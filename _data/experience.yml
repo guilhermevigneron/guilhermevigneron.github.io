@@ -1,19 +1,17 @@
 # Jobs
-# VP of Global Communications
-- company: Springfield International Human Rights Outreach
-  position: VP of Global Communications
-  duration: Oct, 2013 &mdash; Present
-  summary: Write about your core competencies in one or two sentences describing your position. If you held the position for a long time, it could be a longer section, including a couple bullet points	<ul class="resume-item-list"><li>A project you are proud of</li><li>Another awesome project</li><li>or a team or department you worked with</li></ul>
+# Senior QA Engineer
+- company: AVEVA
+    position: Senior QA Engineer
+    duration: September 2018 - Present (5 years 8 months)
+    summary: |- Developing and implementing effective test strategies, leading cross-functional teams, and identifying and resolving complex issues. Manual and automated testing, combined with excellent communication and problem-solving abilities. Passionate about continuously improving software quality and driving positive impact for stakeholders. 
+    achievements:
+      - Performance test with JMeter
+      - Responsible for Automated and manual test using Azure DevOps release pipelines.
+      - Designed Page Object Model test framework using Selenium and C#.
 
-# Director of Digital Stratgy
-- company: United Nations Human Rights Council
-  position: Director of Digital Strategy
-  duration:  Jun, 2010 &mdash; Sept, 2013
-  summary: If your stint was shorter, feel free to be brief and just call out the most meaningful points of your role. Be concise, and be meaninful. The person reading just needs enough to want to talk to you more about your experience.
-
-
-# Communications Coordinator
-- company: Springfield Women & Children's Center
-  position: Communications Coordinator
-  duration:   Jun, 2008  &mdash; May, 2010
-  summary: Led communication efforts across digital and traditional media channels for marketing and public relations, internal communication strategies, and coordinated support programs for the recipients of the center's services.
+# Quality and Test Analyst
+- company: AVEVA 
+    position: Quality and Test Analyst
+    duration: October 2008 - September 2018 (10 years)
+    summary: |-
+      Results-driven Quality and Test Analyst with a passion for delivering high-quality software solutions... (rest of your summary)
