@@ -1,17 +1,16 @@
 # Jobs
 # Senior QA Engineer
 - company: AVEVA
-    position: Senior QA Engineer
-    duration: September 2018 - Present (5 years 8 months)
-    summary: |- Developing and implementing effective test strategies, leading cross-functional teams, and identifying and resolving complex issues. Manual and automated testing, combined with excellent communication and problem-solving abilities. Passionate about continuously improving software quality and driving positive impact for stakeholders. 
-    achievements:
+  position: Senior QA Engineer
+  duration: September 2018 - Present (5 years 8 months)
+  summary: |- Developing and implementing effective test strategies, leading cross-functional teams, and identifying and resolving complex issues. Manual and automated testing, combined with excellent communication and problem-solving abilities. Passionate about continuously improving software quality and driving positive impact for stakeholders. 
+  achievements:
       - Performance test with JMeter
       - Responsible for Automated and manual test using Azure DevOps release pipelines.
       - Designed Page Object Model test framework using Selenium and C#.
 
 # Quality and Test Analyst
 - company: AVEVA 
-    position: Quality and Test Analyst
-    duration: October 2008 - September 2018 (10 years)
-    summary: |-
-      Results-driven Quality and Test Analyst with a passion for delivering high-quality software solutions... (rest of your summary)
+  position: Quality and Test Analyst
+  duration: October 2008 - September 2018 (10 years)
+  summary: |-Results-driven Quality and Test Analyst with a passion for delivering high-quality software solutions.
