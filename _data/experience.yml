@@ -4,13 +4,21 @@
   position: Senior QA Engineer
   duration: September 2018 - Present (5 years 8 months)
   summary: Developing and implementing effective test strategies, leading cross-functional teams, and identifying and resolving complex issues. Manual and automated testing, combined with excellent communication and problem-solving abilities. Passionate about continuously improving software quality and driving positive impact for stakeholders. 
-  achievements:
-      - Performance test with JMeter
-      - Responsible for Automated and manual test using Azure DevOps release pipelines.
-      - Designed Page Object Model test framework using Selenium and C#.
+  <ul class="resume-item-list">
+      <li>Performance testing with JMeter</li>
+      <li>Responsible for automated and manual testing using Azure DevOps release pipelines.</li>
+      <li>Designed Page Object Model test framework using Selenium and C#.</li>
+      <li>Part-time scrum master.</li>
+  </ul>
 
 # Quality and Test Analyst
 - company: AVEVA 
   position: Quality and Test Analyst
   duration: October 2008 - September 2018 (10 years)
-  summary: Results-driven Quality and Test Analyst with a passion for delivering high-quality software solutions.
+  summary: Results-driven Quality and Test Analyst with a passion for delivering high-quality software solutions. Experienced in developing and executing manual and automated testing strategies, identifying and resolving software defects, and collaborating with cross-functional teams to ensure product excellence. Strong analytical skills, attention to detail, and the ability to think outside the box to find innovative solutions to complex problems. Committed to continuous learning and professional growth, seeking opportunities to apply expertise and drive results in a challenging and dynamic environment.
+  <ul>
+    <li>Continuous integration automated tests on InduSoft Web Studio.</li>
+    <li>Develop automated tests for our HTML 5 solution using Selenium and C#.</li>
+    <li>Implement Microsoft Test Manager tool on TFS 2010 to create, record and execute test cases.</li> 
+    <li>Manual test case creation, execution and report.</li>
+  </ul>
