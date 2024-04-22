@@ -4,7 +4,7 @@
   position: Senior QA Engineer
   duration: September 2018 - Present (5 years 8 months)
   summary:  Developing and implementing effective test strategies, leading cross-functional teams, and identifying and resolving complex issues. Manual and automated testing, combined with excellent communication and problem-solving abilities. Passionate about continuously improving software quality and driving positive impact for stakeholders. 
-  <ul class="resume-item-list">
+  <ul>
     <li>Performance testing with JMeter</li>
     <li>Responsible for automated and manual testing using Azure DevOps release pipelines.</li>
     <li>Designed Page Object Model test framework using Selenium and C#.</li>
