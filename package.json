@@ -19,6 +19,8 @@
   "description": "",
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",
+    "@percy/cli": "^1.31.0",
+    "@percy/playwright": "^1.0.8",
     "axe-core": "^4.10.3",
     "playwright": "^1.53.2"
   }
