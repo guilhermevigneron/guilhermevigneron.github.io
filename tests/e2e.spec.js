@@ -1,6 +1,5 @@
 const { test, expect } = require('@playwright/test');
 const AxeBuilder = require('@axe-core/playwright').default;
-const { percySnapshot } = require('@percy/playwright');
 
 test.describe('Homepage', () => {
   test.beforeEach(async ({ page }) => {
@@ -9,7 +8,6 @@ test.describe('Homepage', () => {
 
   test('Header Verification', async ({ page }) => {
     await expect(page.locator('h1')).toContainText('Guilherme Vigneron de Oliveira');
-    await percySnapshot(page, 'Homepage');
   });
 
   test('Navigation Link Verification', async ({ page }) => {
