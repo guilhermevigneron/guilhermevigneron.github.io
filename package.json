@@ -9,7 +9,7 @@
   "author": "Guilherme Vigneron de Oliveira",
   "license": "ISC",
   "devDependencies": {
-    "axe-cli": "^4.2.0",
+    "@axe-core/cli": "^4.8.2",
     "lighthouse": "^11.0.0"
   }
 }
