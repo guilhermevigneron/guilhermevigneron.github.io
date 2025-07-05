@@ -59,5 +59,5 @@ jobs:
       - name: E2E tests with Cypress
         uses: cypress-io/github-action@v6
         with:
+          spec: cypress/e2e/portfolio.cy.js
           browser: chrome
-          headless: true
