@@ -13,6 +13,6 @@
   "devDependencies": {
     "@axe-core/cli": "^4.9.1",
     "lighthouse": "^12.0.0",
-    "w3c-html-validator": "^5.0.1"
+    "w3c-html-validator": "^1.8.3"
   }
 }
