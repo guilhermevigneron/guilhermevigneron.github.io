@@ -36,7 +36,9 @@ jobs:
           JEKYLL_ENV: production
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+        run: |
+          npx playwright install --with-deps
+          chmod +x node_modules/.bin/playwright
 
       - name: Run E2E and Accessibility Tests
         run: npx playwright test
