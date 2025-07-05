@@ -4,12 +4,15 @@
   "description": "Personal portfolio website.",
   "scripts": {
     "test:accessibility": "axe http://127.0.0.1:4000",
-    "test:performance": "lighthouse http://127.0.0.1:4000 --view --output=json,html --output-path=./lighthouse-report --chrome-flags='--headless --no-sandbox'"
+    "test:performance": "lighthouse http://127.0.0.1:4000 --view --output=json,html --output-path=./lighthouse-report --chrome-flags='--headless --no-sandbox'",
+    "test:html": "html-validator --file=./_site/index.html",
+    "test:security": "npm audit --audit-level=high"
   },
   "author": "Guilherme Vigneron de Oliveira",
   "license": "ISC",
   "devDependencies": {
     "@axe-core/cli": "^4.8.2",
-    "lighthouse": "^11.0.0"
+    "lighthouse": "^11.0.0",
+    "html-validator-cli": "^8.0.0"
   }
 }
