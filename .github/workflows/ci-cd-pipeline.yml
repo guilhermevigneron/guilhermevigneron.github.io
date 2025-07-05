@@ -17,27 +17,25 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.1'
-          bundler-cache: true
+          bundler-cache: true 
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
+          cache: 'npm'      
 
       - name: Install Node.js dependencies
-        run: npm ci
+        run: npm ci           
 
       - name: Build Jekyll site
-        run: bundle exec jekyll build
-        env:
-          JEKYLL_ENV: production
+        run: bundle exec jekyll build --exclude tests
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
-      - name: Run E2E and Accessibility Tests
-        run: npx playwright test tests/
+      - name: Run Playwright tests
+        run: npx playwright test
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
