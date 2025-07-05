@@ -55,3 +55,9 @@ jobs:
 
       - name: Performance test
         run: npm run test:performance
+
+      - name: E2E tests with Cypress
+        uses: cypress-io/github-action@v6
+        with:
+          browser: chrome
+          headless: true
