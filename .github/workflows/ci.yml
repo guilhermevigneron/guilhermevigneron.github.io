@@ -27,6 +27,9 @@ jobs:
       - name: Install Jekyll
         run: gem install jekyll bundler
       
+      - name: Install correct ChromeDriver
+        run: npx browser-driver-manager install chrome
+        
       - name: Build and serve Jekyll site
         run: |
           jekyll build
