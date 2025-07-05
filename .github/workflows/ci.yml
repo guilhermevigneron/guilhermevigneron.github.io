@@ -42,10 +42,10 @@ jobs:
         with:
           args: "./_site/**/*.html"
 
-      - name: Run browser-based tests
+      - name: Run All Browser-Based Tests with Cypress
         uses: cypress-io/github-action@v6
         with:
           build: jekyll build
           start: jekyll serve
           wait-on: 'http://localhost:4000'
-          command: "npm run test:accessibility && npm run test:performance && npx cypress run --spec cypress/e2e/portfolio.cy.js --browser chrome"
+          browser: chrome
