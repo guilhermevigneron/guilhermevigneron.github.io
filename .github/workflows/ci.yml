@@ -29,8 +29,8 @@ jobs:
       
       - name: Build and serve Jekyll site
         run: |
-          bundle exec jekyll build
-          nohup bundle exec jekyll serve &
+          jekyll build
+          nohup jekyll serve &
           sleep 15
 
       - name: Accessibility test
