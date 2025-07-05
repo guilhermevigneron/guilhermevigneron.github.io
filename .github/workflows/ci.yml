@@ -5,11 +5,12 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Use Node.js 18.x
         uses: actions/setup-node@v3
@@ -19,6 +20,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Security Audit
+        run: npm run test:security
+
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -27,12 +31,22 @@ jobs:
       - name: Install Jekyll
         run: gem install jekyll bundler
       
+      - name: Build Jekyll site
+        run: jekyll build
+      
+      - name: HTML Validation
+        run: npm run test:html
+
+      - name: Link Checker
+        uses: lycheeverse/lychee-action@v1
+        with:
+          args: "./_site/**/*.html"
+
       - name: Install correct ChromeDriver
         run: npx browser-driver-manager install chrome
         
-      - name: Build and serve Jekyll site
+      - name: Serve Jekyll site
         run: |
-          jekyll build
           nohup jekyll serve &
           sleep 15
 
