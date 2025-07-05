@@ -1,0 +1,15 @@
+{
+  "name": "portfolio-website",
+  "version": "1.0.0",
+  "description": "Personal portfolio website.",
+  "scripts": {
+    "test:accessibility": "axe http://127.0.0.1:4000",
+    "test:performance": "lighthouse http://127.0.0.1:4000 --view --output=json,html --output-path=./lighthouse-report"
+  },
+  "author": "Guilherme Vigneron de Oliveira",
+  "license": "ISC",
+  "devDependencies": {
+    "axe-cli": "^4.2.0",
+    "lighthouse": "^11.0.0"
+  }
+}
