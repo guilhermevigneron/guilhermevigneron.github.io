@@ -30,15 +30,16 @@ jobs:
       - name: Install Node.js dependencies
         run: npm install
 
+      - name: Add npm bin to PATH
+        run: echo "$PWD/node_modules/.bin" >> $GITHUB_PATH
+
       - name: Build Jekyll site
         run: bundle exec jekyll build
         env:
           JEKYLL_ENV: production
 
       - name: Install Playwright browsers
-        run: |
-          npx playwright install --with-deps
-          chmod +x node_modules/.bin/playwright
+        run: npx playwright install --with-deps
 
       - name: Run E2E and Accessibility Tests
         run: npx playwright test
