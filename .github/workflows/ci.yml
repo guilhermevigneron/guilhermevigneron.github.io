@@ -31,7 +31,7 @@ jobs:
       - name: Install Jekyll
         run: gem install jekyll bundler
       
-      - name: Build Jekyll site
+      - name: Build Jekyll site for validation
         run: jekyll build
       
       - name: HTML Validation
@@ -42,22 +42,13 @@ jobs:
         with:
           args: "./_site/**/*.html"
 
-      - name: Install correct ChromeDriver
-        run: npx browser-driver-manager install chrome
-        
-      - name: Serve Jekyll site
-        run: |
-          nohup jekyll serve &
-          sleep 15
-
-      - name: Accessibility test
-        run: npm run test:accessibility
-
-      - name: Performance test
-        run: npm run test:performance
-
-      - name: E2E tests with Cypress
+      - name: Run browser-based tests
         uses: cypress-io/github-action@v6
         with:
-          spec: cypress/e2e/portfolio.cy.js
-          browser: chrome
+          build: jekyll build
+          start: jekyll serve
+          wait-on: 'http://localhost:4000'
+          command: |
+            npm run test:accessibility
+            npm run test:performance
+            npx cypress run --spec cypress/e2e/portfolio.cy.js --browser chrome
