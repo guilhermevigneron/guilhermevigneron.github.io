@@ -1,54 +1,38 @@
-# GitHub Actions workflow to run accessibility and performance tests
-
 name: CI
 
-# Controls when the action will run. 
-# Triggers the workflow on push events but only for the main branch.
 on:
   push:
     branches: [ main ]
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
 
-      # Sets up Node.js environment
       - name: Use Node.js 16.x
         uses: actions/setup-node@v3
         with:
           node-version: '16'
-          cache: 'npm'
       
-      # Install project dependencies
       - name: Install dependencies
         run: npm install
 
-      # Sets up Ruby and Jekyll for building the site
       - name: Setup Ruby and Jekyll
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.0' # Or your preferred Ruby version
-          bundler-cache: true # runs 'bundle install' and caches installed gems
+          ruby-version: '3.0'
+          bundler-cache: true
 
-      # Build the Jekyll site and serve it in the background
       - name: Build and serve Jekyll site
         run: |
           bundle exec jekyll build
           nohup bundle exec jekyll serve &
-          sleep 15 # Give the server time to start
+          sleep 15
 
-      # Run the accessibility test using Axe
       - name: Accessibility test
         run: npm run test:accessibility
 
-      # Run the performance test using Lighthouse
       - name: Performance test
         run: npm run test:performance
