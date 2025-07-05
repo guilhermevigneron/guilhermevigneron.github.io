@@ -5,7 +5,7 @@
   "scripts": {
     "test:accessibility": "axe http://127.0.0.1:4000",
     "test:performance": "lighthouse http://127.0.0.1:4000 --view --output=json,html --output-path=./lighthouse-report --chrome-flags='--headless --no-sandbox'",
-    "test:html": "w3c-html-validator --input ./_site/index.html",
+    "test:html": "w3c-html-validator ./_site/index.html",
     "test:security": "npm audit --audit-level=high"
   },
   "author": "Guilherme Vigneron de Oliveira",
@@ -13,6 +13,6 @@
   "devDependencies": {
     "@axe-core/cli": "^4.9.1",
     "lighthouse": "^12.0.0",
-    "w3c-html-validator": "^1.8.3"
+    "w3c-html-validator": "^5.0.1"
   }
 }
