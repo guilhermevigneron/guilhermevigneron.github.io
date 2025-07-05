@@ -15,6 +15,10 @@
     "cypress-axe": "^1.5.0",
     "cypress-audit": "^1.1.0",
     "lighthouse": "^12.0.0",
-    "w3c-html-validator": "^1.8.3"
+    "w3c-html-validator": "^5.0.1"
+  },
+  "overrides": {
+    "semver": "^7.5.4",
+    "lodash.set": "^4.3.2"
   }
 }
