@@ -12,7 +12,7 @@
   "devDependencies": {
     "@axe-core/cli": "^4.9.1",
     "cypress": "^13.13.1",
-    "cypress-axe": "^1.5.0",
+    "cypress-axe": "^1.6.0",
     "lighthouse": "^12.0.0",
     "w3c-html-validator": "^1.8.3"
   },
