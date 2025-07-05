@@ -48,7 +48,4 @@ jobs:
           build: jekyll build
           start: jekyll serve
           wait-on: 'http://localhost:4000'
-          command: |
-            npm run test:accessibility
-            npm run test:performance
-            npx cypress run --spec cypress/e2e/portfolio.cy.js --browser chrome
+          command: "npm run test:accessibility && npm run test:performance && npx cypress run --spec cypress/e2e/portfolio.cy.js --browser chrome"
