@@ -38,6 +38,9 @@ jobs:
         env:
           JEKYLL_ENV: production
 
+      - name: Install Playwright
+        run: npm install --save-dev playwright
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
