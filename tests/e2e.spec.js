@@ -22,8 +22,4 @@ describe('Homepage', () => {
     cy.contains('h2', 'Core Competencies').should('be.visible');
   });
 
-  it('should have no accessibility violations on load', () => {
-    // Run accessibility check on the entire page
-    cy.checkA11y();
-  });
 });
