@@ -54,9 +54,6 @@ To maintain a high standard, this project is configured with a **GitHub Actions*
   - **Navigational Integrity**  
     All key links (LinkedIn, GitHub, Email) are visible and functional.
 
-  - **Web Accessibility (a11y)**  
-    Uses `cypress-axe` to check for accessibility issues against WCAG standards, ensuring the site is usable by people with disabilities.
-
 ---
 
 This automated, multi-layered testing strategy ensures that my professional portfolio is not only a reflection of my experience but also a testament to the quality and care I put into my work.
