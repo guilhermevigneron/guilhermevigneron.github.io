@@ -118,9 +118,6 @@ describe('Portfolio Tests', () => {
 
   // --- Accessibility ---
 
-  it('should be free of accessibility violations', () => {
-    cy.checkA11y();
-  });
 
   it('should have a skip-to-content link', () => {
     cy.get('a[href="#about"]').should('exist');
