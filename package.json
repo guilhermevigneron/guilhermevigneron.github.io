@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Personal portfolio website.",
   "scripts": {
-    "test:html": "w3c-html-validator --check-url file://$(pwd)/_site/index.html",
+    "test:html": "w3c-html-validator ./_site/index.html",
     "test:security": "npm audit --audit-level=high",
     "cy:run": "cypress run --browser chrome"
   },
