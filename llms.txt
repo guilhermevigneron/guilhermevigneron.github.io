@@ -1,0 +1,28 @@
+# Guilherme Vigneron de Oliveira — Portfolio
+
+> This is the personal portfolio of Guilherme Vigneron de Oliveira, a Principal Software QA Engineer with 15+ years of experience.
+
+## About
+- Principal Software QA Engineer at AVEVA (Nov 2023 – Present), Austin, TX
+- Senior QA Engineer at AVEVA (Sep 2018 – Aug 2024), São Paulo, Brazil
+- Quality and Test Analyst at AVEVA (Oct 2008 – Sep 2018), São Paulo, Brazil
+
+## Core Skills
+Selenium, C#, Python, Azure DevOps, JMeter, SQL, Test Automation Frameworks, Agile & Scrum, CI/CD, Risk-Based Testing, Performance Testing
+
+## Education
+- Post-Graduation, Software Engineering (SOA) — Grupo Veris Educacional - IBTA (2010-2011)
+- B.S., Computing — Universidade Estadual de Campinas (2005-2009)
+
+## Publications
+- "The Hidden Costs of Flaky Tests: A Deep Dive into Test Reliability" — StickyMinds (https://www.stickyminds.com/article/hidden-costs-flaky-tests-deep-dive-test-reliability)
+- "The Big Picture: Defining a Successful Test Automation Strategy" — Software Testing Magazine (https://www.softwaretestingmagazine.com/knowledge/the-big-picture-defining-a-successful-test-automation-strategy-for-long-term-value/)
+
+## Awards
+- AVEVA Innovation and Creativity Recognition Award
+
+## Contact
+- Email: guilhermevigneron@gmail.com
+- LinkedIn: https://www.linkedin.com/in/guilherme-vigneron-de-oliveira
+- GitHub: https://github.com/guilhermevigneron
+- Website: https://guilhermevigneron.dev

@@ -11,9 +11,8 @@ yarn-debug.log*
 pnpm-debug.log*
 
 # Test reports and artifacts
-/playwright-report/
-/test-results/
-/playwright/.cache/
+/cypress/videos/
+/cypress/screenshots/
 
 # Environment variables
 .env

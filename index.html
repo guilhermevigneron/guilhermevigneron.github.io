@@ -4,6 +4,56 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Guilherme Vigneron de Oliveira - Principal Technologist</title>
+    <meta name="description" content="Guilherme Vigneron de Oliveira — Principal Software QA Engineer with 15+ years of experience in test automation, Selenium, C#, Python, Azure DevOps, and performance testing. Based in Austin, TX.">
+    <link rel="canonical" href="https://guilhermevigneron.dev">
+
+    <!-- Open Graph / Social Media -->
+    <meta property="og:title" content="Guilherme Vigneron de Oliveira - Principal Technologist">
+    <meta property="og:description" content="Principal QA Engineer with 15+ years building test automation frameworks, CI/CD pipelines, and quality strategies.">
+    <meta property="og:type" content="profile">
+    <meta property="og:url" content="https://guilhermevigneron.dev">
+    <meta property="og:locale" content="en_US">
+    <meta property="profile:first_name" content="Guilherme">
+    <meta property="profile:last_name" content="Vigneron de Oliveira">
+
+    <!-- JSON-LD Structured Data for AI Agents -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Person",
+      "name": "Guilherme Vigneron de Oliveira",
+      "jobTitle": "Principal Software QA Engineer",
+      "url": "https://guilhermevigneron.dev",
+      "email": "guilhermevigneron@gmail.com",
+      "sameAs": [
+        "https://www.linkedin.com/in/guilherme-vigneron-de-oliveira",
+        "https://github.com/guilhermevigneron"
+      ],
+      "worksFor": {
+        "@type": "Organization",
+        "name": "AVEVA"
+      },
+      "knowsAbout": ["Selenium", "C#", "Python", "Azure DevOps", "JMeter", "SQL", "Test Automation Frameworks", "Agile & Scrum", "CI/CD", "Risk-Based Testing", "Performance Testing"],
+      "alumniOf": [
+        {
+          "@type": "EducationalOrganization",
+          "name": "Universidade Estadual de Campinas"
+        },
+        {
+          "@type": "EducationalOrganization",
+          "name": "Grupo Veris Educacional - IBTA"
+        }
+      ],
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": "Austin",
+        "addressRegion": "TX",
+        "addressCountry": "US"
+      },
+      "description": "Seasoned Quality Assurance Engineer with over 15 years of experience elevating software quality through innovative testing strategies and automation."
+    }
+    </script>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,9 +64,23 @@
             font-family: 'Inter', sans-serif;
             background-color: #f8fafc;
         }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
     </style>
 </head>
 <body class="text-slate-700">
+
+    <!-- Skip to content link for keyboard/screen reader users -->
+    <a href="#about" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:bg-sky-600 focus:text-white focus:px-4 focus:py-2 focus:rounded focus:z-50">Skip to main content</a>
 
     <header class="bg-slate-900 text-white p-8 md:p-12 shadow-lg">
         <div class="max-w-4xl mx-auto">
@@ -26,19 +90,22 @@
                     <!-- Changed text-sky-400 to text-sky-300 for better contrast -->
                     <p class="text-xl md:text-2xl font-light text-sky-300 mt-2">Principal Technologist | QA & Software Testing Expert</p>
                 </div>
-                <div class="flex space-x-4 mt-6 md:mt-0">
+                <nav aria-label="Social links" class="flex space-x-4 mt-6 md:mt-0">
                     <!-- Added rel="noopener noreferrer" and updated aria-label for new tab context -->
                     <a href="https://www.linkedin.com/in/guilherme-vigneron-de-oliveira" target="_blank" rel="noopener noreferrer" class="text-slate-200 hover:text-sky-400 transition-colors duration-300" aria-label="LinkedIn Profile (opens in a new tab)" tabindex="0">
-                        <i class="fab fa-linkedin fa-2x"></i>
+                        <i class="fab fa-linkedin fa-2x" aria-hidden="true"></i>
+                        <span class="sr-only">LinkedIn</span>
                     </a>
                     <a href="https://github.com/guilhermevigneron" target="_blank" rel="noopener noreferrer" class="text-slate-200 hover:text-sky-400 transition-colors duration-300" aria-label="GitHub Profile (opens in a new tab)" tabindex="0">
-                        <i class="fab fa-github fa-2x"></i>
+                        <i class="fab fa-github fa-2x" aria-hidden="true"></i>
+                        <span class="sr-only">GitHub</span>
                     </a>
                     <!-- Email link does not open in new tab, so no rel or special aria-label needed -->
                     <a href="mailto:guilhermevigneron@gmail.com" class="text-slate-200 hover:text-sky-400 transition-colors duration-300" aria-label="Email" tabindex="0">
-                        <i class="fas fa-envelope fa-2x"></i>
+                        <i class="fas fa-envelope fa-2x" aria-hidden="true"></i>
+                        <span class="sr-only">Email</span>
                     </a>
-                </div>
+                </nav>
             </div>
         </div>
     </header>
@@ -65,7 +132,7 @@
             <div class="relative border-l-2 border-slate-200 pl-8 space-y-12">
                 
                 <div class="relative">
-                    <div class="absolute -left-[39px] top-1.5 w-5 h-5 bg-white rounded-full border-4 border-sky-500"></div>
+                    <div class="absolute -left-[39px] top-1.5 w-5 h-5 bg-white rounded-full border-4 border-sky-500" aria-hidden="true"></div>
                     <h3 class="text-xl font-bold text-slate-800">Principal Software QA Engineer</h3>
                     <p class="font-semibold text-sky-800">AVEVA</p>
                     <p class="text-sm text-slate-500 mb-2">Nov 2023 - Present | Austin, TX</p>
@@ -79,7 +146,7 @@
                 </div>
                 
                 <div class="relative">
-                    <div class="absolute -left-[39px] top-1.5 w-5 h-5 bg-white rounded-full border-4 border-sky-500"></div>
+                    <div class="absolute -left-[39px] top-1.5 w-5 h-5 bg-white rounded-full border-4 border-sky-500" aria-hidden="true"></div>
                     <h3 class="text-xl font-bold text-slate-800">Senior QA Engineer</h3>
                     <p class="font-semibold text-sky-800">AVEVA</p>
                     <p class="text-sm text-slate-500 mb-2">Sep 2018 - Aug 2024 | São Paulo, Brazil</p>
@@ -92,7 +159,7 @@
                 </div>
 
                 <div class="relative">
-                    <div class="absolute -left-[39px] top-1.5 w-5 h-5 bg-white rounded-full border-4 border-sky-500"></div>
+                    <div class="absolute -left-[39px] top-1.5 w-5 h-5 bg-white rounded-full border-4 border-sky-500" aria-hidden="true"></div>
                     <h3 class="text-xl font-bold text-slate-800">Quality and Test Analyst</h3>
                     <p class="font-semibold text-sky-800">AVEVA</p>
                     <p class="text-sm text-slate-500 mb-2">Oct 2008 - Sep 2018 | São Paulo, Brazil</p>
@@ -129,11 +196,11 @@
             <div class="w-16 h-1 bg-sky-500 mt-2 mb-8"></div>
             <div class="space-y-4">
                 <div class="bg-white p-4 rounded-lg shadow-sm">
-                    <h3 class="font-bold text-slate-800"><a href="https://www.stickyminds.com/article/hidden-costs-flaky-tests-deep-dive-test-reliability" target="_blank" class="text-slate-800 hover:text-sky-600 transition-colors duration-300">The Hidden Costs of Flaky Tests: A Deep Dive into Test Reliability</a></h3>
+                    <h3 class="font-bold text-slate-800"><a href="https://www.stickyminds.com/article/hidden-costs-flaky-tests-deep-dive-test-reliability" target="_blank" rel="noopener noreferrer" class="text-slate-800 hover:text-sky-600 transition-colors duration-300">The Hidden Costs of Flaky Tests: A Deep Dive into Test Reliability</a></h3>
                     <p class="text-sm">Publication</p>
                 </div>
                 <div class="bg-white p-4 rounded-lg shadow-sm">
-                    <h3 class="font-bold text-slate-800"><a href="https://www.softwaretestingmagazine.com/knowledge/the-big-picture-defining-a-successful-test-automation-strategy-for-long-term-value/" target="_blank" class="text-slate-800 hover:text-sky-600 transition-colors duration-300">The Big Picture: Defining a Successful Test Automation Strategy</a></h3>
+                    <h3 class="font-bold text-slate-800"><a href="https://www.softwaretestingmagazine.com/knowledge/the-big-picture-defining-a-successful-test-automation-strategy-for-long-term-value/" target="_blank" rel="noopener noreferrer" class="text-slate-800 hover:text-sky-600 transition-colors duration-300">The Big Picture: Defining a Successful Test Automation Strategy</a></h3>
                     <p class="text-sm">Publication</p>
                 </div>
                 <div class="bg-white p-4 rounded-lg shadow-sm">
@@ -161,7 +228,7 @@
     </main>
 
     <footer class="text-center p-6 bg-slate-100 mt-12">
-        <p class="text-slate-700">© 2025 Guilherme Vigneron de Oliveira. Built with Jekyll & Tailwind CSS.</p>
+        <p class="text-slate-700">© 2026 Guilherme Vigneron de Oliveira. Built with Tailwind CSS.</p>
     </footer>
 
 </body>
