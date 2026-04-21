@@ -36,7 +36,7 @@ To maintain a high standard, this project is configured with a **GitHub Actions*
 ### 3. Code & Content Validation
 
 - **HTML Validation**  
-  Uses `w3c-html-validator` to check the generated HTML against W3C standards, guaranteeing the markup is valid and well-formed.
+  Uses `html-validate` for offline validation of HTML against standards, guaranteeing the markup is valid and well-formed without external network dependencies.
 
 - **Link Checking**  
   Employs `lychee-action` to crawl the entire site and verify that there are no broken links (404s or other errors), ensuring a seamless user experience.
@@ -49,10 +49,16 @@ To maintain a high standard, this project is configured with a **GitHub Actions*
   The pipeline launches a live server with the built site and runs a suite of E2E tests using Cypress. These tests simulate real user interactions to verify:
 
   - **Content Verification**  
-    The correct name and section headers are present.
+    The correct name, subtitle, and all section headers correctly render.
 
   - **Navigational Integrity**  
-    All key links (LinkedIn, GitHub, Email) are visible and functional.
+    All key links (LinkedIn, GitHub, Email, Resume download) are visible, functional, and employ secure attributes (`rel="noopener noreferrer"`).
+
+  - **SEO & AI Agent Readability**  
+    Validates the presence of comprehensive JSON-LD structured data, Open Graph meta tags, meta descriptions, and canonical URLs ensuring maximum visibility for both search engines and AI agents.
+
+  - **Accessibility Landmarks**  
+    Checks for the presence of skip-to-content links, correct navigation wrappers, and ARIA attributes for screen readers.
 
 ---
 
