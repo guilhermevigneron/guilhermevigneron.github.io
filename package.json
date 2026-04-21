@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Personal portfolio website.",
   "scripts": {
-    "test:html": "w3c-html-validator ./_site/index.html",
+    "test:html": "w3c-html-validator --check-url file://$(pwd)/_site/index.html",
     "test:security": "npm audit --audit-level=high",
     "cy:run": "cypress run --browser chrome"
   },
@@ -13,8 +13,7 @@
     "@axe-core/cli": "^4.9.1",
     "cypress": "^13.13.1",
     "cypress-axe": "^1.6.0",
-    "lighthouse": "^12.0.0",
-    "w3c-html-validator": "^1.8.3"
+    "w3c-html-validator": "^2.2.0"
   },
   "overrides": {
     "semver": "^7.5.4",
