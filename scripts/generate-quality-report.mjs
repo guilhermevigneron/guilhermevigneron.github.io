@@ -189,7 +189,7 @@ function buildQualityPage() {
       title: 'Web Vitals & Asset Payload Budgets',
       status: perfStatus,
       summary:
-        'Headless mobile emulation (390x844, 4x CPU throttle) verifying esbuild-minified CSS/JS, subsetted fonts, responsive AVIF/WebP avatar, zero 404s, and Web Vitals thresholds.',
+        'Headless mobile emulation (390x844, Slow 4G network + 4x CPU throttle) verifying esbuild-minified CSS/JS, subsetted fonts, responsive AVIF/WebP avatar, zero 404s, and Web Vitals thresholds.',
       metric: perfReport?.mobileVitals
         ? `Transfer ${(perfReport.mobileVitals.totalTransferBytes / 1024).toFixed(1)} KB · FCP ${perfReport.mobileVitals.fcpMs}ms · LCP ${perfReport.mobileVitals.lcpMs}ms · CLS ${perfReport.mobileVitals.cls}`
         : 'Pending npm run test:perf execution',

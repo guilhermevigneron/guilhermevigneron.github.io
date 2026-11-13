@@ -1,32 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
-import { createStaticServer } from './serve.mjs';
+import {
+  CHROMIUM_LAUNCH_ARGS,
+  blockExternalRequests,
+  findBrowserExecutable,
+  startStaticServer,
+} from './lib/browser.mjs';
 import { computeYearsOfExperience } from './sync-resume.mjs';
 
 const ROOT = process.cwd();
 const siteDir = path.join(ROOT, '_site');
 const ogOutPath = path.join(siteDir, 'assets', 'og-card.png');
-
-function findBrowserExecutable() {
-  const candidates = [
-    process.env.CHROME_PATH,
-    process.env.PUPPETEER_EXECUTABLE_PATH,
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  ].filter(Boolean);
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  throw new Error(
-    'No Chromium/Chrome executable found. Set CHROME_PATH environment variable.'
-  );
-}
 
 function escapeHtml(value) {
   return String(value)
@@ -194,24 +179,17 @@ async function generateOgCard() {
   const cardHtml = buildCardHtml(resume);
 
   const executablePath = findBrowserExecutable();
-  const server = createStaticServer(siteDir);
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const { port } = server.address();
-  const baseUrl = `http://127.0.0.1:${port}`;
+  const { baseUrl, close: closeServer } = await startStaticServer(siteDir);
   const virtualUrl = `${baseUrl}/__og-card__.html`;
 
   let browser;
-  const blockedExternalRequests = [];
+  let blockedExternalRequests = [];
 
   try {
     browser = await chromium.launch({
       executablePath,
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-      ],
+      args: CHROMIUM_LAUNCH_ARGS,
     });
 
     const context = await browser.newContext({
@@ -220,29 +198,15 @@ async function generateOgCard() {
     });
     const page = await context.newPage();
 
-    const baseOrigin = new URL(baseUrl).origin;
-    await page.route('**/*', (route) => {
-      const url = route.request().url();
-      if (url === virtualUrl) {
-        return route.fulfill({
-          status: 200,
-          contentType: 'text/html; charset=utf-8',
-          body: cardHtml,
-        });
-      }
-      if (url.startsWith('data:') || url.startsWith('blob:')) {
-        return route.continue();
-      }
-      try {
-        if (new URL(url).origin === baseOrigin) {
-          return route.continue();
-        }
-      } catch {
-        // Fall through to block invalid URLs
-      }
-      blockedExternalRequests.push(url);
-      return route.abort();
-    });
+    blockedExternalRequests = await blockExternalRequests(page, baseUrl);
+    // Registered last so Playwright matches it before the catch-all blocker
+    await page.route(virtualUrl, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'text/html; charset=utf-8',
+        body: cardHtml,
+      })
+    );
 
     await page.goto(virtualUrl, { waitUntil: 'networkidle' });
     await page.evaluate(() => document.fonts.ready);
@@ -288,8 +252,7 @@ async function generateOgCard() {
     );
   } finally {
     if (browser) await browser.close();
-    server.closeAllConnections?.();
-    await new Promise((resolve) => server.close(resolve));
+    await closeServer();
   }
 }
 

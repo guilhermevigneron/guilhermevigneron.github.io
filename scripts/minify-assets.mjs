@@ -30,23 +30,23 @@ export async function minifyCssFiles(outSiteDir = path.join(ROOT, '_site')) {
 }
 
 export async function minifyJsFiles(outSiteDir = path.join(ROOT, '_site')) {
-  const scripts = [
-    'assets/js/theme-init.js',
-    'assets/js/theme.js',
-    'assets/js/command-menu.js',
+  const bundles = [
+    ['src/js/theme-init.js', 'assets/js/theme-init.js'],
+    ['src/js/theme.js', 'assets/js/theme.js'],
+    ['src/js/command-menu.js', 'assets/js/command-menu.js'],
   ];
 
-  for (const rel of scripts) {
-    const targetPath = path.join(outSiteDir, rel);
-    if (!fs.existsSync(targetPath)) continue;
-    const source = fs.readFileSync(targetPath, 'utf8');
+  for (const [inputRel, outputRel] of bundles) {
+    const source = fs.readFileSync(path.join(ROOT, inputRel), 'utf8');
     const result = await esbuild.transform(source, {
       loader: 'js',
       minify: true,
       target: 'es2020',
       charset: 'utf8',
     });
-    fs.writeFileSync(targetPath, result.code, 'utf8');
+    const outputPath = path.join(outSiteDir, outputRel);
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    fs.writeFileSync(outputPath, result.code, 'utf8');
   }
 }
 

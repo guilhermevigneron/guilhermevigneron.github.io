@@ -204,7 +204,9 @@
   let cachedLlms = '';
   let llmsRequested = false;
 
-  if (modifierEl && /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent)) {
+  // navigator.platform is deprecated; prefer UA Client Hints, fall back to the UA string
+  const platform = navigator.userAgentData?.platform || navigator.userAgent || '';
+  if (modifierEl && /mac|iphone|ipad|ipod/i.test(platform)) {
     modifierEl.textContent = '\u2318';
   }
 
@@ -247,6 +249,46 @@
       return;
     }
     finish(copyFallback(text));
+  };
+
+  const fetchLlms = () =>
+    W.fetch('/llms.txt')
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.text();
+      })
+      .then((txt) => {
+        cachedLlms = txt;
+        return txt;
+      });
+
+  const copyLlms = () => {
+    const label = 'Markdown resume';
+    if (cachedLlms) {
+      copyText(cachedLlms, label);
+      return;
+    }
+    const textPromise = fetchLlms();
+    const fallback = () =>
+      textPromise.then(
+        (txt) => copyText(txt, label),
+        () => showToast('Unable to fetch Markdown resume')
+      );
+    const clip = navigator.clipboard;
+    if (clip?.write && typeof W.ClipboardItem === 'function') {
+      // Handing ClipboardItem a promise starts the write inside the click's user
+      // activation, which Safari requires when the text arrives asynchronously
+      try {
+        const item = new W.ClipboardItem({
+          'text/plain': textPromise.then((txt) => new Blob([txt], { type: 'text/plain' })),
+        });
+        clip.write([item]).then(() => showToast(`${label}${COPIED}`), fallback);
+        return;
+      } catch {
+        // Fall through to fetch-then-writeText
+      }
+    }
+    fallback();
   };
 
   const isOpen = () => !dialog.hidden;
@@ -300,14 +342,11 @@
     input.focus({ preventScroll: true });
     if (!llmsRequested && W.fetch) {
       llmsRequested = true;
-      W.fetch('/llms.txt')
-        .then((r) => (r.ok ? r.text() : ''))
-        .then((t) => {
-          if (t) cachedLlms = t;
-        })
-        .catch(() => {
-          llmsRequested = false;
-        });
+      // Warm the cache so "Copy Markdown Resume" can write synchronously on click;
+      // any failure (network or non-2xx) re-arms the prefetch for the next open
+      fetchLlms().catch(() => {
+        llmsRequested = false;
+      });
     }
   };
 
@@ -360,20 +399,7 @@
       copyText(SITE_URL, 'Profile URL');
     } else if (action === 'copy-llms') {
       closeMenu(true);
-      if (cachedLlms) {
-        copyText(cachedLlms, 'Markdown resume');
-      } else {
-        W.fetch('/llms.txt')
-          .then((r) => {
-            if (!r.ok) throw new Error(r.status);
-            return r.text();
-          })
-          .then((txt) => {
-            cachedLlms = txt;
-            copyText(txt, 'Markdown resume');
-          })
-          .catch(() => showToast('Unable to fetch Markdown resume'));
-      }
+      copyLlms();
     } else if (href) {
       if (href[0] === '#') {
         closeMenu(false);

@@ -105,7 +105,10 @@ try {
     assert.ok(decodedIndex.includes(resume.basics.label));
     assert.ok(decodedIndex.includes(resume.basics.email));
     assert.ok(decodedIndex.includes(resume.basics.summary));
-    assert.ok(decodedIndex.includes(currentYear), `Missing current copyright year ${currentYear}`);
+    assert.ok(
+      bodySource.includes(`&copy; ${currentYear} ${resume.basics.name}`),
+      `Missing current copyright notice "© ${currentYear} ${resume.basics.name}"`
+    );
     assert.ok(decodedIndex.includes('href="/resume.pdf"'));
     assert.ok(decodedIndex.includes('href="/quality/"'));
     assert.ok(!decodedIndex.includes('drive.google.com'), 'External Google Drive link still present');

@@ -1,31 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
-import { createStaticServer } from './serve.mjs';
+import {
+  CHROMIUM_LAUNCH_ARGS,
+  blockExternalRequests,
+  findBrowserExecutable,
+  startStaticServer,
+} from './lib/browser.mjs';
 
 const ROOT = process.cwd();
 const siteDir = path.join(ROOT, '_site');
 const pdfOutPath = path.join(siteDir, 'resume.pdf');
-
-function findBrowserExecutable() {
-  const candidates = [
-    process.env.CHROME_PATH,
-    process.env.PUPPETEER_EXECUTABLE_PATH,
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  ].filter(Boolean);
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  throw new Error(
-    'No Chromium/Chrome executable found. Set CHROME_PATH environment variable.'
-  );
-}
 
 function countPdfPages(pdfBuffer) {
   const text = pdfBuffer.toString('latin1');
@@ -46,24 +31,16 @@ async function generatePdf() {
   const maxPdfPages = Number(resume.meta?.maxPdfPages || 1);
 
   const executablePath = findBrowserExecutable();
-  const server = createStaticServer(siteDir);
-
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const address = server.address();
-  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const { baseUrl, close: closeServer } = await startStaticServer(siteDir);
 
   let browser;
-  const blockedExternalRequests = [];
+  let blockedExternalRequests = [];
 
   try {
     browser = await chromium.launch({
       executablePath,
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-      ],
+      args: CHROMIUM_LAUNCH_ARGS,
     });
 
     const context = await browser.newContext({
@@ -73,24 +50,8 @@ async function generatePdf() {
 
     const page = await context.newPage();
 
-    const baseOrigin = new URL(baseUrl).origin;
-
     // Enforce zero external network requests while rendering PDF
-    await page.route('**/*', (route) => {
-      const url = route.request().url();
-      if (url.startsWith('data:') || url.startsWith('blob:')) {
-        return route.continue();
-      }
-      try {
-        if (new URL(url).origin === baseOrigin) {
-          return route.continue();
-        }
-      } catch {
-        // Fall through to block invalid URLs
-      }
-      blockedExternalRequests.push(url);
-      return route.abort();
-    });
+    blockedExternalRequests = await blockExternalRequests(page, baseUrl);
 
     await page.emulateMedia({ media: 'print', colorScheme: 'light' });
     await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
@@ -174,8 +135,7 @@ async function generatePdf() {
     );
   } finally {
     if (browser) await browser.close();
-    server.closeAllConnections?.();
-    await new Promise((resolve) => server.close(resolve));
+    await closeServer();
   }
 }
 

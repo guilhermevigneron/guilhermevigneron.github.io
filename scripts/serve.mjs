@@ -27,21 +27,24 @@ export function createStaticServer(siteDir) {
   const resolvedSiteDir = path.resolve(siteDir);
 
   return http.createServer((req, res) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8', Allow: 'GET, HEAD' });
+      res.end('Method Not Allowed');
+      return;
+    }
+
     const rawUrl = req.url || '/';
+    // Reject protocol-relative paths so they can never be parsed as a different host
     if (rawUrl.startsWith('//')) {
       res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('Bad Request');
       return;
     }
 
+    let reqUrl;
     let cleanPath;
     try {
-      const reqUrl = new URL(rawUrl, 'http://127.0.0.1');
-      if (reqUrl.origin !== 'http://127.0.0.1') {
-        res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
-        res.end('Bad Request');
-        return;
-      }
+      reqUrl = new URL(rawUrl, 'http://127.0.0.1');
       cleanPath = decodeURIComponent(reqUrl.pathname);
     } catch {
       res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -66,6 +69,15 @@ export function createStaticServer(siteDir) {
     }
 
     if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isDirectory()) {
+      // Mirror GitHub Pages: /dir -> 301 /dir/ so relative URLs resolve correctly
+      if (!reqUrl.pathname.endsWith('/')) {
+        // Collapse leading slashes so e.g. "/\assets" (normalized to "//assets") can't
+        // turn into a protocol-relative open redirect
+        const safePath = `/${reqUrl.pathname.replace(/^\/+/, '')}/`;
+        res.writeHead(301, { Location: `${safePath}${reqUrl.search}` });
+        res.end();
+        return;
+      }
       candidatePath = path.join(candidatePath, 'index.html');
     }
 

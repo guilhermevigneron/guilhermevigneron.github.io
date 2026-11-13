@@ -62,27 +62,60 @@ export function buildJsonLd(data) {
   };
 }
 
+// RFC 2426 §5: backslash, comma, semicolon and newlines must be escaped in text values
+export function escapeVCardText(value) {
+  return String(value ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/\r?\n/g, '\\n')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;');
+}
+
+// RFC 2425 §5.8.1: fold content lines longer than 75 octets (CRLF + single space)
+function foldVCardLine(line) {
+  const bytes = Buffer.from(line, 'utf8');
+  if (bytes.length <= 75) return line;
+  const parts = [];
+  let current = '';
+  let currentBytes = 0;
+  for (const ch of line) {
+    const chBytes = Buffer.byteLength(ch, 'utf8');
+    const limit = parts.length === 0 ? 75 : 74; // continuation lines start with a space
+    if (currentBytes + chBytes > limit) {
+      parts.push(current);
+      current = '';
+      currentBytes = 0;
+    }
+    current += ch;
+    currentBytes += chBytes;
+  }
+  parts.push(current);
+  return parts.join('\r\n ');
+}
+
 export function buildVCard(data) {
+  const e = escapeVCardText;
   const nameParts = String(data.basics.name || '').trim().split(/\s+/);
   const firstName = nameParts[0] || '';
   const lastName = nameParts.slice(1).join(' ');
   const org = data.work?.[0]?.name || '';
   const loc = data.basics.location || {};
+  // ADR components: PO box; extended address; street; locality; region; postal code; country
+  const adr = ['', '', '', loc.city, loc.region, loc.postalCode, loc.countryCode].map(e).join(';');
   const lines = [
     'BEGIN:VCARD',
     'VERSION:3.0',
-    `FN:${data.basics.name}`,
-    `N:${lastName};${firstName};;;`,
-    `ORG:${org}`,
-    `TITLE:${data.meta.jobTitle}`,
+    `FN:${e(data.basics.name)}`,
+    `N:${e(lastName)};${e(firstName)};;;`,
+    `ORG:${e(org)}`,
+    `TITLE:${e(data.meta.jobTitle)}`,
     `EMAIL;TYPE=INTERNET:${data.basics.email}`,
     `URL:${data.basics.url}`,
-    `ADR;TYPE=HOME:;;${loc.city || ''};${loc.region || ''};;${loc.countryCode || ''}`,
-    `NOTE:${data.basics.label}`,
+    `ADR;TYPE=HOME:${adr}`,
+    `NOTE:${e(data.basics.label)}`,
     'END:VCARD',
-    '',
   ];
-  return lines.join('\r\n');
+  return lines.map(foldVCardLine).join('\r\n') + '\r\n';
 }
 
 export function buildLlmsTxt(data) {
@@ -211,6 +244,39 @@ export function buildCvContentHtml(data) {
   const linkedinDisplay = linkedin ? linkedin.url.replace(/^https?:\/\/(www\.)?/, '') : '';
   const githubDisplay = github ? github.url.replace(/^https?:\/\//, '') : '';
 
+  const printContactHtml = [
+    `<a href="${escapeHtml(data.basics.url)}">${escapeHtml(domain)}</a>`,
+    `<a href="mailto:${escapeHtml(data.basics.email)}">${escapeHtml(data.basics.email)}</a>`,
+    github ? `<a href="${escapeHtml(github.url)}">${escapeHtml(githubDisplay)}</a>` : '',
+    linkedin ? `<a href="${escapeHtml(linkedin.url)}">${escapeHtml(linkedinDisplay)}</a>` : '',
+  ]
+    .filter(Boolean)
+    .map((link) => `                        ${link}`)
+    .join('\n                        <span aria-hidden="true">/</span>\n');
+  // Omit social icons entirely (rather than emitting href="") when a profile is absent
+  const githubItem = github
+    ? `
+                            <li>
+                                <a href="${escapeHtml(github.url)}" target="_blank" rel="noopener noreferrer" class="icon-btn" aria-label="GitHub Profile (opens in a new tab)" title="GitHub">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                                        <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"></path>
+                                    </svg>
+                                    <span class="sr-only">GitHub</span>
+                                </a>
+                            </li>`
+    : '';
+  const linkedinItem = linkedin
+    ? `
+                            <li>
+                                <a href="${escapeHtml(linkedin.url)}" target="_blank" rel="noopener noreferrer" class="icon-btn" aria-label="LinkedIn Profile (opens in a new tab)" title="LinkedIn">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                                        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"></path>
+                                    </svg>
+                                    <span class="sr-only">LinkedIn</span>
+                                </a>
+                            </li>`
+    : '';
+
   const workHtml = data.work
     .map((job) => {
       const highlights = (job.highlights || [])
@@ -325,13 +391,7 @@ ${highlights}
                         </span>
                     </p>
                     <div class="print-contact">
-                        <a href="${escapeHtml(data.basics.url)}">${escapeHtml(domain)}</a>
-                        <span aria-hidden="true">/</span>
-                        <a href="mailto:${escapeHtml(data.basics.email)}">${escapeHtml(data.basics.email)}</a>
-                        <span aria-hidden="true">/</span>
-                        <a href="${escapeHtml(github?.url || '')}">${escapeHtml(githubDisplay)}</a>
-                        <span aria-hidden="true">/</span>
-                        <a href="${escapeHtml(linkedin?.url || '')}">${escapeHtml(linkedinDisplay)}</a>
+${printContactHtml}
                     </div>
                 </div>
                 <picture class="avatar-picture">
@@ -350,23 +410,7 @@ ${highlights}
                                     </svg>
                                     <span class="sr-only">Email</span>
                                 </a>
-                            </li>
-                            <li>
-                                <a href="${escapeHtml(github?.url || '')}" target="_blank" rel="noopener noreferrer" class="icon-btn" aria-label="GitHub Profile (opens in a new tab)" title="GitHub">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
-                                        <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"></path>
-                                    </svg>
-                                    <span class="sr-only">GitHub</span>
-                                </a>
-                            </li>
-                            <li>
-                                <a href="${escapeHtml(linkedin?.url || '')}" target="_blank" rel="noopener noreferrer" class="icon-btn" aria-label="LinkedIn Profile (opens in a new tab)" title="LinkedIn">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
-                                        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"></path>
-                                    </svg>
-                                    <span class="sr-only">LinkedIn</span>
-                                </a>
-                            </li>
+                            </li>${githubItem}${linkedinItem}
                         </ul>
                     </nav>
                     <a href="${escapeHtml(data.meta.resumePdf)}" class="icon-btn" aria-label="Download My Resume (PDF)" title="Download My Resume (PDF)">

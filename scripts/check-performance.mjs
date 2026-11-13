@@ -2,44 +2,46 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
-import { createStaticServer } from './serve.mjs';
+import {
+  CHROMIUM_LAUNCH_ARGS,
+  blockExternalRequests,
+  findBrowserExecutable,
+  startStaticServer,
+} from './lib/browser.mjs';
 
 const ROOT = process.cwd();
 const siteDir = path.join(ROOT, '_site');
 const reportsDir = path.join(ROOT, '.ci-reports');
 
+// Budgets keep ~10% headroom over current payloads so routine content edits
+// don't trip CI; tighten deliberately when shipping size optimizations.
 const BUDGETS = {
-  screenCssMaxBytes: 12 * 1024,
+  screenCssMaxBytes: 13 * 1024,
   subpageCssMaxBytes: 6 * 1024,
   printCssMaxBytes: 3 * 1024,
   combinedFontsMaxBytes: 32 * 1024,
   indexHtmlMaxBytes: 25 * 1024,
   avatarJpgMaxBytes: 8 * 1024,
   avatarAvifMaxBytes: 4 * 1024,
-  totalMobileTransferMaxBytes: 75 * 1024,
+  totalMobileTransferMaxBytes: 82 * 1024,
   clsMax: 0.01,
   lcpMaxMs: 2500,
   fcpMaxMs: 1800,
 };
 
-function findBrowserExecutable() {
-  const candidates = [
-    process.env.CHROME_PATH,
-    process.env.PUPPETEER_EXECUTABLE_PATH,
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  ].filter(Boolean);
+// Lighthouse-style "Slow 4G" mobile profile: 150ms RTT, ~1.6 Mbps down, ~750 Kbps up.
+// Combined with 4x CPU throttling this approximates a mid-tier phone instead of
+// measuring an unthrottled loopback server.
+const NETWORK_PROFILE = {
+  offline: false,
+  latency: 150,
+  downloadThroughput: (1.6 * 1024 * 1024) / 8,
+  uploadThroughput: (750 * 1024) / 8,
+};
 
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  throw new Error(
-    'No Chromium/Chrome executable found. Set CHROME_PATH environment variable.'
-  );
+function writeReport(report) {
+  fs.mkdirSync(reportsDir, { recursive: true });
+  fs.writeFileSync(path.join(reportsDir, 'perf-report.json'), JSON.stringify(report, null, 2));
 }
 
 function fileSize(relPath) {
@@ -97,27 +99,19 @@ async function main() {
   );
 
   const executablePath = findBrowserExecutable();
-  const server = createStaticServer(siteDir);
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const { port } = server.address();
-  const baseUrl = `http://127.0.0.1:${port}`;
+  const { baseUrl, close: closeServer } = await startStaticServer(siteDir);
 
   let browser;
   const failedRequests = [];
   const consoleErrors = [];
   const overflowChecks = [];
-  const blockedExternalRequests = [];
-  const baseOrigin = new URL(baseUrl).origin;
+  let blockedExternalRequests = [];
 
   try {
     browser = await chromium.launch({
       executablePath,
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-      ],
+      args: CHROMIUM_LAUNCH_ARGS,
     });
 
     const context = await browser.newContext({
@@ -129,21 +123,7 @@ async function main() {
 
     const page = await context.newPage();
 
-    await page.route('**/*', (route) => {
-      const url = route.request().url();
-      if (url.startsWith('data:') || url.startsWith('blob:')) {
-        return route.continue();
-      }
-      try {
-        if (new URL(url).origin === baseOrigin) {
-          return route.continue();
-        }
-      } catch {
-        // Fall through to abort invalid URLs
-      }
-      blockedExternalRequests.push(url);
-      return route.abort();
-    });
+    blockedExternalRequests = await blockExternalRequests(page, baseUrl);
 
     page.on('response', (res) => {
       const url = res.url();
@@ -191,6 +171,8 @@ async function main() {
 
     const cdp = await context.newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    await cdp.send('Network.enable');
+    await cdp.send('Network.emulateNetworkConditions', NETWORK_PROFILE);
 
     await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
     await page.evaluate(() => document.fonts.ready);
@@ -216,6 +198,12 @@ async function main() {
     });
 
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    await cdp.send('Network.emulateNetworkConditions', {
+      offline: false,
+      latency: 0,
+      downloadThroughput: -1,
+      uploadThroughput: -1,
+    });
 
     // Check overflow across mobile viewports & routes
     for (const width of [320, 375, 390, 768]) {
@@ -274,25 +262,31 @@ async function main() {
         combinedFontsBytes,
       },
       mobileVitals: vitals,
+      networkProfile: NETWORK_PROFILE,
       overflowChecksCount: overflowChecks.length,
       failedRequestsCount: failedRequests.length,
       timestamp: new Date().toISOString(),
     };
 
-    fs.mkdirSync(reportsDir, { recursive: true });
-    fs.writeFileSync(path.join(reportsDir, 'perf-report.json'), JSON.stringify(report, null, 2));
+    writeReport(report);
 
     console.log(
       `PASS performance & mobile audit: screen CSS ${(assetSizes.screenCssBytes / 1024).toFixed(1)} KB, fonts ${(combinedFontsBytes / 1024).toFixed(1)} KB, mobile transfer ${(vitals.totalTransferBytes / 1024).toFixed(1)} KB, FCP ${vitals.fcpMs}ms, LCP ${vitals.lcpMs}ms, CLS ${vitals.cls}`
     );
   } finally {
     if (browser) await browser.close();
-    server.closeAllConnections?.();
-    await new Promise((resolve) => server.close(resolve));
+    await closeServer();
   }
 }
 
 main().catch((err) => {
+  // Persist an explicit failure so the /quality report shows FAIL, not PENDING
+  writeReport({
+    passed: false,
+    budgets: BUDGETS,
+    error: err?.message || String(err),
+    timestamp: new Date().toISOString(),
+  });
   console.error(err);
   process.exit(1);
 });

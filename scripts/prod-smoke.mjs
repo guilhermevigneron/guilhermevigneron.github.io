@@ -1,12 +1,19 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const BASE_URL = (process.env.SMOKE_BASE_URL || 'https://guilhermevigneron.dev').replace(
   /\/$/,
   ''
 );
 
-async function checkEndpoint(path, expectedStatus = 200) {
-  const url = `${BASE_URL}${path}`;
+// Expected content comes from the checked-out source of truth, not hardcoded strings
+const resume = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'resume.json'), 'utf8'));
+const EXPECTED_NAME = resume.basics.name;
+const EXPECTED_MANIFEST_DESCRIPTION = resume.meta.manifestDescription;
+
+async function checkEndpoint(route, expectedStatus = 200) {
+  const url = `${BASE_URL}${route}`;
   const response = await fetch(url, { redirect: 'follow' });
   assert.equal(
     response.status,
@@ -22,7 +29,7 @@ async function main() {
   // 1. Homepage HTML & zero third-party CDNs
   const homeRes = await checkEndpoint('/', 200);
   const homeHtml = await homeRes.text();
-  assert.ok(homeHtml.includes('Guilherme Vigneron de Oliveira'), 'Homepage missing name');
+  assert.ok(homeHtml.includes(EXPECTED_NAME), 'Homepage missing name');
   assert.ok(homeHtml.includes('Selected Projects'), 'Homepage missing Selected Projects section');
   assert.ok(homeHtml.includes('href="/resume.pdf"'), 'Homepage missing /resume.pdf link');
   assert.ok(homeHtml.includes('href="/quality/"'), 'Homepage missing /quality/ link');
@@ -65,7 +72,7 @@ async function main() {
   const manifestRes = await checkEndpoint('/site.webmanifest', 200);
   const manifest = await manifestRes.json();
   assert.ok(
-    manifest.description?.includes('Principal Technologist'),
+    manifest.description === EXPECTED_MANIFEST_DESCRIPTION,
     'site.webmanifest description out of sync'
   );
 
@@ -96,7 +103,7 @@ async function main() {
   // 4. Machine-readable endpoints
   const resumeJsonRes = await checkEndpoint('/resume.json', 200);
   const resumeJson = await resumeJsonRes.json();
-  assert.equal(resumeJson.basics?.name, 'Guilherme Vigneron de Oliveira');
+  assert.equal(resumeJson.basics?.name, EXPECTED_NAME);
   assert.ok(Array.isArray(resumeJson.projects) && resumeJson.projects.length >= 1, 'resume.json missing projects');
 
   const llmsRes = await checkEndpoint('/llms.txt', 200);
@@ -108,7 +115,7 @@ async function main() {
   const vcfRes = await checkEndpoint('/contact.vcf', 200);
   const vcfText = await vcfRes.text();
   assert.ok(vcfText.includes('BEGIN:VCARD'), 'contact.vcf missing BEGIN:VCARD');
-  assert.ok(vcfText.includes('FN:Guilherme Vigneron de Oliveira'), 'contact.vcf missing FN');
+  assert.ok(vcfText.includes(`FN:${EXPECTED_NAME}`), 'contact.vcf missing FN');
 
   // 5. RFC 9116 security.txt & >= 30d expiry
   const secRes = await checkEndpoint('/.well-known/security.txt', 200);

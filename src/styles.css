@@ -731,6 +731,10 @@ html.dark .theme-icon-moon {
   border-bottom: 1px solid var(--rule);
 }
 
+.cmd-input-row:has(.cmd-input:focus-visible) {
+  border-bottom-color: var(--ink);
+}
+
 .cmd-search-icon {
   width: 1.125rem;
   height: 1.125rem;

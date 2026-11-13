@@ -720,6 +720,9 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
         expect(vcfRes.body).to.include('BEGIN:VCARD');
         expect(vcfRes.body).to.include(`FN:${resume.basics.name}`);
         expect(vcfRes.body).to.include(`EMAIL;TYPE=INTERNET:${resume.basics.email}`);
+        expect(vcfRes.body).to.include(
+          `ADR;TYPE=HOME:;;;${resume.basics.location.city};${resume.basics.location.region};;${resume.basics.location.countryCode}`
+        );
         expect(vcfRes.body).to.include('END:VCARD');
       });
     });
