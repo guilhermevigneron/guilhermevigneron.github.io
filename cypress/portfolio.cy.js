@@ -38,8 +38,15 @@ function isLocalUrl(rawUrl) {
 
 function isBrowserInternalRequest(req) {
   try {
-    const { hostname } = new URL(req.url);
-    return !req.headers?.referer && CHROME_INTERNAL_HOSTS.has(hostname);
+    const { hostname, pathname } = new URL(req.url);
+    if (req.headers?.referer) {
+      return false;
+    }
+    if (CHROME_INTERNAL_HOSTS.has(hostname)) {
+      return true;
+    }
+    // Chrome's internal Search/AI-mode background request (/async/folae)
+    return hostname === 'www.google.com' && pathname === '/async/folae';
   } catch {
     return false;
   }
