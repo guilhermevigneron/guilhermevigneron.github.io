@@ -37,11 +37,16 @@ async function main() {
   console.log('PASS / (200, zero third-party references)');
 
   // 2. Self-hosted CSS, fonts & avatar
+  const cssMatch = homeHtml.match(/<link rel="stylesheet" href="(\/assets\/css\/styles(?:\.[a-f0-9]+)?\.css)">/);
+  assert.ok(cssMatch, 'Homepage missing compiled stylesheet link');
+  const activeCssRes = await checkEndpoint(cssMatch[1], 200);
+  const activeCssText = await activeCssRes.text();
+  assert.ok(activeCssText.includes('.icon-btn svg'), 'Active CSS missing .icon-btn svg rule');
   await checkEndpoint('/assets/css/styles.css', 200);
   await checkEndpoint('/assets/fonts/GeistMono-Variable.woff2', 200);
   await checkEndpoint('/assets/fonts/GeistPixel-Square.woff2', 200);
   await checkEndpoint('/assets/avatar.jpg', 200);
-  console.log('PASS /assets/css/styles.css, Geist fonts & /assets/avatar.jpg');
+  console.log(`PASS ${cssMatch[1]}, Geist fonts & /assets/avatar.jpg`);
 
   // 3. Resume PDF
   const pdfRes = await checkEndpoint('/resume.pdf', 200);
