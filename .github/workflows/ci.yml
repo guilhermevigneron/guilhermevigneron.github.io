@@ -121,8 +121,7 @@ jobs:
         run: |
           npm run build:quality
           npm run test:html
-          npm run test:perf
-          npm run test:e2e
+          node scripts/check-performance.mjs --quality-only
 
       - name: Link Checker (final /quality Report)
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0

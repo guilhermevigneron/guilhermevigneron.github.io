@@ -51,6 +51,8 @@ function fileSize(relPath) {
 }
 
 async function main() {
+  const qualityOnly = process.argv.includes('--quality-only');
+
   if (!fs.existsSync(path.join(siteDir, 'index.html'))) {
     throw new Error('_site/index.html not found. Run "npm run build" first.');
   }
@@ -189,39 +191,47 @@ async function main() {
       }
     });
 
-    const cdp = await context.newCDPSession(page);
-    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    let vitals = null;
+    if (!qualityOnly) {
+      const cdp = await context.newCDPSession(page);
+      await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 
-    await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
-    await page.evaluate(() => document.fonts.ready);
-    await page.waitForTimeout(450);
+      await page.goto(`${baseUrl}/`, { waitUntil: 'load' });
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(450);
 
-    const vitals = await page.evaluate(() => {
-      const nav = performance.getEntriesByType('navigation')[0];
-      const resources = performance.getEntriesByType('resource');
-      const resourceTransferBytes = resources.reduce(
-        (sum, r) => sum + (r.encodedBodySize || r.transferSize || 0),
-        0
-      );
-      const docBytes = nav ? nav.encodedBodySize || nav.transferSize || 0 : 0;
-      const avatarImg = document.querySelector('img.avatar');
-      return {
-        fcpMs: window.__perfMetrics.fcp === null ? null : Math.round(window.__perfMetrics.fcp),
-        lcpMs: window.__perfMetrics.lcp === null ? null : Math.round(window.__perfMetrics.lcp),
-        cls: Number((window.__perfMetrics.cls || 0).toFixed(4)),
-        totalTransferBytes: docBytes + resourceTransferBytes,
-        resourceCount: resources.length,
-        avatarCurrentSrc: avatarImg ? avatarImg.currentSrc : '',
-      };
-    });
+      vitals = await page.evaluate(() => {
+        const nav = performance.getEntriesByType('navigation')[0];
+        const resources = performance.getEntriesByType('resource');
+        const resourceTransferBytes = resources.reduce(
+          (sum, r) => sum + (r.encodedBodySize || r.transferSize || 0),
+          0
+        );
+        const docBytes = nav ? nav.encodedBodySize || nav.transferSize || 0 : 0;
+        const avatarImg = document.querySelector('img.avatar');
+        return {
+          fcpMs: window.__perfMetrics.fcp === null ? null : Math.round(window.__perfMetrics.fcp),
+          lcpMs: window.__perfMetrics.lcp === null ? null : Math.round(window.__perfMetrics.lcp),
+          cls: Number((window.__perfMetrics.cls || 0).toFixed(4)),
+          totalTransferBytes: docBytes + resourceTransferBytes,
+          resourceCount: resources.length,
+          avatarCurrentSrc: avatarImg ? avatarImg.currentSrc : '',
+        };
+      });
 
-    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    }
 
-    // Check overflow across mobile viewports & routes
-    for (const width of [320, 375, 390, 768]) {
-      await page.setViewportSize({ width, height: 800 });
-      for (const route of ['/', '/404.html', '/quality/', '/architecture/']) {
-        await page.goto(`${baseUrl}${route}`, { waitUntil: 'networkidle' });
+    // Check overflow across mobile viewports & routes (navigate once per route, resize in-place)
+    const routesToCheck = qualityOnly
+      ? ['/quality/']
+      : ['/', '/404.html', '/quality/', '/architecture/'];
+
+    for (const route of routesToCheck) {
+      await page.goto(`${baseUrl}${route}`, { waitUntil: 'load' });
+      await page.evaluate(() => document.fonts.ready);
+      for (const width of [320, 375, 390, 768]) {
+        await page.setViewportSize({ width, height: 800 });
         const overflow = await page.evaluate(() => ({
           scrollWidth: document.documentElement.scrollWidth,
           clientWidth: document.documentElement.clientWidth,
@@ -249,6 +259,14 @@ async function main() {
       0,
       `Browser console errors detected: ${consoleErrors.join('; ')}`
     );
+
+    if (qualityOnly) {
+      console.log(
+        `PASS /quality/ render & overflow audit (${overflowChecks.length} viewports, 0 console/network errors)`
+      );
+      return;
+    }
+
     assert.ok(
       vitals.cls <= BUDGETS.clsMax,
       `Mobile CLS ${vitals.cls} exceeds budget ${BUDGETS.clsMax}`

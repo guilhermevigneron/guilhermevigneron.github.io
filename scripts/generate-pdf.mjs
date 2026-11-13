@@ -93,7 +93,7 @@ async function generatePdf() {
     });
 
     await page.emulateMedia({ media: 'print', colorScheme: 'light' });
-    await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
+    await page.goto(`${baseUrl}/`, { waitUntil: 'load' });
     const printAudit = await page.evaluate(async (expectedName) => {
       document.documentElement.classList.remove('dark');
       await document.fonts.ready;

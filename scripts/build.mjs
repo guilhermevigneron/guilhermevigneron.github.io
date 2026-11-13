@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { minifyHtml } from './minify-html.mjs';
 import { minifyCssFiles, minifyJsFiles } from './minify-assets.mjs';
 import { buildVCard } from './sync-resume.mjs';
@@ -13,6 +13,22 @@ const reportsDir = path.join(ROOT, '.ci-reports');
 function runNodeScript(relScript) {
   execFileSync(process.execPath, [path.join(ROOT, relScript)], {
     stdio: 'inherit',
+  });
+}
+
+function runNodeScriptAsync(relScript) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [path.join(ROOT, relScript)], {
+      stdio: 'inherit',
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`${relScript} exited with code ${code}`));
+      }
+    });
   });
 }
 
@@ -189,16 +205,16 @@ fs.writeFileSync(
   )
 );
 
-console.log('5. Generating /resume.pdf via headless Chromium...');
-runNodeScript('scripts/generate-pdf.mjs');
+console.log('5. Generating /resume.pdf and /assets/og-card.png (1200x630) in parallel...');
+await Promise.all([
+  runNodeScriptAsync('scripts/generate-pdf.mjs'),
+  runNodeScriptAsync('scripts/generate-og-card.mjs'),
+]);
 
-console.log('6. Generating /assets/og-card.png (1200x630) via headless Chromium...');
-runNodeScript('scripts/generate-og-card.mjs');
-
-console.log('7. Generating initial /quality/index.html & /quality/report.json...');
+console.log('6. Generating initial /quality/index.html & /quality/report.json...');
 runNodeScript('scripts/generate-quality-report.mjs');
 
-console.log('8. Generating /architecture/index.html...');
+console.log('7. Generating /architecture/index.html...');
 runNodeScript('scripts/generate-architecture.mjs');
 
 console.log('Build complete: _site/ ready.');

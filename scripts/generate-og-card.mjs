@@ -244,7 +244,7 @@ async function generateOgCard() {
       return route.abort();
     });
 
-    await page.goto(virtualUrl, { waitUntil: 'networkidle' });
+    await page.goto(virtualUrl, { waitUntil: 'load' });
     await page.evaluate(() => document.fonts.ready);
 
     fs.mkdirSync(path.dirname(ogOutPath), { recursive: true });
