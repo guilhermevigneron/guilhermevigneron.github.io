@@ -37,6 +37,5 @@ This repository contains the source code for my personal portfolio and resume we
 npm ci
 npm run build
 npm run test:html
-npm run serve        # Serves _site/ at http://127.0.0.1:4000
-npm run cy:run       # Or: npm run cy:run:chromium
+npm run test:e2e     # Starts static server & runs Cypress + axe suite
 ```

@@ -53,12 +53,9 @@ jobs:
           args: --root-dir ${{ github.workspace }}/_site --exclude '^https://guilhermevigneron\.dev/quality/$' --no-progress ./_site/**/*.html
 
       - name: Run Browser E2E & Accessibility Tests (Cypress)
-        uses: cypress-io/github-action@v6
-        with:
-          install: false
-          start: npm run serve
-          wait-on: 'http://127.0.0.1:4000'
-          browser: chrome
+        env:
+          CYPRESS_BROWSER: chrome
+        run: npm run test:e2e
 
       - name: Publish CI Telemetry to /quality Report
         env:

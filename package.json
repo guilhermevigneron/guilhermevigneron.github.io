@@ -11,6 +11,7 @@
     "serve": "node scripts/serve.mjs",
     "test:sync": "node scripts/validate-sync.mjs",
     "test:html": "node scripts/run-html-validate.mjs",
+    "test:e2e": "node scripts/test-e2e.mjs",
     "test:security": "npm audit --audit-level=high",
     "test:smoke:prod": "node scripts/prod-smoke.mjs",
     "cy:run": "cypress run --browser chrome",
