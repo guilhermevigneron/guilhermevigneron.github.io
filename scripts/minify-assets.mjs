@@ -34,6 +34,7 @@ export async function minifyJsFiles(outSiteDir = path.join(ROOT, '_site')) {
     'assets/js/theme-init.js',
     'assets/js/theme.js',
     'assets/js/command-menu.js',
+    'assets/js/command-menu-panel.js',
   ];
 
   for (const rel of scripts) {

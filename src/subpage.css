@@ -71,9 +71,13 @@ html.dark {
 
 .subpage-nav-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.5rem;
   margin-left: auto;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .ghost-link {
@@ -306,18 +310,18 @@ html.dark {
   background-color: var(--bg);
 }
 
+.arch-step {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--faint);
+}
+
 .arch-stage--source {
   background-color: var(--wash);
 }
 
 .arch-stage--source .arch-step {
   color: var(--body);
-}
-
-.arch-step {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--faint);
 }
 
 .arch-title {

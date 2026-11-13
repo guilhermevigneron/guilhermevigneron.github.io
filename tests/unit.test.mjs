@@ -1,17 +1,53 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import http from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
+import { describe, it } from 'node:test';
+import { rewriteAssetRefs } from '../scripts/lib/chrome.mjs';
+import { countPdfPages } from '../scripts/lib/pdf.mjs';
+import { minifyHtml } from '../scripts/minify-html.mjs';
+import { createStaticServer } from '../scripts/serve.mjs';
 import {
+  buildCommandMenuMeta,
+  buildCvContentHtml,
   buildJsonLd,
   buildLlmsTxt,
+  buildRobotsTxt,
+  buildSitemapXml,
   buildVCard,
   computeYearsOfExperience,
+  syncSecurityTxt,
 } from '../scripts/sync-resume.mjs';
-import { minifyHtml } from '../scripts/minify-html.mjs';
 
 const ROOT = process.cwd();
 const resume = JSON.parse(fs.readFileSync(path.join(ROOT, 'resume.json'), 'utf8'));
+
+function httpRequest(port, reqPath, method = 'GET') {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        host: '127.0.0.1',
+        port,
+        path: reqPath,
+        method,
+      },
+      (res) => {
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => {
+          resolve({
+            status: res.statusCode,
+            headers: res.headers,
+            body: Buffer.concat(chunks).toString('utf8'),
+          });
+        });
+      }
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
 
 describe('sync-resume helpers', () => {
   it('computes years of experience from earliest work startDate', () => {
@@ -20,17 +56,38 @@ describe('sync-resume helpers', () => {
     assert.equal(computeYearsOfExperience({ work: [] }, 2026), null);
   });
 
-  it('builds a valid vCard 3.0 payload with CRLF line endings', () => {
+  it('builds a valid RFC 2426 vCard 3.0 payload with 7 ADR fields and escaping', () => {
     const vcf = buildVCard(resume);
     assert.ok(vcf.includes('\r\n'));
     assert.ok(vcf.startsWith('BEGIN:VCARD\r\nVERSION:3.0\r\n'));
     assert.ok(vcf.includes(`FN:${resume.basics.name}\r\n`));
     assert.ok(vcf.includes(`EMAIL;TYPE=INTERNET:${resume.basics.email}\r\n`));
     assert.ok(vcf.includes(`URL:${resume.basics.url}\r\n`));
+    assert.ok(vcf.includes('ADR;TYPE=HOME:;;;Austin;TX;;US\r\n'));
     assert.ok(vcf.trimEnd().endsWith('END:VCARD'));
+
+    const customVcf = buildVCard({
+      basics: {
+        name: 'Ada; Lovelace',
+        email: 'ada@example.com',
+        url: 'https://example.com',
+        label: 'Mathematician, Pioneer\nLead',
+        location: { city: 'London, UK', region: 'Greater;London', countryCode: 'GB' },
+      },
+      work: [
+        { name: 'Past Co', endDate: '2020-01' },
+        { name: 'Engine; Labs, Inc.' },
+      ],
+      meta: { jobTitle: 'Lead, Systems; R&D' },
+    });
+    assert.ok(customVcf.includes('FN:Ada\\; Lovelace\r\n'));
+    assert.ok(customVcf.includes('ORG:Engine\\; Labs\\, Inc.\r\n'));
+    assert.ok(customVcf.includes('TITLE:Lead\\, Systems\\; R&D\r\n'));
+    assert.ok(customVcf.includes('ADR;TYPE=HOME:;;;London\\, UK;Greater\\;London;;GB\r\n'));
+    assert.ok(customVcf.includes('NOTE:Mathematician\\, Pioneer\\nLead\r\n'));
   });
 
-  it('builds Schema.org Person JSON-LD with deduplicated alumniOf', () => {
+  it('builds Schema.org Person JSON-LD with deduplicated alumniOf and active worksFor', () => {
     const ld = buildJsonLd(resume);
     assert.equal(ld['@context'], 'https://schema.org');
     assert.equal(ld['@type'], 'Person');
@@ -38,9 +95,15 @@ describe('sync-resume helpers', () => {
     assert.equal(ld.worksFor.name, resume.work[0].name);
     const schoolNames = ld.alumniOf.map((s) => s.name);
     assert.equal(new Set(schoolNames).size, schoolNames.length);
+
+    const noCurrentJob = buildJsonLd({
+      ...resume,
+      work: [{ name: 'Past Corp', startDate: '2020-01', endDate: '2022-01' }],
+    });
+    assert.equal(noCurrentJob.worksFor, undefined);
   });
 
-  it('builds llms.txt with key sections and endpoints', () => {
+  it('builds llms.txt, robots.txt, sitemap.xml, security.txt, and command-menu metadata', () => {
     const txt = buildLlmsTxt(resume);
     assert.ok(txt.includes(`# ${resume.basics.name}`));
     assert.ok(txt.includes('## Experience'));
@@ -48,6 +111,63 @@ describe('sync-resume helpers', () => {
     assert.ok(txt.includes('## Machine-Readable & Verification Endpoints'));
     assert.ok(txt.includes('/resume.pdf'));
     assert.ok(txt.includes('/contact.vcf'));
+    assert.ok(txt.includes('/architecture/'));
+
+    const robots = buildRobotsTxt({ basics: { url: 'https://example.dev/' } });
+    assert.equal(robots, 'User-agent: *\nAllow: /\n\nSitemap: https://example.dev/sitemap.xml\n');
+
+    const sitemap = buildSitemapXml({ basics: { url: 'https://example.dev/' } });
+    assert.ok(sitemap.includes('<loc>https://example.dev/</loc>'));
+    assert.ok(sitemap.includes('<loc>https://example.dev/architecture/</loc>'));
+    assert.ok(sitemap.includes('<loc>https://example.dev/quality/report.json</loc>'));
+
+    const secOut = syncSecurityTxt(
+      'Contact: mailto:old@example.com\nExpires: 2027-01-01T00:00:00.000Z\nCanonical: https://old.example/.well-known/security.txt\n',
+      resume
+    );
+    assert.ok(secOut.includes(`Contact: mailto:${resume.basics.email}`));
+    assert.ok(secOut.includes(`Canonical: ${resume.basics.url}/.well-known/security.txt`));
+
+    const panelMeta = buildCommandMenuMeta(resume);
+    assert.ok(panelMeta.includes(`email: '${resume.basics.email}'`));
+    assert.ok(panelMeta.includes('hasLanguages: true'));
+  });
+
+  it('renders CV HTML safely without .tag-sep spans and respects showInPrint and escaping', () => {
+    const html = buildCvContentHtml({
+      ...resume,
+      basics: {
+        ...resume.basics,
+        name: 'Test <script>User</script>',
+      },
+      awards: [{ title: 'Honor', date: '2025-07-01' }],
+      languages: [],
+    });
+    assert.ok(!html.includes('<script>User</script>'));
+    assert.ok(html.includes('Test &lt;script&gt;User&lt;/script&gt;'));
+    assert.ok(!html.includes('tag-sep'));
+    assert.ok(html.includes('id="about" tabindex="-1"'));
+    assert.ok(html.includes('id="projects" aria-labelledby="projects-heading" class="cv-section animate-fade-in delay-3 no-print"'));
+    assert.ok(!html.includes('id="languages"'));
+  });
+});
+
+describe('asset & pdf helpers', () => {
+  it('rewrites exact asset paths without prefix collisions', () => {
+    const input = '<script src="/assets/js/command-menu.js"></script><script src="/assets/js/command-menu-panel.js"></script>';
+    const output = rewriteAssetRefs(input, {
+      '/assets/js/command-menu.js': '/assets/js/command-menu.1111aaaa.js',
+      '/assets/js/command-menu-panel.js': '/assets/js/command-menu-panel.2222bbbb.js',
+    });
+    assert.ok(output.includes('/assets/js/command-menu.1111aaaa.js'));
+    assert.ok(output.includes('/assets/js/command-menu-panel.2222bbbb.js'));
+    assert.ok(!output.includes('command-menu.1111aaaa.js-panel'));
+  });
+
+  it('counts PDF pages from Pages /Count dictionary or fallback /Page objects', () => {
+    assert.equal(countPdfPages(Buffer.from('%PDF-1.4 << /Type /Pages /Count 1 >>')), 1);
+    assert.equal(countPdfPages(Buffer.from('%PDF-1.4 << /Type /Page >> << /Type /Page >>')), 2);
+    assert.equal(countPdfPages(Buffer.from('not a pdf')), 0);
   });
 });
 
@@ -79,6 +199,55 @@ describe('minifyHtml', () => {
     const input = '<div>\n  <pre>  line 1\n    line 2  </pre>\n</div>';
     const output = minifyHtml(input);
     assert.ok(output.includes('<pre>  line 1\n    line 2  </pre>'));
+  });
+});
+
+describe('static server routing and security guards', () => {
+  it('handles 200, 301 trailing-slash redirect, 400, 403 traversal, 404, and HEAD', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'site-srv-test-'));
+    fs.writeFileSync(path.join(tmpDir, 'index.html'), '<h1>Home</h1>', 'utf8');
+    fs.writeFileSync(path.join(tmpDir, '404.html'), '<h1>Missing</h1>', 'utf8');
+    fs.mkdirSync(path.join(tmpDir, 'quality'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'quality', 'index.html'), '<h1>Quality</h1>', 'utf8');
+
+    const server = createStaticServer(tmpDir);
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address();
+
+    try {
+      const home = await httpRequest(port, '/');
+      assert.equal(home.status, 200);
+      assert.equal(home.headers['x-content-type-options'], 'nosniff');
+      assert.equal(home.body, '<h1>Home</h1>');
+
+      const redirect = await httpRequest(port, '/quality?v=1');
+      assert.equal(redirect.status, 301);
+      assert.equal(redirect.headers.location, '/quality/?v=1');
+
+      const head = await httpRequest(port, '/quality/', 'HEAD');
+      assert.equal(head.status, 200);
+      assert.equal(head.body, '');
+
+      const traversal = await httpRequest(port, '/%2e%2e/etc/passwd');
+      assert.equal(traversal.status, 403);
+
+      const doubleSlash = await httpRequest(port, '//evil.test/foo');
+      assert.equal(doubleSlash.status, 400);
+
+      const nullByte = await httpRequest(port, '/foo%00bar');
+      assert.equal(nullByte.status, 400);
+
+      const malformed = await httpRequest(port, '/%E0%A4%A');
+      assert.equal(malformed.status, 400);
+
+      const notFound = await httpRequest(port, '/does-not-exist');
+      assert.equal(notFound.status, 404);
+      assert.equal(notFound.body, '<h1>Missing</h1>');
+    } finally {
+      server.closeAllConnections?.();
+      await new Promise((resolve) => server.close(resolve));
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });
 

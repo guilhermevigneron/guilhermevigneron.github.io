@@ -1,7 +1,7 @@
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import assert from 'node:assert/strict';
-import { chromium } from 'playwright-core';
+import { launchHeadlessBrowser } from './lib/browser.mjs';
 import { createStaticServer } from './serve.mjs';
 
 const ROOT = process.cwd();
@@ -12,6 +12,8 @@ const BUDGETS = {
   screenCssMaxBytes: 12 * 1024,
   subpageCssMaxBytes: 6 * 1024,
   printCssMaxBytes: 3 * 1024,
+  initialJsMaxBytes: 4 * 1024,
+  lazyPanelJsMaxBytes: 12 * 1024,
   combinedFontsMaxBytes: 32 * 1024,
   indexHtmlMaxBytes: 25 * 1024,
   avatarJpgMaxBytes: 8 * 1024,
@@ -21,26 +23,6 @@ const BUDGETS = {
   lcpMaxMs: 2500,
   fcpMaxMs: 1800,
 };
-
-function findBrowserExecutable() {
-  const candidates = [
-    process.env.CHROME_PATH,
-    process.env.PUPPETEER_EXECUTABLE_PATH,
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  ].filter(Boolean);
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  throw new Error(
-    'No Chromium/Chrome executable found. Set CHROME_PATH environment variable.'
-  );
-}
 
 function fileSize(relPath) {
   const full = path.join(siteDir, relPath);
@@ -61,12 +43,18 @@ async function main() {
     screenCssBytes: fileSize('assets/css/styles.css'),
     subpageCssBytes: fileSize('assets/css/subpage.css'),
     printCssBytes: fileSize('assets/css/print.css'),
+    themeInitJsBytes: fileSize('assets/js/theme-init.js'),
+    themeJsBytes: fileSize('assets/js/theme.js'),
+    commandMenuJsBytes: fileSize('assets/js/command-menu.js'),
+    commandMenuPanelJsBytes: fileSize('assets/js/command-menu-panel.js'),
     monoFontBytes: fileSize('assets/fonts/GeistMono-Variable.woff2'),
     pixelFontBytes: fileSize('assets/fonts/GeistPixel-Square.woff2'),
     indexHtmlBytes: fileSize('index.html'),
     avatarJpgBytes: fileSize('assets/avatar.jpg'),
     avatarAvif224Bytes: fileSize('assets/avatar-224.avif'),
   };
+  const initialJsBytes =
+    assetSizes.themeInitJsBytes + assetSizes.themeJsBytes + assetSizes.commandMenuJsBytes;
   const combinedFontsBytes = assetSizes.monoFontBytes + assetSizes.pixelFontBytes;
 
   assert.ok(
@@ -80,6 +68,14 @@ async function main() {
   assert.ok(
     assetSizes.printCssBytes <= BUDGETS.printCssMaxBytes,
     `Print CSS ${assetSizes.printCssBytes} B exceeds budget ${BUDGETS.printCssMaxBytes} B`
+  );
+  assert.ok(
+    initialJsBytes <= BUDGETS.initialJsMaxBytes,
+    `Initial JS ${initialJsBytes} B exceeds budget ${BUDGETS.initialJsMaxBytes} B`
+  );
+  assert.ok(
+    assetSizes.commandMenuPanelJsBytes <= BUDGETS.lazyPanelJsMaxBytes,
+    `Lazy command menu panel JS ${assetSizes.commandMenuPanelJsBytes} B exceeds budget ${BUDGETS.lazyPanelJsMaxBytes} B`
   );
   assert.ok(
     combinedFontsBytes <= BUDGETS.combinedFontsMaxBytes,
@@ -98,7 +94,6 @@ async function main() {
     `avatar-224.avif ${assetSizes.avatarAvif224Bytes} B exceeds budget ${BUDGETS.avatarAvifMaxBytes} B`
   );
 
-  const executablePath = findBrowserExecutable();
   const server = createStaticServer(siteDir);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address();
@@ -112,15 +107,7 @@ async function main() {
   const baseOrigin = new URL(baseUrl).origin;
 
   try {
-    browser = await chromium.launch({
-      executablePath,
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-      ],
-    });
+    ({ browser } = await launchHeadlessBrowser());
 
     const context = await browser.newContext({
       viewport: { width: 390, height: 844 },
@@ -216,8 +203,15 @@ async function main() {
           totalTransferBytes: docBytes + resourceTransferBytes,
           resourceCount: resources.length,
           avatarCurrentSrc: avatarImg ? avatarImg.currentSrc : '',
+          eagerPanelLoaded: resources.some((r) => r.name.includes('command-menu-panel')),
         };
       });
+
+      assert.equal(
+        vitals.eagerPanelLoaded,
+        false,
+        'Lazy command-menu-panel JS should not load during initial page load'
+      );
 
       await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
     }
@@ -289,6 +283,7 @@ async function main() {
       budgets: BUDGETS,
       assetSizes: {
         ...assetSizes,
+        initialJsBytes,
         combinedFontsBytes,
       },
       mobileVitals: vitals,
@@ -301,7 +296,7 @@ async function main() {
     fs.writeFileSync(path.join(reportsDir, 'perf-report.json'), JSON.stringify(report, null, 2));
 
     console.log(
-      `PASS performance & mobile audit: screen CSS ${(assetSizes.screenCssBytes / 1024).toFixed(1)} KB, fonts ${(combinedFontsBytes / 1024).toFixed(1)} KB, mobile transfer ${(vitals.totalTransferBytes / 1024).toFixed(1)} KB, FCP ${vitals.fcpMs}ms, LCP ${vitals.lcpMs}ms, CLS ${vitals.cls}`
+      `PASS performance & mobile audit: screen CSS ${(assetSizes.screenCssBytes / 1024).toFixed(1)} KB, initial JS ${(initialJsBytes / 1024).toFixed(1)} KB, fonts ${(combinedFontsBytes / 1024).toFixed(1)} KB, mobile transfer ${(vitals.totalTransferBytes / 1024).toFixed(1)} KB, FCP ${vitals.fcpMs}ms, LCP ${vitals.lcpMs}ms, CLS ${vitals.cls}`
     );
   } finally {
     if (browser) await browser.close();

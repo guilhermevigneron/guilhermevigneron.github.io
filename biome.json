@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.6.7/schema.json",
   "files": {
     "includes": [
       "**",
@@ -20,14 +20,41 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
-      "suspicious": {
-        "noDuplicateCustomProperties": "off",
-        "noDuplicateProperties": "off",
-        "useIterableCallbackReturn": "off"
-      }
+      "preset": "recommended"
     }
   },
+  "overrides": [
+    {
+      "includes": ["src/styles.css"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noDuplicateCustomProperties": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/styles.css", "src/subpage.css"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noDuplicateProperties": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/styles.css", "src/print.css"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noImportantStyles": "off"
+          }
+        }
+      }
+    }
+  ],
   "javascript": {
     "formatter": {
       "quoteStyle": "single",

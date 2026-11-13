@@ -1,6 +1,6 @@
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { createStaticServer } from './serve.mjs';
 
 const ROOT = process.cwd();

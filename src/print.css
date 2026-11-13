@@ -84,8 +84,7 @@
   .cmd-dialog,
   .cmd-toast,
   .skip-link,
-  .no-print,
-  .tag-sep {
+  .no-print {
     display: none !important;
   }
 

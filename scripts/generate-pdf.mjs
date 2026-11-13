@@ -1,41 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { chromium } from 'playwright-core';
+import { launchHeadlessBrowser } from './lib/browser.mjs';
+import { countPdfPages } from './lib/pdf.mjs';
 import { createStaticServer } from './serve.mjs';
 
 const ROOT = process.cwd();
 const siteDir = path.join(ROOT, '_site');
 const pdfOutPath = path.join(siteDir, 'resume.pdf');
-
-function findBrowserExecutable() {
-  const candidates = [
-    process.env.CHROME_PATH,
-    process.env.PUPPETEER_EXECUTABLE_PATH,
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  ].filter(Boolean);
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  throw new Error(
-    'No Chromium/Chrome executable found. Set CHROME_PATH environment variable.'
-  );
-}
-
-function countPdfPages(pdfBuffer) {
-  const text = pdfBuffer.toString('latin1');
-  const pagesDictMatch = text.match(/\/Type\s*\/Pages[\s\S]{0,160}?\/Count\s+(\d+)/);
-  if (pagesDictMatch) {
-    return Number(pagesDictMatch[1]);
-  }
-  const pageMatches = text.match(/\/Type\s*\/Page\b(?!s)/g);
-  return pageMatches ? pageMatches.length : 0;
-}
 
 async function generatePdf() {
   if (!fs.existsSync(path.join(siteDir, 'index.html'))) {
@@ -44,8 +15,10 @@ async function generatePdf() {
 
   const resume = JSON.parse(fs.readFileSync(path.join(ROOT, 'resume.json'), 'utf8'));
   const maxPdfPages = Number(resume.meta?.maxPdfPages || 1);
+  const projects = resume.projects || [];
+  const expectProjectsHiddenInPrint =
+    projects.length > 0 && projects.every((project) => project.showInPrint === false);
 
-  const executablePath = findBrowserExecutable();
   const server = createStaticServer(siteDir);
 
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -53,18 +26,11 @@ async function generatePdf() {
   const baseUrl = `http://127.0.0.1:${address.port}`;
 
   let browser;
+  let executablePath;
   const blockedExternalRequests = [];
 
   try {
-    browser = await chromium.launch({
-      executablePath,
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-      ],
-    });
+    ({ browser, executablePath } = await launchHeadlessBrowser());
 
     const context = await browser.newContext({
       colorScheme: 'light',
@@ -102,11 +68,11 @@ async function generatePdf() {
       const avatarVisible = Boolean(
         avatarWrap && getComputedStyle(avatarWrap).display !== 'none'
       );
-      const text = document.body.innerText || '';
+      const text = document.body.textContent || '';
       return {
         hasName: text.includes(expectedName),
         avatarVisible,
-        avatarReady: Boolean(avatar && avatar.complete && avatar.naturalWidth > 0),
+        avatarReady: Boolean(avatar?.complete && avatar.naturalWidth > 0),
         projectsVisibleInPrint: Boolean(
           document.querySelector('#projects') &&
             getComputedStyle(document.querySelector('#projects')).display !== 'none'
@@ -120,7 +86,7 @@ async function generatePdf() {
     if (printAudit.avatarVisible && !printAudit.avatarReady) {
       throw new Error('Print layout avatar image failed to load');
     }
-    if (printAudit.projectsVisibleInPrint) {
+    if (expectProjectsHiddenInPrint && printAudit.projectsVisibleInPrint) {
       throw new Error('Selected Projects section should stay hidden in print PDF layout');
     }
 
@@ -131,12 +97,6 @@ async function generatePdf() {
       preferCSSPageSize: true,
       tagged: true,
       outline: true,
-      margin: {
-        top: '0.45in',
-        right: '0.5in',
-        bottom: '0.45in',
-        left: '0.5in',
-      },
     });
 
     if (blockedExternalRequests.length > 0) {

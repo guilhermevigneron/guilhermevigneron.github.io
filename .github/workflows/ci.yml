@@ -14,8 +14,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   dependency_review:
@@ -86,6 +86,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Single-Source Sync Parity Check
+        run: npm run test:sync
+
       - name: Lint (Biome)
         run: npm run lint
 
@@ -96,7 +99,7 @@ jobs:
         run: npm run test:security
 
       - name: Build static site, CSS/JS bundles, /resume.pdf & OG card
-        run: npm run build
+        run: npm run build -- --no-sync
 
       - name: HTML5 Validation
         run: npm run test:html
@@ -105,7 +108,7 @@ jobs:
         id: lychee
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
-          args: --root-dir ${{ github.workspace }}/_site --accept 200..=299,999 --exclude '^https://guilhermevigneron\.dev/(quality/|architecture/|assets/og-card\.png)$' --no-progress ./_site/index.html ./_site/404.html ./_site/quality/index.html ./_site/architecture/index.html
+          args: --root-dir ${{ github.workspace }}/_site --index-files index.html --remap "^https://guilhermevigneron\.dev file://${{ github.workspace }}/_site" --accept 200..=299,999 --no-progress ./_site/index.html ./_site/404.html ./_site/quality/index.html ./_site/architecture/index.html
 
       - name: Run Browser E2E & Accessibility Tests (Cypress)
         env:
@@ -123,10 +126,13 @@ jobs:
           npm run test:html
           node scripts/check-performance.mjs --quality-only
 
+      - name: Verify /quality Telemetry Overall Status
+        run: node -e "const r = JSON.parse(require('node:fs').readFileSync('./_site/quality/report.json', 'utf8')); if (r.overallStatus !== 'pass') { console.error(JSON.stringify(r, null, 2)); process.exit(1); }"
+
       - name: Link Checker (final /quality Report)
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
-          args: --root-dir ${{ github.workspace }}/_site --accept 200..=299,999 --exclude '^https://guilhermevigneron\.dev/quality/$' --no-progress ./_site/quality/index.html
+          args: --root-dir ${{ github.workspace }}/_site --index-files index.html --remap "^https://guilhermevigneron\.dev file://${{ github.workspace }}/_site" --accept 200..=299,999 --no-progress ./_site/quality/index.html
 
       - name: Upload GitHub Pages artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -138,6 +144,9 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build_and_test
     runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write
@@ -179,4 +188,4 @@ jobs:
       - name: Production Link Checker (guilhermevigneron.dev)
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
-          args: --accept 200..=299,999 --no-progress https://guilhermevigneron.dev https://guilhermevigneron.dev/quality/ https://guilhermevigneron.dev/architecture/
+          args: --accept 200..=299,999 --no-progress https://guilhermevigneron.dev https://guilhermevigneron.dev/404.html https://guilhermevigneron.dev/quality/ https://guilhermevigneron.dev/architecture/

@@ -73,7 +73,7 @@ module.exports = defineConfig({
           persistMetrics();
           return null;
         },
-        recordNetworkAudit({ route, externalUrls }) {
+        recordNetworkAudit({ externalUrls }) {
           state.network.pagesChecked += 1;
           state.network.externalRequests += externalUrls.length;
           state.network.blockedUrls.push(...externalUrls);

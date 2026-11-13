@@ -1,5 +1,5 @@
-import http from 'node:http';
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -24,7 +24,9 @@ const MIME_TYPES = {
 };
 
 export function createStaticServer(siteDir) {
-  const resolvedSiteDir = path.resolve(siteDir);
+  const resolvedSiteDir = fs.existsSync(siteDir)
+    ? fs.realpathSync(siteDir)
+    : path.resolve(siteDir);
 
   return http.createServer((req, res) => {
     const rawUrl = req.url || '/';
@@ -35,6 +37,8 @@ export function createStaticServer(siteDir) {
     }
 
     let cleanPath;
+    let search = '';
+    let escapesRoot = false;
     try {
       const reqUrl = new URL(rawUrl, 'http://127.0.0.1');
       if (reqUrl.origin !== 'http://127.0.0.1') {
@@ -42,20 +46,44 @@ export function createStaticServer(siteDir) {
         res.end('Bad Request');
         return;
       }
+      const rawPathname = decodeURIComponent(rawUrl.split(/[?#]/)[0]);
+      let depth = 0;
+      for (const segment of rawPathname.replaceAll('\\', '/').split('/')) {
+        if (!segment || segment === '.') continue;
+        if (segment === '..') {
+          depth -= 1;
+          if (depth < 0) {
+            escapesRoot = true;
+            break;
+          }
+        } else {
+          depth += 1;
+        }
+      }
       cleanPath = decodeURIComponent(reqUrl.pathname);
+      search = reqUrl.search;
     } catch {
       res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('Bad Request');
       return;
     }
 
-    if (cleanPath.includes('\0')) {
+    if (escapesRoot) {
+      res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Forbidden');
+      return;
+    }
+
+    if (cleanPath.includes('\0') || cleanPath.startsWith('//')) {
       res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('Bad Request');
       return;
     }
 
     let candidatePath = path.resolve(resolvedSiteDir, `.${cleanPath}`);
+    if (fs.existsSync(candidatePath)) {
+      candidatePath = fs.realpathSync(candidatePath);
+    }
     if (
       candidatePath !== resolvedSiteDir &&
       !candidatePath.startsWith(resolvedSiteDir + path.sep)
@@ -66,6 +94,11 @@ export function createStaticServer(siteDir) {
     }
 
     if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isDirectory()) {
+      if (cleanPath !== '/' && !cleanPath.endsWith('/')) {
+        res.writeHead(301, { Location: `${cleanPath}/${search}` });
+        res.end();
+        return;
+      }
       candidatePath = path.join(candidatePath, 'index.html');
     }
 
@@ -74,6 +107,7 @@ export function createStaticServer(siteDir) {
       res.writeHead(statusCode, {
         'Content-Type': contentType,
         'Content-Length': stat.size,
+        'X-Content-Type-Options': 'nosniff',
       });
       if (req.method === 'HEAD') {
         res.end();

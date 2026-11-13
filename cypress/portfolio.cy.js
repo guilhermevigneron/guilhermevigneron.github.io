@@ -3,6 +3,23 @@
  * Security, and Content Parity test suite for guilhermevigneron.dev.
  */
 
+import resume from '../resume.json';
+
+const SITE_URL = String(resume.meta?.canonical || resume.basics.url).replace(/\/$/, '');
+const CURRENT_YEAR = new Date().getUTCFullYear();
+const MAX_PDF_PAGES = Number(resume.meta?.maxPdfPages || 1);
+const PROJECTS = resume.projects || [];
+const ALL_PROJECTS_NO_PRINT =
+  PROJECTS.length > 0 && PROJECTS.every((project) => project.showInPrint === false);
+const ACTIVE_JOB = (resume.work || []).find((job) => !job.endDate);
+const LINKEDIN_PROFILE = resume.basics.profiles.find(
+  (profile) => profile.network.toLowerCase() === 'linkedin'
+);
+const GITHUB_PROFILE = resume.basics.profiles.find(
+  (profile) => profile.network.toLowerCase() === 'github'
+);
+const FIRST_PROJECT = PROJECTS[0];
+
 const THIRD_PARTY_DOMAINS = [
   'cdn.tailwindcss.com',
   'cdnjs.cloudflare.com',
@@ -94,7 +111,7 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
     });
   });
 
-  it('serves self-hosted Geist fonts, responsive avatar images, favicons, and split CSS with zero CDN references', () => {
+  it('serves self-hosted Geist fonts, responsive avatar images, favicons, split CSS, and lazy JS with zero CDN references', () => {
     cy.request('/assets/fonts/GeistMono-Variable.woff2').then((res) => {
       expect(res.status).to.eq(200);
       expect(res.headers['content-type']).to.include('font/woff2');
@@ -123,7 +140,7 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
       expect(res.headers['content-type']).to.include('image/webp');
     });
 
-    cy.request({ url: '/assets/og-card.png', encoding: 'binary' }).then((res) => {
+    cy.request({ url: resume.meta.ogImage, encoding: 'binary' }).then((res) => {
       expect(res.status).to.eq(200);
       expect(res.headers['content-type']).to.include('image/png');
       expect(res.body.length).to.be.greaterThan(5000);
@@ -135,8 +152,8 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
     cy.request('/site.webmanifest').then((res) => {
       expect(res.status).to.eq(200);
       const manifest = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;
-      expect(manifest.short_name).to.eq('G. Vigneron');
-      expect(manifest.description).to.include('Principal Technologist');
+      expect(manifest.short_name).to.eq(resume.meta.shortName);
+      expect(manifest.description).to.eq(resume.meta.manifestDescription);
     });
 
     cy.request('/assets/css/styles.css').then((res) => {
@@ -181,6 +198,14 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
       const src = $script.attr('src');
       expect(src).to.match(/^\/assets\/js\/command-menu\.[a-f0-9]+\.js$/);
       cy.request(src).its('status').should('eq', 200);
+    });
+
+    cy.window().then((win) => {
+      const initialUrls = win.performance.getEntriesByType('resource').map((entry) => entry.name);
+      expect(
+        initialUrls.some((url) => url.includes('command-menu-panel')),
+        'command-menu-panel should be deferred until command palette is opened'
+      ).to.eq(false);
     });
 
     cy.document().then(async (doc) => {
@@ -264,10 +289,10 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
     cy.visit('/');
   });
 
-  it('renders title, header, subtitle, six sections including Selected Projects, and footer', () => {
-    cy.title().should('eq', 'Guilherme Vigneron de Oliveira - Principal Technologist');
-    cy.contains('h1', 'Guilherme Vigneron de Oliveira').should('be.visible');
-    cy.contains('Principal Technologist | Quality, DevOps & Developer Experience').should('be.visible');
+  it('renders title, header, subtitle, semantic sections, CSS tag separators, and footer', () => {
+    cy.title().should('eq', resume.meta.pageTitle);
+    cy.contains('h1', resume.basics.name).should('be.visible');
+    cy.contains(resume.basics.label).should('be.visible');
 
     cy.contains('h2', 'Summary').should('be.visible');
     cy.contains('h2', 'Professional Experience').should('be.visible');
@@ -275,32 +300,48 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
     cy.contains('h2', 'Skills').should('be.visible');
     cy.contains('h2', 'Publications & Awards').should('be.visible');
     cy.contains('h2', 'Education').should('be.visible');
+    if (resume.languages?.length) {
+      cy.contains('h2', 'Languages').should('be.visible');
+    }
 
-    cy.get('#projects').should('have.class', 'no-print').within(() => {
-      cy.contains('a', 'guilhermevigneron.dev')
-        .should('be.visible')
-        .and('have.attr', 'href', 'https://github.com/guilhermevigneron/guilhermevigneron.github.io');
-      cy.contains('a', 'Live Quality Report').should('have.attr', 'href', '/quality/');
-    });
+    cy.get('.tag-list .tag-sep').should('have.length', 0);
+
+    cy.get('#projects')
+      .should(ALL_PROJECTS_NO_PRINT ? 'have.class' : 'not.have.class', 'no-print')
+      .within(() => {
+        if (FIRST_PROJECT) {
+          cy.contains('a', FIRST_PROJECT.name)
+            .should('be.visible')
+            .and('have.attr', 'href', FIRST_PROJECT.url);
+          for (const extra of FIRST_PROJECT.links || []) {
+            cy.contains('a', extra.label).should('have.attr', 'href', extra.url);
+          }
+        }
+      });
 
     cy.get('footer').should('be.visible');
-    cy.get('footer').should('contain.text', '2026 Guilherme Vigneron de Oliveira');
+    cy.get('footer').should('contain.text', `${CURRENT_YEAR} ${resume.basics.name}`);
+    cy.get('footer a[href="/architecture/"]').should('be.visible');
     cy.get('footer a[href="/quality/"]').should('be.visible');
   });
 
   it('uses accessible inline SVGs instead of Font Awesome for social navigation', () => {
     cy.get('nav[aria-label="Social links"]').within(() => {
-      cy.get('a[aria-label="LinkedIn Profile (opens in a new tab)"]')
-        .should('be.visible')
-        .and('have.attr', 'href', 'https://www.linkedin.com/in/guilherme-vigneron-de-oliveira');
+      if (LINKEDIN_PROFILE) {
+        cy.get('a[aria-label="LinkedIn Profile (opens in a new tab)"]')
+          .should('be.visible')
+          .and('have.attr', 'href', LINKEDIN_PROFILE.url);
+      }
 
-      cy.get('a[aria-label="GitHub Profile (opens in a new tab)"]')
-        .should('be.visible')
-        .and('have.attr', 'href', 'https://github.com/guilhermevigneron');
+      if (GITHUB_PROFILE) {
+        cy.get('a[aria-label="GitHub Profile (opens in a new tab)"]')
+          .should('be.visible')
+          .and('have.attr', 'href', GITHUB_PROFILE.url);
+      }
 
       cy.get('a[aria-label="Email"]')
         .should('be.visible')
-        .and('have.attr', 'href', 'mailto:email@gvo.simplelogin.com');
+        .and('have.attr', 'href', `mailto:${resume.basics.email}`);
 
       cy.get('svg[aria-hidden="true"][focusable="false"]').should('have.length', 3);
     });
@@ -356,18 +397,10 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
   it('includes complete SEO metadata, OG image card, and Schema.org JSON-LD', () => {
     cy.get('meta[name="description"]').should('have.attr', 'content').and('not.be.empty');
     cy.get('meta[property="og:type"]').should('have.attr', 'content', 'profile');
-    cy.get('meta[property="og:url"]').should('have.attr', 'content', 'https://guilhermevigneron.dev');
-    cy.get('meta[property="og:image"]').should(
-      'have.attr',
-      'content',
-      'https://guilhermevigneron.dev/assets/og-card.png'
-    );
-    cy.get('meta[name="twitter:image"]').should(
-      'have.attr',
-      'content',
-      'https://guilhermevigneron.dev/assets/og-card.png'
-    );
-    cy.get('link[rel="canonical"]').should('have.attr', 'href', 'https://guilhermevigneron.dev');
+    cy.get('meta[property="og:url"]').should('have.attr', 'content', SITE_URL);
+    cy.get('meta[property="og:image"]').should('have.attr', 'content', resume.meta.ogImageUrl);
+    cy.get('meta[name="twitter:image"]').should('have.attr', 'content', resume.meta.ogImageUrl);
+    cy.get('link[rel="canonical"]').should('have.attr', 'href', SITE_URL);
     cy.get('a[href="#about"]').should('exist');
   });
 });
@@ -413,7 +446,7 @@ describe('Theme Toggle & Persistence', () => {
 });
 
 describe('Command Menu Interaction', () => {
-  it('opens via trigger or Ctrl+J, ignores Ctrl+Shift+J, filters hints, syncs focus, and closes cleanly', () => {
+  it('lazy-loads on trigger or Ctrl+J, ignores Ctrl+Shift+J, filters hints, syncs ARIA/focus, passes axe, and closes cleanly', () => {
     cy.viewport(1280, 800);
     cy.visit('/');
 
@@ -424,6 +457,14 @@ describe('Command Menu Interaction', () => {
     cy.get('#command-trigger').should('be.visible').click();
     cy.get('#command-dialog').should('be.visible');
     cy.focused().should('have.id', 'command-input');
+
+    cy.window().then((win) => {
+      const urls = win.performance.getEntriesByType('resource').map((entry) => entry.name);
+      expect(
+        urls.some((url) => /\/assets\/js\/command-menu-panel\.[a-f0-9]+\.js$/.test(url)),
+        'command-menu-panel lazy module should load after opening command dialog'
+      ).to.eq(true);
+    });
 
     cy.injectAxe();
     cy.checkA11y('#command-dialog');
@@ -447,11 +488,16 @@ describe('Command Menu Interaction', () => {
       .should('contain.text', 'Download Resume (PDF)')
       .and('have.attr', 'data-selected', 'true');
 
+    if (resume.languages?.length) {
+      cy.contains('#command-dialog .cmd-item', 'Languages').should('exist');
+    }
+
+    const emailSearchToken = resume.basics.email.split('@')[1]?.split('.')[0] || resume.basics.email;
     [
       { query: 'Live', expected: 'Live Quality Report' },
       { query: 'Appearance', expected: 'Toggle Light / Dark Theme' },
       { query: 'A4', expected: 'Print / Save as PDF' },
-      { query: 'simplelogin', expected: 'Email' },
+      { query: emailSearchToken, expected: 'Email' },
     ].forEach(({ query, expected }) => {
       cy.get('#command-input').focus().clear().type(query);
       cy.contains('#command-dialog .cmd-item:not([hidden])', expected).should('be.visible');
@@ -486,18 +532,18 @@ describe('Command Menu Interaction', () => {
     cy.get('#command-input').type('Copy Email');
     cy.contains('#command-dialog .cmd-item:not([hidden])', 'Copy Email Address').click();
     cy.get('#cmd-toast').should('be.visible').and('contain.text', 'Email copied to clipboard');
-    cy.get('@clipWrite').should('have.been.calledWith', 'email@gvo.simplelogin.com');
+    cy.get('@clipWrite').should('have.been.calledWith', resume.basics.email);
 
     cy.get('#command-trigger').click();
     cy.get('#command-input').type('Copy Profile URL');
     cy.contains('#command-dialog .cmd-item:not([hidden])', 'Copy Profile URL').click();
     cy.get('#cmd-toast').should('be.visible').and('contain.text', 'Profile URL copied to clipboard');
-    cy.get('@clipWrite').should('have.been.calledWith', 'https://guilhermevigneron.dev');
+    cy.get('@clipWrite').should('have.been.calledWith', SITE_URL);
 
     cy.get('#command-trigger').click();
     cy.get('#command-input').type('vCard');
     cy.contains('#command-dialog .cmd-item:not([hidden])', 'Save Contact (vCard)')
-      .should('have.attr', 'data-href', '/contact.vcf')
+      .should('have.attr', 'data-href', resume.meta.contactVcf)
       .and('have.attr', 'data-download', 'guilherme-vigneron.vcf');
 
     cy.get('#command-input').clear().type('Markdown');
@@ -505,16 +551,17 @@ describe('Command Menu Interaction', () => {
     cy.get('#cmd-toast')
       .should('be.visible')
       .and('contain.text', 'Markdown resume copied to clipboard');
-    cy.get('@clipWrite').its('lastCall.args.0').should('include', '# Guilherme Vigneron de Oliveira');
+    cy.get('@clipWrite').its('lastCall.args.0').should('include', `# ${resume.basics.name}`);
 
     cy.get('#command-trigger').click();
     cy.get('#command-input').type('Selected Projects');
     cy.contains('#command-dialog .cmd-item:not([hidden])', 'Selected Projects').click();
     cy.get('#command-dialog').should('not.be.visible');
     cy.location('hash').should('eq', '#projects');
+    cy.focused().should('have.id', 'projects');
   });
 
-  it('works across /quality/, /architecture/, and /404.html via Ctrl+J and mobile search trigger', () => {
+  it('works across /quality/, /architecture/, and /404.html via desktop and mobile triggers', () => {
     ['/quality/', '/architecture/', '/404.html'].forEach((route) => {
       cy.viewport(1280, 800);
       cy.visit(route, { failOnStatusCode: route !== '/404.html' });
@@ -553,6 +600,21 @@ describe('Mobile Device Compatibility & Touch UX', () => {
           ).to.be.at.most(win.innerWidth);
         });
       });
+
+      if (width === 320) {
+        cy.visit('/');
+        cy.get('#command-trigger-mobile').click();
+        cy.get('#command-dialog').should('be.visible');
+        cy.window().then((win) => {
+          expect(win.document.documentElement.scrollWidth).to.be.at.most(win.innerWidth);
+        });
+        cy.get('#command-dialog').then(($dlg) => {
+          const rect = $dlg[0].getBoundingClientRect();
+          expect(rect.left).to.be.at.least(0);
+          expect(rect.right).to.be.at.most(320);
+        });
+      }
+
       cy.task('recordMobileAudit', { label: `overflow-${label}`, passed: true });
     });
   });
@@ -650,9 +712,9 @@ describe('Automated Resume PDF Pipeline', () => {
     cy.visit('/');
     cy.contains('a', 'Download My Resume')
       .should('be.visible')
-      .and('have.attr', 'href', '/resume.pdf');
+      .and('have.attr', 'href', resume.meta.resumePdf);
 
-    cy.request({ url: '/resume.pdf', encoding: 'binary' }).then((res) => {
+    cy.request({ url: resume.meta.resumePdf, encoding: 'binary' }).then((res) => {
       expect(res.status).to.eq(200);
       expect(res.headers['content-type']).to.include('application/pdf');
       expect(res.body.length).to.be.greaterThan(5000);
@@ -662,7 +724,8 @@ describe('Automated Resume PDF Pipeline', () => {
       expect(res.body, '/resume.pdf no embedded images').to.not.match(/\/Subtype\s*\/Image\b/);
       const pagesMatch = res.body.match(/\/Type\s*\/Pages[\s\S]{0,160}?\/Count\s+(\d+)/);
       expect(pagesMatch, '/resume.pdf page count header').to.not.be.null;
-      expect(Number(pagesMatch[1]), '/resume.pdf page count').to.eq(1);
+      const pageCount = Number(pagesMatch[1]);
+      expect(pageCount, '/resume.pdf page count').to.be.at.least(1).and.at.most(MAX_PDF_PAGES);
     });
   });
 });
@@ -671,29 +734,29 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
   it('keeps /resume.json, index.html JSON-LD, /llms.txt, and /contact.vcf in sync', () => {
     cy.request('/resume.json').then((resumeRes) => {
       expect(resumeRes.status).to.eq(200);
-      const resume =
+      const liveResume =
         typeof resumeRes.body === 'string' ? JSON.parse(resumeRes.body) : resumeRes.body;
 
-      expect(resume.basics.name).to.eq('Guilherme Vigneron de Oliveira');
-      expect(resume.work).to.have.length(3);
-      expect(resume.projects).to.have.length.at.least(1);
-      expect(resume.skills).to.have.length(13);
-      expect(resume.meta.resumePdf).to.eq('/resume.pdf');
-      expect(resume.meta.contactVcf).to.eq('/contact.vcf');
-      expect(resume.meta.maxPdfPages).to.eq(1);
+      expect(liveResume.basics.name).to.eq(resume.basics.name);
+      expect(liveResume.work).to.have.length.at.least(1);
+      expect(liveResume.projects).to.have.length.at.least(1);
+      expect(liveResume.skills).to.have.length.at.least(1);
+      expect(liveResume.meta.resumePdf).to.eq(resume.meta.resumePdf);
+      expect(liveResume.meta.contactVcf).to.eq(resume.meta.contactVcf);
+      expect(liveResume.meta.maxPdfPages).to.eq(MAX_PDF_PAGES);
 
       cy.visit('/');
       cy.get('main').within(() => {
-        cy.get(`a[href="mailto:${resume.basics.email}"]`).should('exist');
-        resume.basics.profiles.forEach((profile) => {
+        cy.get(`a[href="mailto:${liveResume.basics.email}"]`).should('exist');
+        liveResume.basics.profiles.forEach((profile) => {
           cy.get(`a[href="${profile.url}"]`).should('exist');
         });
-        resume.work.forEach((job) => {
+        liveResume.work.forEach((job) => {
           cy.contains(job.position).should('be.visible');
           cy.contains(job.displayDate).should('be.visible');
           cy.contains(job.location).should('be.visible');
         });
-        resume.skills.forEach((skill) => {
+        liveResume.skills.forEach((skill) => {
           cy.get('#skills').should('contain.text', skill.name);
         });
       });
@@ -703,34 +766,47 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
         .then(($script) => {
           const jsonLd = JSON.parse($script.text());
           expect(jsonLd['@type']).to.eq('Person');
-          expect(jsonLd.name).to.eq(resume.basics.name);
-          expect(jsonLd.jobTitle).to.eq(resume.meta.jobTitle);
-          expect(jsonLd.email).to.eq(resume.basics.email);
-          expect(jsonLd.worksFor.name).to.eq(resume.work[0].name);
-          expect(jsonLd.knowsAbout).to.deep.eq(resume.skills.map((s) => s.name));
+          expect(jsonLd.name).to.eq(liveResume.basics.name);
+          expect(jsonLd.jobTitle).to.eq(liveResume.meta.jobTitle);
+          expect(jsonLd.email).to.eq(liveResume.basics.email);
+          if (ACTIVE_JOB) {
+            expect(jsonLd.worksFor.name).to.eq(ACTIVE_JOB.name);
+          } else {
+            expect(jsonLd.worksFor).to.eq(undefined);
+          }
+          expect(jsonLd.knowsAbout).to.deep.eq(liveResume.skills.map((s) => s.name));
         });
 
       cy.request('/llms.txt').then((llmsRes) => {
         expect(llmsRes.status).to.eq(200);
         const llms = llmsRes.body;
-        expect(llms).to.include(resume.basics.name);
-        expect(llms).to.include(resume.meta.resumePdfUrl);
-        expect(llms).to.include(resume.meta.resumeJsonUrl);
-        expect(llms).to.include(resume.meta.contactVcfUrl);
-        expect(llms).to.include(resume.meta.qualityReportJsonUrl);
+        expect(llms).to.include(liveResume.basics.name);
+        expect(llms).to.include(liveResume.meta.resumePdfUrl);
+        expect(llms).to.include(liveResume.meta.resumeJsonUrl);
+        expect(llms).to.include(liveResume.meta.contactVcfUrl);
+        expect(llms).to.include(liveResume.meta.qualityReportJsonUrl);
         expect(llms).to.not.include('drive.google.com');
-        resume.work.forEach((job) => expect(llms).to.include(job.position));
-        resume.projects.forEach((proj) => expect(llms).to.include(proj.name));
-        resume.skills.forEach((skill) => expect(llms).to.include(skill.name));
-        resume.publications.forEach((pub) => expect(llms).to.include(pub.url));
+        liveResume.work.forEach((job) => {
+          expect(llms).to.include(job.position);
+        });
+        liveResume.projects.forEach((proj) => {
+          expect(llms).to.include(proj.name);
+        });
+        liveResume.skills.forEach((skill) => {
+          expect(llms).to.include(skill.name);
+        });
+        liveResume.publications.forEach((pub) => {
+          expect(llms).to.include(pub.url);
+        });
       });
 
       cy.request('/contact.vcf').then((vcfRes) => {
         expect(vcfRes.status).to.eq(200);
         expect(vcfRes.headers['content-type']).to.include('text/vcard');
         expect(vcfRes.body).to.include('BEGIN:VCARD');
-        expect(vcfRes.body).to.include(`FN:${resume.basics.name}`);
-        expect(vcfRes.body).to.include(`EMAIL;TYPE=INTERNET:${resume.basics.email}`);
+        expect(vcfRes.body).to.include(`FN:${liveResume.basics.name}`);
+        expect(vcfRes.body).to.include(`EMAIL;TYPE=INTERNET:${liveResume.basics.email}`);
+        expect(vcfRes.body).to.match(/^ADR;TYPE=HOME:;;;[^;\r\n]*;[^;\r\n]*;;[^;\r\n]*\r?$/m);
         expect(vcfRes.body).to.include('END:VCARD');
       });
     });
@@ -741,10 +817,8 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
       expect(res.status).to.eq(200);
       const body = res.body;
 
-      expect(body).to.match(/^Contact:\s*mailto:email@gvo\.simplelogin\.com$/m);
-      expect(body).to.match(
-        /^Canonical:\s*https:\/\/guilhermevigneron\.dev\/\.well-known\/security\.txt$/m
-      );
+      expect(body).to.include(`Contact: mailto:${resume.basics.email}`);
+      expect(body).to.include(`Canonical: ${SITE_URL}/.well-known/security.txt`);
       expect(body).to.match(/^Preferred-Languages:\s*en,\s*pt$/m);
 
       const expiresMatch = body.match(/^Expires:\s*(.+)$/m);
@@ -760,10 +834,20 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
     });
   });
 
-  it('serves branded 404.html with a working link back to / and handles malformed URLs cleanly', () => {
+  it('serves branded 404.html, redirects directory routes without trailing slash (301), and handles malformed URLs cleanly', () => {
     cy.request({ url: '/nonexistent-route-check', failOnStatusCode: false }).then((res) => {
       expect(res.status).to.eq(404);
       expect(res.body).to.include('Page Not Found');
+    });
+
+    cy.request({ url: '/quality', followRedirect: false }).then((res) => {
+      expect(res.status).to.eq(301);
+      expect(res.headers.location).to.eq('/quality/');
+    });
+
+    cy.request({ url: '/quality?v=1', followRedirect: false }).then((res) => {
+      expect(res.status).to.eq(301);
+      expect(res.headers.location).to.eq('/quality/?v=1');
     });
 
     cy.request({ url: '/%E0%A4%A', failOnStatusCode: false }).then((res) => {
@@ -775,33 +859,41 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
     cy.contains('a', 'Back to Portfolio').should('have.attr', 'href', '/');
   });
 
-  it('serves /quality/ verification report, /quality/report.json, and /sitemap.xml', () => {
+  it('serves /quality/ verification report, /quality/report.json, /architecture/, and /sitemap.xml', () => {
     cy.visit('/quality/');
     cy.contains('h1', 'Quality & Verification Report').should('be.visible');
     cy.contains('Zero Third-Party Network Requests').should('be.visible');
     cy.contains('Web Vitals & Asset Payload Budgets').should('be.visible');
     cy.contains('Mobile Compatibility & Touch Ergonomics').should('be.visible');
     cy.contains('WCAG 2.1 AA Accessibility').should('be.visible');
+    cy.contains('Static Lint, Unit Tests & Dependency Audit').should('be.visible');
     cy.contains('Print PDF & Social Card Pipeline').should('be.visible');
+    cy.get('header a[href="/architecture/"]').should('be.visible');
     cy.get('a[href="/quality/report.json"]').should('be.visible');
 
     cy.request('/quality/report.json').then((res) => {
       expect(res.status).to.eq(200);
       const report = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;
       expect(report.schemaVersion).to.eq(1);
-      expect(report.artifacts.resumePdfPages).to.eq(1);
+      expect(report.artifacts.resumePdfPages).to.eq(MAX_PDF_PAGES);
       expect(report.artifacts.ogCardBytes).to.be.greaterThan(5000);
       expect(report.artifacts.contactVcfBytes).to.be.greaterThan(100);
+      expect(report.endpoints).to.include('/architecture/');
       const failing = report.gates.filter((g) => g.status === 'fail');
       expect(failing).to.deep.equal([]);
     });
 
+    cy.visit('/architecture/');
+    cy.contains('h1', 'Architecture Overview').should('be.visible');
+    cy.get('header a[href="/quality/"]').should('be.visible');
+
     cy.request('/sitemap.xml').then((res) => {
       expect(res.status).to.eq(200);
-      expect(res.body).to.include('https://guilhermevigneron.dev/');
-      expect(res.body).to.include('https://guilhermevigneron.dev/resume.pdf');
-      expect(res.body).to.include('https://guilhermevigneron.dev/contact.vcf');
-      expect(res.body).to.include('https://guilhermevigneron.dev/quality/report.json');
+      expect(res.body).to.include(`${SITE_URL}/`);
+      expect(res.body).to.include(`${SITE_URL}${resume.meta.resumePdf}`);
+      expect(res.body).to.include(`${SITE_URL}${resume.meta.contactVcf}`);
+      expect(res.body).to.include(`${SITE_URL}/architecture/`);
+      expect(res.body).to.include(`${SITE_URL}/quality/report.json`);
     });
   });
 });

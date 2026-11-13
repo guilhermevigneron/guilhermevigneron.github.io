@@ -9,7 +9,7 @@ Zero-third-party-runtime-dependency personal portfolio & resume static site buil
 ## Core Architecture & Single Source of Truth
 
 - **`resume.json` is the single source of truth** for all profile content, experience, projects, skills, education, publications, awards, and metadata.
-- **Never hand-edit generated/synced blocks** in `index.html`, `404.html`, `llms.txt`, `site.webmanifest`, or `sitemap.xml`. Instead, edit `resume.json` (or the template logic in `scripts/sync-resume.mjs`) and run:
+- **Never hand-edit generated/synced blocks** in `index.html`, `404.html`, `llms.txt`, `site.webmanifest`, `sitemap.xml`, `robots.txt`, `.well-known/security.txt`, or `assets/js/command-menu-panel.js`. Instead, edit `resume.json` (or the template logic in `scripts/sync-resume.mjs`) and run:
   ```bash
   npm run sync
   ```
@@ -20,10 +20,10 @@ Zero-third-party-runtime-dependency personal portfolio & resume static site buil
 
 - `resume.json` — Canonical JSON Resume data.
 - `src/` — Source stylesheets (`styles.css`, `subpage.css`, `print.css`).
-- `assets/js/` — Client scripts (`theme-init.js`, `theme.js`, `command-menu.js`).
-- `scripts/` — Build, sync, PDF/OG generation, HTML validation, perf, and quality report scripts.
+- `assets/js/` — Client scripts (`theme-init.js`, `theme.js`, eager loader `command-menu.js`, lazy ES module `command-menu-panel.js`).
+- `scripts/` — Build, sync, PDF/OG generation, HTML validation, perf, gate telemetry (`run-gate.mjs`), and report generators, backed by shared helpers in `scripts/lib/` (`browser.mjs`, `chrome.mjs`, `pdf.mjs`).
 - `tests/unit.test.mjs` — Node built-in unit tests (`node --test`).
-- `cypress/portfolio.cy.js` — E2E, mobile, CSP, and WCAG 2.1 AA (`cypress-axe`) tests.
+- `cypress/portfolio.cy.js` — E2E, mobile, CSP, lazy module loading, and WCAG 2.1 AA (`cypress-axe`) tests.
 
 ## Non-Negotiable Constraints
 
@@ -32,6 +32,7 @@ Zero-third-party-runtime-dependency personal portfolio & resume static site buil
    - Do **not** add inline `<script>` or `<style>` blocks, `eval()`, or external CDN/font/API requests.
 2. **Performance & Asset Budgets** (enforced by `scripts/check-performance.mjs` and `scripts/generate-pdf.mjs`):
    - Screen CSS `<= 12 KB`, subpage CSS `<= 6 KB`, print CSS `<= 3 KB`
+   - Initial JS (`theme-init.js` + `theme.js` + `command-menu.js`) `<= 4 KB`, lazy `command-menu-panel.js` `<= 12 KB`
    - Minified `index.html` `<= 25 KB`, initial mobile transfer `<= 75 KB`
    - `CLS <= 0.01`, `LCP <= 2500 ms`, `FCP <= 1800 ms`
    - `/resume.pdf` must remain **1 page** (`maxPdfPages: 1`).
@@ -52,11 +53,12 @@ npm run verify
 
 Or run targeted checks as needed:
 
-- `npm run lint` — Biome lint across JS, CSS, JSON, and SVG/HTML
+- `npm run lint` — Biome lint across JS, CSS, JSON, and SVG/HTML (records telemetry)
 - `npm run lint:fix` — Auto-fix Biome lint issues
-- `npm run test:unit` — Unit tests (`tests/unit.test.mjs`)
+- `npm run test:unit` — Unit tests (`tests/unit.test.mjs`, records telemetry)
+- `npm run test:security` — `npm audit --audit-level=moderate` (records telemetry)
 - `npm run test:sync` — Validate `resume.json` parity across synced files
-- `npm run build` — Sync, validate, bundle/fingerprint assets, generate `/resume.pdf`, OG card, `/quality/`, and `/architecture/`
+- `npm run build` — Sync (skip with `-- --no-sync`), validate, bundle/fingerprint assets, generate `/resume.pdf`, OG card, `/quality/`, and `/architecture/`
 - `npm run test:html` — Validate built HTML5 in `_site/`
 - `npm run test:e2e` — Run Cypress + `axe-core` suite
 - `npm run test:perf` — Run Playwright mobile Web Vitals & byte-budget audit

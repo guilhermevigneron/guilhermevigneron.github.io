@@ -1,5 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  escapeHtml,
+  getAssetUrls,
+  readJsonIfExists,
+  renderSubpageDocument,
+} from './lib/chrome.mjs';
 import { minifyHtml } from './minify-html.mjs';
 
 const ROOT = process.cwd();
@@ -8,15 +14,6 @@ const reportsDir = path.join(ROOT, '.ci-reports');
 const outDir = path.join(siteDir, 'quality');
 const outFile = path.join(outDir, 'index.html');
 const outJsonFile = path.join(outDir, 'report.json');
-
-function readJsonIfExists(filePath) {
-  if (!fs.existsSync(filePath)) return null;
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch {
-    return null;
-  }
-}
 
 function getFileSizeBytes(filePath) {
   if (!fs.existsSync(filePath)) return null;
@@ -28,7 +25,7 @@ function formatKb(bytes) {
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
-function getCombinedFontsSizeBytes(paths) {
+function sumFileSizesBytes(paths) {
   let totalBytes = 0;
   let foundAny = false;
   for (const filePath of paths) {
@@ -51,14 +48,6 @@ function getSecurityExpiryDays() {
   return Math.floor((expiresMs - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 function statusBadge(status) {
   if (status === 'pass') {
     return '<span class="status-badge status-badge--pass">PASS</span>';
@@ -72,8 +61,16 @@ function statusBadge(status) {
 function buildQualityPage() {
   const resume = readJsonIfExists(path.join(ROOT, 'resume.json'));
   const ownerName = resume?.basics?.name || 'Guilherme Vigneron de Oliveira';
+  const siteUrl = String(resume?.basics?.url || 'https://guilhermevigneron.dev').replace(
+    /\/$/,
+    ''
+  );
+  const domain = siteUrl.replace(/^https?:\/\//, '');
   const currentYear = new Date().getUTCFullYear();
 
+  const lintReport = readJsonIfExists(path.join(reportsDir, 'lint-report.json'));
+  const unitReport = readJsonIfExists(path.join(reportsDir, 'unit-report.json'));
+  const securityReport = readJsonIfExists(path.join(reportsDir, 'security-report.json'));
   const syncReport = readJsonIfExists(path.join(reportsDir, 'sync-validation.json'));
   const pdfReport = readJsonIfExists(path.join(reportsDir, 'pdf-report.json'));
   const ogReport = readJsonIfExists(path.join(reportsDir, 'og-report.json'));
@@ -82,21 +79,20 @@ function buildQualityPage() {
   const perfReport = readJsonIfExists(path.join(reportsDir, 'perf-report.json'));
   const lycheeExit = process.env.LYCHEE_STATUS;
 
-  const assetManifest = readJsonIfExists(path.join(reportsDir, 'asset-manifest.json'));
-  const cssUrl = assetManifest?.cssUrl || '/assets/css/styles.css';
-  const subpageCssUrl = assetManifest?.subpageCssUrl || '/assets/css/subpage.css';
-  const monoFontUrl = assetManifest?.monoFontUrl || '/assets/fonts/GeistMono-Variable.woff2';
-  const pixelFontUrl = assetManifest?.pixelFontUrl || '/assets/fonts/GeistPixel-Square.woff2';
-  const themeInitJsUrl = assetManifest?.themeInitJsUrl || '/assets/js/theme-init.js';
-  const themeJsUrl = assetManifest?.themeJsUrl || '/assets/js/theme.js';
-  const commandMenuJsUrl = assetManifest?.commandMenuJsUrl || '/assets/js/command-menu.js';
-  const faviconSvgUrl = assetManifest?.faviconSvgUrl || '/assets/favicon.svg';
-  const appleTouchIconUrl = assetManifest?.appleTouchIconUrl || '/assets/apple-touch-icon.png';
+  const assetUrls = getAssetUrls(reportsDir, true);
 
   const cssBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'css', 'styles.css'));
   const subpageCssBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'css', 'subpage.css'));
   const printCssBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'css', 'print.css'));
-  const fontsBytes = getCombinedFontsSizeBytes([
+  const initialJsBytes = sumFileSizesBytes([
+    path.join(siteDir, 'assets', 'js', 'theme-init.js'),
+    path.join(siteDir, 'assets', 'js', 'theme.js'),
+    path.join(siteDir, 'assets', 'js', 'command-menu.js'),
+  ]);
+  const commandMenuPanelJsBytes = getFileSizeBytes(
+    path.join(siteDir, 'assets', 'js', 'command-menu-panel.js')
+  );
+  const fontsBytes = sumFileSizesBytes([
     path.join(siteDir, 'assets', 'fonts', 'GeistMono-Variable.woff2'),
     path.join(siteDir, 'assets', 'fonts', 'GeistPixel-Square.woff2'),
   ]);
@@ -110,6 +106,15 @@ function buildQualityPage() {
   const fontSize = formatKb(fontsBytes);
   const pdfSize = formatKb(pdfBytes);
   const indexSize = formatKb(indexBytes);
+
+  const lintStatus = lintReport ? (lintReport.passed ? 'pass' : 'fail') : 'pending';
+  const unitStatus = unitReport ? (unitReport.passed ? 'pass' : 'fail') : 'pending';
+  const auditStatus = securityReport ? (securityReport.passed ? 'pass' : 'fail') : 'pending';
+  const codeQualityStatus = [lintStatus, unitStatus, auditStatus].includes('fail')
+    ? 'fail'
+    : lintStatus === 'pass' && unitStatus === 'pass' && auditStatus === 'pass'
+      ? 'pass'
+      : 'pending';
 
   const syncStatus = syncReport?.passed ? 'pass' : syncReport ? 'fail' : 'pending';
   const pdfStatus = pdfReport?.passed ? 'pass' : pdfReport ? 'fail' : 'pending';
@@ -221,7 +226,7 @@ function buildQualityPage() {
       title: 'WCAG 2.1 AA Accessibility (cypress-axe)',
       status: axeStatus,
       summary:
-        'Automated axe-core audits executed across both Light and Dark themes on Desktop (1280x800) and Mobile (375x667) viewports for home, 404, and Quality pages.',
+        'Automated axe-core audits executed across both Light and Dark themes on Desktop (1280x800) and Mobile (375x667) viewports plus interactive dialogs.',
       metric: cypressReport?.a11y
         ? `${cypressReport.a11y.checksRun} viewport/theme audits — ${cypressReport.a11y.violations} violations`
         : 'Pending Cypress axe-core audit run',
@@ -231,15 +236,31 @@ function buildQualityPage() {
       title: 'E2E Verification Suite (Cypress)',
       status: cypressStatus,
       summary:
-        'Full browser verification covering content, cross-page command menu, clipboard actions, theme persistence, resume.pdf binary payload, security.txt expiry, and parity.',
+        'Full browser verification covering content, lazy cross-page command menu, clipboard actions, theme persistence, resume.pdf binary payload, security.txt expiry, and parity.',
       metric: cypressReport
         ? `${cypressReport.totalPassed}/${cypressReport.totalTests} tests passed (${cypressReport.totalFailed} failed)`
         : 'Pending Cypress execution',
     },
     {
+      id: 'lint-unit-security',
+      title: 'Static Lint, Unit Tests & Dependency Audit',
+      status: codeQualityStatus,
+      summary:
+        'Biome code formatting & lint rules across JS/CSS/JSON, Node.js built-in unit tests for generators & HTTP path safety, and npm audit dependency checks.',
+      metric:
+        lintReport && unitReport && securityReport
+          ? `Biome lint: ${lintStatus} · Unit tests: ${unitStatus} · npm audit: ${auditStatus}`
+          : 'Pending npm run lint, test:unit & test:security',
+    },
+    {
       id: 'pdf-og-rendering',
       title: 'Print PDF & Social Card Pipeline',
-      status: pdfStatus === 'pass' && ogStatus === 'pass' ? 'pass' : pdfStatus === 'fail' || ogStatus === 'fail' ? 'fail' : 'pending',
+      status:
+        pdfStatus === 'pass' && ogStatus === 'pass'
+          ? 'pass'
+          : pdfStatus === 'fail' || ogStatus === 'fail'
+            ? 'fail'
+            : 'pending',
       summary:
         'Headless Chromium print rendering enforcing single-page A4 layout bounds alongside automated 1200x630 Open Graph card generation.',
       metric:
@@ -263,7 +284,12 @@ function buildQualityPage() {
     {
       id: 'source-parity-security',
       title: 'Single Source of Truth & Security Policy',
-      status: syncStatus === 'pass' && secStatus === 'pass' ? 'pass' : syncStatus === 'fail' || secStatus === 'fail' ? 'fail' : 'pending',
+      status:
+        syncStatus === 'pass' && secStatus === 'pass'
+          ? 'pass'
+          : syncStatus === 'fail' || secStatus === 'fail'
+            ? 'fail'
+            : 'pending',
       summary:
         'Automated parity across /resume.json, DOM, Schema.org JSON-LD, /llms.txt, webmanifest, sitemap, and 404, plus RFC 9116 /.well-known/security.txt freshness.',
       metric: `Sync: ${syncPassedCount}/${syncTotalCount} checks passed · security.txt expires in ${expiryDays ?? '?'} days (min 30d)`,
@@ -287,6 +313,8 @@ function buildQualityPage() {
       cssBytes,
       subpageCssBytes,
       printCssBytes,
+      initialJsBytes,
+      commandMenuPanelJsBytes,
       fontsBytes,
       indexHtmlBytes: indexBytes,
       resumePdfBytes: pdfBytes,
@@ -301,6 +329,7 @@ function buildQualityPage() {
       '/llms.txt',
       '/contact.vcf',
       '/assets/og-card.png',
+      '/architecture/',
       '/quality/',
       '/quality/report.json',
       '/.well-known/security.txt',
@@ -313,65 +342,10 @@ function buildQualityPage() {
     ? `${pdfReport.pages} page, ${pdfSize}, ${pdfStatus.toUpperCase()}`
     : pdfStatus.toUpperCase();
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Quality &amp; Verification Report - ${escapeHtml(ownerName)}</title>
-    <meta name="description" content="Automated CI/CD quality, accessibility, performance, and security verification report for guilhermevigneron.dev.">
-    <meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#0d0c0a" media="(prefers-color-scheme: dark)">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
-    <meta name="referrer" content="strict-origin-when-cross-origin">
-    <link rel="icon" type="image/svg+xml" href="${escapeHtml(faviconSvgUrl)}">
-    <link rel="icon" href="/favicon.ico" sizes="32x32">
-    <link rel="apple-touch-icon" href="${escapeHtml(appleTouchIconUrl)}">
-    <link rel="manifest" href="/site.webmanifest">
-    <link rel="canonical" href="https://guilhermevigneron.dev/quality/">
-    <link rel="alternate" type="application/json" href="/quality/report.json" title="Quality Telemetry JSON">
-    <script src="${escapeHtml(themeInitJsUrl)}"></script>
-    <link rel="stylesheet" href="${escapeHtml(cssUrl)}">
-    <link rel="stylesheet" href="${escapeHtml(subpageCssUrl)}">
-    <link rel="preload" href="${escapeHtml(monoFontUrl)}" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="${escapeHtml(pixelFontUrl)}" as="font" type="font/woff2" crossorigin>
-    <script src="${escapeHtml(themeJsUrl)}" defer></script>
-    <script src="${escapeHtml(commandMenuJsUrl)}" defer></script>
-</head>
-<body class="subpage-body">
-    <a href="#main-content" class="sr-only skip-link">Skip to main content</a>
-
-    <main id="main-content" class="subpage-main">
-        <div class="cv-shell">
-            <header class="subpage-nav">
-                <div>
-                    <a href="/" class="subpage-brand">${escapeHtml(ownerName)}</a>
-                    <p class="entry-sub">Self-Verifying Engineering Showcase &amp; Quality Report</p>
-                </div>
-                <div class="subpage-nav-actions">
-                    <a href="/" class="ghost-link">Portfolio</a>
-                    <button id="theme-toggle" type="button" class="icon-btn" aria-label="Switch to dark theme" aria-pressed="false" title="Switch to dark theme">
-                        <svg class="theme-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                            <circle cx="12" cy="12" r="4"></circle>
-                            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
-                        </svg>
-                        <svg class="theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                        </svg>
-                    </button>
-                    <button id="command-trigger-mobile" type="button" class="icon-btn mobile-only-btn" aria-label="Open command menu" aria-haspopup="dialog" aria-controls="command-dialog" aria-expanded="false" title="Open command menu">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <path d="m21 21-4.3-4.3"></path>
-                        </svg>
-                    </button>
-                </div>
-            </header>
-
-            <section class="cv-section">
+  const mainSectionsHtml = `            <section class="cv-section">
                 <h1 class="cv-name">Quality &amp; Verification Report</h1>
                 <p class="summary-copy">
-                    Every build of <strong>guilhermevigneron.dev</strong> runs through an automated zero-third-party verification pipeline before deployment. Below is the telemetry generated from this deployment artifact.
+                    Every build of <strong>${escapeHtml(domain)}</strong> runs through an automated zero-third-party verification pipeline before deployment. Below is the telemetry generated from this deployment artifact.
                 </p>
                 <div class="metric-grid">
                     <div class="panel-card">
@@ -422,6 +396,7 @@ function buildQualityPage() {
                         <li><a href="/llms.txt">/llms.txt</a> &mdash; LLM-friendly markdown profile generated from resume.json</li>
                         <li><a href="/contact.vcf">/contact.vcf</a> &mdash; Downloadable vCard contact generated from resume.json</li>
                         <li><a href="/assets/og-card.png">/assets/og-card.png</a> &mdash; Automated 1200x630 Open Graph preview card</li>
+                        <li><a href="/architecture/">/architecture/</a> &mdash; High-level build &amp; verification pipeline overview</li>
                         <li><a href="/quality/report.json">/quality/report.json</a> &mdash; Machine-readable CI telemetry JSON</li>
                         <li><a href="/.well-known/security.txt">/.well-known/security.txt</a> &mdash; RFC 9116 vulnerability disclosure policy</li>
                         <li><a href="/sitemap.xml">/sitemap.xml</a> &amp; <a href="/robots.txt">/robots.txt</a> &mdash; Search crawler directives</li>
@@ -435,40 +410,40 @@ function buildQualityPage() {
                     <p><strong>Generated:</strong> ${escapeHtml(generatedAt)}</p>
                     <p><strong>Ref / Commit:</strong> ${escapeHtml(branchRef)} (${escapeHtml(commitSha)})</p>${runUrl ? `\n                    <p><strong>CI Run:</strong> <a href="${escapeHtml(runUrl)}" target="_blank" rel="noopener noreferrer">GitHub Actions Execution Log</a></p>` : ''}
                 </div>
-            </section>
-        </div>
-    </main>
+            </section>`;
 
-    <footer class="cv-footer-wrap">
-        <div class="cv-footer-inner">
-            <span>&copy; ${escapeHtml(String(currentYear))} ${escapeHtml(ownerName)}</span>
-            <div class="cv-footer-links">
-                <a href="/">Return to Portfolio</a>
-                <span aria-hidden="true">&middot;</span>
-                <a href="/architecture/">Architecture</a>
-                <span aria-hidden="true">&middot;</span>
-                <a href="/quality/report.json">Telemetry JSON</a>
-                <span aria-hidden="true">&middot;</span>
-                <a href="/resume.json">JSON Resume</a>
-                <span aria-hidden="true">&middot;</span>
-                <a href="/llms.txt">llms.txt</a>
-            </div>
-        </div>
-        <div class="command-bar">
-            <button type="button" id="command-trigger" class="command-trigger" aria-haspopup="dialog" aria-controls="command-dialog" aria-expanded="false">
-                <span>Press</span>
-                <kbd class="kbd-chip"><span id="command-modifier">Ctrl</span>+J</kbd>
-                <span>to open the command menu</span>
-            </button>
-        </div>
-    </footer>
-</body>
-</html>
-`;
+  const html = renderSubpageDocument({
+    title: `Quality & Verification Report - ${ownerName}`,
+    description: `Automated CI/CD quality, accessibility, performance, and security verification report for ${domain}.`,
+    canonicalUrl: `${siteUrl}/quality/`,
+    alternateLinks: [
+      {
+        type: 'application/json',
+        href: '/quality/report.json',
+        title: 'Quality Telemetry JSON',
+      },
+    ],
+    ownerName,
+    subtitleHtml: '<p class="entry-sub">Self-Verifying Engineering Showcase &amp; Quality Report</p>',
+    navLinks: [
+      { href: '/', label: 'Portfolio' },
+      { href: '/architecture/', label: 'Architecture' },
+    ],
+    mainSectionsHtml,
+    footerLinks: [
+      { href: '/', label: 'Return to Portfolio' },
+      { href: '/architecture/', label: 'Architecture' },
+      { href: '/quality/report.json', label: 'Telemetry JSON' },
+      { href: '/resume.json', label: 'JSON Resume' },
+      { href: '/llms.txt', label: 'llms.txt' },
+    ],
+    copyrightHtml: `<span>&copy; ${escapeHtml(String(currentYear))} ${escapeHtml(ownerName)}</span>`,
+    assetUrls,
+  });
 
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(outFile, minifyHtml(html), 'utf8');
-  fs.writeFileSync(outJsonFile, JSON.stringify(reportPayload, null, 2) + '\n', 'utf8');
+  fs.writeFileSync(outJsonFile, `${JSON.stringify(reportPayload, null, 2)}\n`, 'utf8');
   console.log('Generated _site/quality/index.html & _site/quality/report.json');
 }
 

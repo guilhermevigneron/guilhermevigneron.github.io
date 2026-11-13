@@ -1,6 +1,6 @@
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import assert from 'node:assert/strict';
 
 const ROOT = process.cwd();
 const resume = JSON.parse(fs.readFileSync(path.join(ROOT, 'resume.json'), 'utf8'));
@@ -9,6 +9,12 @@ const notFoundHtml = fs.readFileSync(path.join(ROOT, '404.html'), 'utf8');
 const llmsTxt = fs.readFileSync(path.join(ROOT, 'llms.txt'), 'utf8');
 const webmanifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'site.webmanifest'), 'utf8'));
 const sitemapXml = fs.readFileSync(path.join(ROOT, 'sitemap.xml'), 'utf8');
+const robotsTxt = fs.readFileSync(path.join(ROOT, 'robots.txt'), 'utf8');
+const securityTxt = fs.readFileSync(path.join(ROOT, '.well-known', 'security.txt'), 'utf8');
+const commandPanelJs = fs.readFileSync(
+  path.join(ROOT, 'assets', 'js', 'command-menu-panel.js'),
+  'utf8'
+);
 
 const HTML_ENTITIES = {
   '&amp;': '&',
@@ -50,23 +56,38 @@ try {
     assert.ok(resume.basics?.url, 'basics.url missing');
     assert.ok(Array.isArray(resume.work) && resume.work.length >= 3, 'work entries missing');
     for (const job of resume.work) {
-      assert.ok(Array.isArray(job.keywords) && job.keywords.length > 0, `work keywords missing for ${job.position}`);
+      assert.ok(
+        Array.isArray(job.keywords) && job.keywords.length > 0,
+        `work keywords missing for ${job.position}`
+      );
     }
-    assert.ok(Array.isArray(resume.projects) && resume.projects.length >= 1, 'projects entries missing');
+    assert.ok(
+      Array.isArray(resume.projects) && resume.projects.length >= 1,
+      'projects entries missing'
+    );
     for (const project of resume.projects) {
       assert.ok(project.name && project.description && project.url, 'project fields incomplete');
     }
-    assert.ok(Array.isArray(resume.education) && resume.education.length >= 2, 'education entries missing');
+    assert.ok(
+      Array.isArray(resume.education) && resume.education.length >= 2,
+      'education entries missing'
+    );
     assert.ok(Array.isArray(resume.skills) && resume.skills.length >= 10, 'skills entries missing');
-    assert.ok(Array.isArray(resume.publications) && resume.publications.length >= 2, 'publications missing');
+    assert.ok(
+      Array.isArray(resume.publications) && resume.publications.length >= 2,
+      'publications missing'
+    );
     assert.ok(Array.isArray(resume.awards) && resume.awards.length >= 1, 'awards missing');
     assert.equal(resume.meta?.resumePdf, '/resume.pdf');
     assert.equal(resume.meta?.contactVcf, '/contact.vcf');
     assert.equal(resume.meta?.ogImage, '/assets/og-card.png');
-    assert.ok(Number.isInteger(resume.meta?.maxPdfPages) && resume.meta.maxPdfPages >= 1, 'meta.maxPdfPages invalid');
+    assert.ok(
+      Number.isInteger(resume.meta?.maxPdfPages) && resume.meta.maxPdfPages >= 1,
+      'meta.maxPdfPages invalid'
+    );
   });
 
-  check('index.html JSON-LD and OG meta match resume.json', () => {
+  check('index.html JSON-LD, canonical, and OG meta match resume.json', () => {
     const match = indexHtml.match(
       /<script type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/
     );
@@ -81,7 +102,12 @@ try {
       jsonLd.sameAs,
       resume.basics.profiles.map((p) => p.url)
     );
-    assert.equal(jsonLd.worksFor?.name, resume.work[0].name);
+    const activeJob = resume.work.find((j) => !j.endDate);
+    if (activeJob) {
+      assert.equal(jsonLd.worksFor?.name, activeJob.name);
+    } else {
+      assert.equal(jsonLd.worksFor, undefined);
+    }
     assert.deepEqual(
       jsonLd.knowsAbout,
       resume.skills.map((s) => s.name)
@@ -96,7 +122,15 @@ try {
         `Missing alumniOf: ${edu.institution}`
       );
     }
-    assert.ok(indexHtml.includes(`content="${resume.meta.ogImageUrl}"`), 'og:image missing or mismatched');
+    const canonical = resume.meta.canonical || resume.basics.url;
+    assert.ok(
+      indexHtml.includes(`<link rel="canonical" href="${canonical}">`),
+      'canonical link missing or mismatched in index.html'
+    );
+    assert.ok(
+      indexHtml.includes(`content="${resume.meta.ogImageUrl}"`),
+      'og:image missing or mismatched'
+    );
   });
 
   check('index.html DOM content matches resume.json with zero external CDNs', () => {
@@ -130,8 +164,14 @@ try {
     }
     for (const project of resume.projects) {
       assert.ok(decodedIndex.includes(project.name), `Missing project name: ${project.name}`);
-      assert.ok(decodedIndex.includes(project.subtitle), `Missing project subtitle: ${project.subtitle}`);
-      assert.ok(decodedIndex.includes(project.description), `Missing project description: ${project.description}`);
+      assert.ok(
+        decodedIndex.includes(project.subtitle),
+        `Missing project subtitle: ${project.subtitle}`
+      );
+      assert.ok(
+        decodedIndex.includes(project.description),
+        `Missing project description: ${project.description}`
+      );
       assert.ok(decodedIndex.includes(project.url), `Missing project URL: ${project.url}`);
       for (const highlight of project.highlights || []) {
         assert.ok(decodedIndex.includes(highlight), `Missing project highlight: ${highlight}`);
@@ -154,6 +194,9 @@ try {
       assert.ok(decodedIndex.includes(edu.institution), `Missing institution: ${edu.institution}`);
       assert.ok(decodedIndex.includes(edu.studyType), `Missing studyType: ${edu.studyType}`);
       assert.ok(decodedIndex.includes(edu.area), `Missing area: ${edu.area}`);
+    }
+    for (const lang of resume.languages || []) {
+      assert.ok(decodedIndex.includes(lang.language), `Missing language: ${lang.language}`);
     }
   });
 
@@ -190,27 +233,67 @@ try {
     }
   });
 
-  check('site.webmanifest, sitemap.xml, and 404.html align with resume.json', () => {
-    assert.equal(webmanifest.name, resume.basics.name);
-    assert.equal(webmanifest.short_name, resume.meta.shortName);
-    assert.equal(webmanifest.description, resume.meta.manifestDescription);
+  check(
+    'site.webmanifest, sitemap.xml, robots.txt, security.txt, command-menu-panel.js, and 404.html align with resume.json',
+    () => {
+      assert.equal(webmanifest.name, resume.basics.name);
+      assert.equal(webmanifest.short_name, resume.meta.shortName);
+      assert.equal(webmanifest.description, resume.meta.manifestDescription);
 
-    for (const url of [
-      `${resume.basics.url}/`,
-      resume.meta.resumePdfUrl,
-      resume.meta.resumeJsonUrl,
-      `${resume.basics.url}/llms.txt`,
-      resume.meta.contactVcfUrl,
-      `${resume.basics.url}/architecture/`,
-      resume.meta.qualityReportUrl,
-      resume.meta.qualityReportJsonUrl,
-    ]) {
-      assert.ok(sitemapXml.includes(`<loc>${url}</loc>`), `sitemap.xml missing ${url}`);
+      const baseUrl = resume.basics.url.replace(/\/$/, '');
+      for (const url of [
+        `${baseUrl}/`,
+        resume.meta.resumePdfUrl,
+        resume.meta.resumeJsonUrl,
+        `${baseUrl}/llms.txt`,
+        resume.meta.contactVcfUrl,
+        `${baseUrl}/architecture/`,
+        resume.meta.qualityReportUrl,
+        resume.meta.qualityReportJsonUrl,
+      ]) {
+        assert.ok(sitemapXml.includes(`<loc>${url}</loc>`), `sitemap.xml missing ${url}`);
+      }
+
+      assert.ok(
+        robotsTxt.includes(`Sitemap: ${baseUrl}/sitemap.xml`),
+        'robots.txt Sitemap URL out of sync'
+      );
+      assert.ok(
+        securityTxt.includes(`Contact: mailto:${resume.basics.email}`),
+        'security.txt Contact out of sync'
+      );
+      assert.ok(
+        securityTxt.includes(`Canonical: ${baseUrl}/.well-known/security.txt`),
+        'security.txt Canonical out of sync'
+      );
+
+      const github = resume.basics.profiles.find((p) => p.network.toLowerCase() === 'github');
+      const linkedin = resume.basics.profiles.find((p) => p.network.toLowerCase() === 'linkedin');
+      assert.ok(
+        commandPanelJs.includes(`email: '${resume.basics.email}'`),
+        'command-menu-panel.js email out of sync'
+      );
+      assert.ok(
+        commandPanelJs.includes(`siteUrl: '${baseUrl}'`),
+        'command-menu-panel.js siteUrl out of sync'
+      );
+      assert.ok(
+        commandPanelJs.includes(`githubUrl: '${github?.url || ''}'`),
+        'command-menu-panel.js githubUrl out of sync'
+      );
+      assert.ok(
+        commandPanelJs.includes(`linkedinUrl: '${linkedin?.url || ''}'`),
+        'command-menu-panel.js linkedinUrl out of sync'
+      );
+
+      assert.ok(decoded404.includes(resume.basics.name), '404.html owner name out of sync');
+      assert.ok(decoded404.includes(resume.basics.label), '404.html subtitle out of sync');
+      assert.ok(
+        decoded404.includes('/assets/js/command-menu.js'),
+        '404.html missing command-menu.js'
+      );
     }
-
-    assert.ok(decoded404.includes(resume.basics.label), '404.html subtitle out of sync');
-    assert.ok(decoded404.includes('/assets/js/command-menu.js'), '404.html missing command-menu.js');
-  });
+  );
 } finally {
   fs.mkdirSync(path.join(ROOT, '.ci-reports'), { recursive: true });
   fs.writeFileSync(

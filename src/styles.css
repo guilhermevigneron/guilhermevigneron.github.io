@@ -102,6 +102,7 @@ img, svg {
 html {
   -webkit-text-size-adjust: 100%;
   font-family: var(--font-mono);
+  scrollbar-gutter: stable;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -568,7 +569,8 @@ html.dark .theme-icon-moon {
   white-space: nowrap;
 }
 
-.tag-sep {
+.tag-item:not(:last-child)::after {
+  content: "\00a0\00b7\0020";
   white-space: normal;
   color: var(--faint);
 }

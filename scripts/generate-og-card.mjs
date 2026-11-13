@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { chromium } from 'playwright-core';
+import { launchHeadlessBrowser } from './lib/browser.mjs';
+import { escapeHtml } from './lib/chrome.mjs';
 import { createStaticServer } from './serve.mjs';
 import { computeYearsOfExperience } from './sync-resume.mjs';
 
@@ -8,38 +9,12 @@ const ROOT = process.cwd();
 const siteDir = path.join(ROOT, '_site');
 const ogOutPath = path.join(siteDir, 'assets', 'og-card.png');
 
-function findBrowserExecutable() {
-  const candidates = [
-    process.env.CHROME_PATH,
-    process.env.PUPPETEER_EXECUTABLE_PATH,
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  ].filter(Boolean);
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  throw new Error(
-    'No Chromium/Chrome executable found. Set CHROME_PATH environment variable.'
-  );
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 function buildCardHtml(resume) {
   const years = computeYearsOfExperience(resume) || 18;
   const domain = String(resume.basics.url || '').replace(/^https?:\/\//, '');
-  const loc = `${resume.basics.location.city}, ${resume.basics.location.region}`;
+  const loc = [resume.basics.location?.city, resume.basics.location?.region]
+    .filter(Boolean)
+    .join(', ');
   const highlights = (resume.skills || []).slice(0, 4).map((s) => s.name);
 
   return `<!DOCTYPE html>
@@ -193,7 +168,6 @@ async function generateOgCard() {
   const resume = JSON.parse(fs.readFileSync(path.join(ROOT, 'resume.json'), 'utf8'));
   const cardHtml = buildCardHtml(resume);
 
-  const executablePath = findBrowserExecutable();
   const server = createStaticServer(siteDir);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address();
@@ -204,15 +178,7 @@ async function generateOgCard() {
   const blockedExternalRequests = [];
 
   try {
-    browser = await chromium.launch({
-      executablePath,
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-      ],
-    });
+    ({ browser } = await launchHeadlessBrowser());
 
     const context = await browser.newContext({
       viewport: { width: 1200, height: 630 },
