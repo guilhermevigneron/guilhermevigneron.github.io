@@ -1,0 +1,157 @@
+@page {
+  size: A4;
+  margin: 10mm;
+}
+
+@media print {
+  :root,
+  html.dark {
+    --bg: #ffffff;
+    --ink: #1a1815;
+    --body: #33312e;
+    --faint: #575450;
+    --rule: #dcdad6;
+    --wash: #f2f0ed;
+    color-scheme: light;
+  }
+
+  html,
+  html.dark,
+  body,
+  html.dark body {
+    background-color: #ffffff !important;
+    color: var(--ink) !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .page-main {
+    padding: 0;
+  }
+
+  .cv-shell {
+    max-width: none;
+    gap: 0.875rem;
+  }
+
+  .cv-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .header-info {
+    flex: 1;
+    gap: 0.25rem;
+  }
+
+  .cv-name {
+    font-size: 1.5rem;
+  }
+
+  .cv-tagline {
+    max-width: none;
+  }
+
+  .cv-tagline,
+  .summary-copy,
+  .entry-role,
+  .edu-degree {
+    font-size: 0.75rem;
+    line-height: 1.3;
+  }
+
+  .avatar {
+    width: 5rem;
+    height: 5rem;
+  }
+
+  .header-actions,
+  .ext-arrow,
+  .cv-footer-wrap,
+  .command-bar,
+  .cmd-backdrop,
+  .cmd-dialog,
+  .skip-link,
+  .no-print {
+    display: none !important;
+  }
+
+  .print-contact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1.3;
+    color: var(--faint);
+  }
+
+  .print-contact a {
+    color: var(--ink);
+    text-decoration: underline;
+  }
+
+  .cv-section {
+    gap: 0.35rem;
+  }
+
+  .section-title {
+    line-height: 1.2;
+  }
+
+  .work-list {
+    gap: 0.625rem;
+  }
+
+  .stack-list,
+  .stack-list--compact {
+    gap: 0.45rem;
+  }
+
+  article {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .entry-header {
+    gap: 0.125rem;
+  }
+
+  .entry-heading,
+  .date-range {
+    line-height: 1.1;
+  }
+
+  .work-highlights {
+    margin-top: 0.2rem;
+    font-size: 0.625rem;
+    line-height: 1.35;
+  }
+
+  .tag-list {
+    margin-top: 0.2rem;
+    font-size: 0.5625rem;
+    line-height: 1.35;
+  }
+
+  .tag-list--skills {
+    font-size: 0.625rem;
+    line-height: 1.35;
+  }
+
+  .entry-sub {
+    margin-top: 0.125rem;
+    font-size: 0.625rem;
+  }
+
+  .edu-degree {
+    margin-top: 0.15rem;
+  }
+
+  .animate-fade-in {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

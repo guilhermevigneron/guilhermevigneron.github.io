@@ -81,7 +81,7 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
     });
   });
 
-  it('serves self-hosted Geist fonts, avatar image, and compiled CSS with zero CDN references', () => {
+  it('serves self-hosted Geist fonts, responsive avatar images, favicons, and split CSS with zero CDN references', () => {
     cy.request('/assets/fonts/GeistMono-Variable.woff2').then((res) => {
       expect(res.status).to.eq(200);
       expect(res.headers['content-type']).to.include('font/woff2');
@@ -100,17 +100,36 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
       expect(res.body.length).to.be.greaterThan(5000);
     });
 
+    cy.request({ url: '/assets/avatar-224.avif', encoding: 'binary' }).then((res) => {
+      expect(res.status).to.eq(200);
+      expect(res.headers['content-type']).to.include('image/avif');
+    });
+
+    cy.request({ url: '/assets/avatar-224.webp', encoding: 'binary' }).then((res) => {
+      expect(res.status).to.eq(200);
+      expect(res.headers['content-type']).to.include('image/webp');
+    });
+
+    cy.request('/assets/favicon.svg').its('status').should('eq', 200);
+    cy.request({ url: '/favicon.ico', encoding: 'binary' }).its('status').should('eq', 200);
+    cy.request('/site.webmanifest').its('status').should('eq', 200);
+
     cy.request('/assets/css/styles.css').then((res) => {
       expect(res.status).to.eq(200);
       expect(res.headers['content-type']).to.include('text/css');
       expect(res.body).to.include('@font-face');
-      expect(res.body).to.include('GeistMono-Variable.woff2');
-      expect(res.body).to.include('GeistPixel-Square.woff2');
+      expect(res.body).to.match(/GeistMono-Variable\.[a-f0-9]+\.woff2/);
+      expect(res.body).to.match(/GeistPixel-Square\.[a-f0-9]+\.woff2/);
+    });
+
+    cy.request('/assets/css/print.css').then((res) => {
+      expect(res.status).to.eq(200);
+      expect(res.headers['content-type']).to.include('text/css');
       expect(res.body).to.include('@media print');
     });
 
     cy.visit('/');
-    cy.get('link[rel="stylesheet"]')
+    cy.get('link[rel="stylesheet"]:not([media="print"])')
       .should('have.attr', 'href')
       .then((href) => {
         expect(href).to.match(/^\/assets\/css\/styles\.[a-f0-9]+\.css$/);
@@ -120,6 +139,9 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
           expect(res.body).to.include('.icon-btn svg');
         });
       });
+    cy.get('link[rel="stylesheet"][media="print"]')
+      .should('have.attr', 'href')
+      .and('match', /^\/assets\/css\/print\.[a-f0-9]+\.css$/);
     cy.get('script[src*="/assets/js/theme-init."]').each(($script) => {
       const src = $script.attr('src');
       expect(src).to.match(/^\/assets\/js\/theme-init\.[a-f0-9]+\.js$/);
@@ -142,11 +164,15 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
       expect(doc.fonts.check('500 24px "Geist Pixel Square"')).to.eq(true);
     });
 
-    cy.get('img[src="/assets/avatar.jpg"]')
+    cy.get('picture.avatar-picture source[type="image/avif"]').should('exist');
+    cy.get('picture.avatar-picture source[type="image/webp"]').should('exist');
+    cy.get('img.avatar')
       .should('be.visible')
-      .and(($img) => {
-        expect($img[0].naturalWidth).to.be.greaterThan(0);
-      });
+      .and('have.attr', 'src')
+      .and('match', /^\/assets\/avatar\.[a-f0-9]+\.jpg$/);
+    cy.get('img.avatar').should(($img) => {
+      expect($img[0].naturalWidth).to.be.greaterThan(0);
+    });
 
     cy.document().its('documentElement.outerHTML').then((html) => {
       THIRD_PARTY_DOMAINS.forEach((domain) => {
@@ -250,7 +276,7 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
   it('enforces explicit dimensions and compact rendered sizes on all SVG icons', () => {
     ['/', '/404.html', '/quality/'].forEach((route) => {
       cy.visit(route, { failOnStatusCode: route !== '/404.html' });
-      cy.get('link[rel="stylesheet"]')
+      cy.get('link[rel="stylesheet"][href*="/assets/css/styles."]')
         .should('have.attr', 'href')
         .and('match', /^\/assets\/css\/styles\.[a-f0-9]+\.css$/);
 
@@ -298,7 +324,7 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
 });
 
 describe('Theme Toggle & Persistence', () => {
-  it('toggles dark/light mode and persists choice in localStorage across reload', () => {
+  it('toggles dark/light mode, syncs theme-color meta, and persists choice across reload', () => {
     cy.visit('/', {
       onBeforeLoad(win) {
         win.localStorage.removeItem('theme');
@@ -308,13 +334,16 @@ describe('Theme Toggle & Persistence', () => {
     cy.get('html').invoke('removeClass', 'dark');
     cy.get('#theme-toggle').should('be.visible').click();
     cy.get('html').should('have.class', 'dark');
+    cy.get('meta[name="theme-color"]').first().should('have.attr', 'content', '#0d0c0a');
     cy.window().its('localStorage').invoke('getItem', 'theme').should('eq', 'dark');
 
     cy.reload();
     cy.get('html').should('have.class', 'dark');
+    cy.get('meta[name="theme-color"]').first().should('have.attr', 'content', '#0d0c0a');
 
     cy.get('#theme-toggle').click();
     cy.get('html').should('not.have.class', 'dark');
+    cy.get('meta[name="theme-color"]').first().should('have.attr', 'content', '#fafaf8');
     cy.window().its('localStorage').invoke('getItem', 'theme').should('eq', 'light');
   });
 });
@@ -349,6 +378,117 @@ describe('Command Menu Interaction', () => {
     cy.get('#command-dialog').should('be.visible');
     cy.get('#command-close').click();
     cy.get('#command-dialog').should('not.be.visible');
+  });
+});
+
+describe('Mobile Device Compatibility & Touch UX', () => {
+  [
+    { width: 320, height: 568, label: 'mobile-320' },
+    { width: 375, height: 667, label: 'mobile-375' },
+    { width: 390, height: 844, label: 'mobile-390' },
+    { width: 768, height: 1024, label: 'tablet-768' },
+  ].forEach(({ width, height, label }) => {
+    it(`renders without horizontal overflow across routes at ${width}x${height}`, () => {
+      cy.viewport(width, height);
+      ['/', '/404.html', '/quality/'].forEach((route) => {
+        cy.visit(route, { failOnStatusCode: route !== '/404.html' });
+        cy.window().then((win) => {
+          const docEl = win.document.documentElement;
+          expect(
+            docEl.scrollWidth,
+            `horizontal overflow on ${route} at ${width}px`
+          ).to.be.at.most(win.innerWidth);
+        });
+      });
+      cy.task('recordMobileAudit', { label: `overflow-${label}`, passed: true });
+    });
+  });
+
+  it('enforces >=44x44px touch targets without overlapping header avatar on mobile (375x667)', () => {
+    cy.viewport(375, 667);
+    cy.visit('/');
+
+    cy.get('img.avatar').then(($avatar) => {
+      const avatarRect = $avatar[0].getBoundingClientRect();
+      cy.get('.header-actions .icon-btn:visible')
+        .should('have.length', 6)
+        .each(($btn) => {
+          const rect = $btn[0].getBoundingClientRect();
+          expect(rect.width, 'mobile icon-btn width').to.be.at.least(44);
+          expect(rect.height, 'mobile icon-btn height').to.be.at.least(44);
+          const overlapsAvatar =
+            rect.left < avatarRect.right &&
+            rect.right > avatarRect.left &&
+            rect.top < avatarRect.bottom &&
+            rect.bottom > avatarRect.top;
+          expect(overlapsAvatar, 'icon-btn must not overlap avatar').to.eq(false);
+        });
+    });
+
+    cy.get('.cv-footer-links a').each(($link) => {
+      const rect = $link[0].getBoundingClientRect();
+      expect(rect.height, 'mobile footer link tap height').to.be.at.least(44);
+    });
+
+    cy.visit('/404.html');
+    cy.get('.error-actions a').each(($link) => {
+      const rect = $link[0].getBoundingClientRect();
+      expect(rect.height, 'mobile 404 action tap height').to.be.at.least(44);
+    });
+
+    cy.task('recordMobileAudit', { label: 'touch-targets-375', passed: true });
+  });
+
+  it('opens and operates mobile command menu without iOS auto-zoom (<16px input) or clipping', () => {
+    cy.viewport(375, 667);
+    cy.visit('/');
+
+    cy.get('.command-bar').should('not.be.visible');
+    cy.get('#command-trigger-mobile')
+      .should('be.visible')
+      .and('have.attr', 'aria-expanded', 'false')
+      .click();
+
+    cy.get('#command-trigger-mobile').should('have.attr', 'aria-expanded', 'true');
+    cy.get('#command-dialog').should('be.visible');
+
+    cy.get('#command-input')
+      .should('be.focused')
+      .then(($input) => {
+        const fontSize = parseFloat(getComputedStyle($input[0]).fontSize);
+        expect(fontSize, 'mobile command input font-size prevents iOS zoom').to.be.at.least(16);
+      });
+
+    cy.get('#command-dialog').then(($dlg) => {
+      const rect = $dlg[0].getBoundingClientRect();
+      expect(rect.left).to.be.at.least(0);
+      expect(rect.right).to.be.at.most(375);
+      expect(rect.top).to.be.at.least(0);
+      expect(rect.bottom).to.be.at.most(667);
+    });
+
+    cy.get('#command-dialog .cmd-item:visible').each(($item) => {
+      const rect = $item[0].getBoundingClientRect();
+      expect(rect.height, 'mobile cmd-item tap height').to.be.at.least(44);
+      expect(rect.right).to.be.at.most(375);
+    });
+
+    cy.get('#command-input').type('Resume');
+    cy.contains('#command-dialog .cmd-item:not([hidden])', 'Download Resume (PDF)').should('be.visible');
+
+    cy.get('#command-close').then(($close) => {
+      const rect = $close[0].getBoundingClientRect();
+      expect(rect.width, 'mobile close button width').to.be.at.least(44);
+      expect(rect.height, 'mobile close button height').to.be.at.least(44);
+    });
+
+    cy.get('#command-close').click();
+    cy.get('#command-dialog').should('not.be.visible');
+    cy.get('#command-trigger-mobile')
+      .should('have.attr', 'aria-expanded', 'false')
+      .and('be.focused');
+
+    cy.task('recordMobileAudit', { label: 'mobile-command-menu-375', passed: true });
   });
 });
 
@@ -450,6 +590,8 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
     cy.visit('/quality/');
     cy.contains('h1', 'Quality & Verification Report').should('be.visible');
     cy.contains('Zero Third-Party Network Requests').should('be.visible');
+    cy.contains('Web Vitals & Asset Payload Budgets').should('be.visible');
+    cy.contains('Mobile Compatibility & Touch Ergonomics').should('be.visible');
     cy.contains('WCAG 2.1 AA Accessibility').should('be.visible');
 
     cy.request('/sitemap.xml').then((res) => {
@@ -468,8 +610,12 @@ describe('WCAG 2.1 AA Accessibility Matrix (Light/Dark & Mobile/Desktop)', () =>
     { route: '/', viewport: [375, 667], theme: 'dark', label: 'home-mobile-dark' },
     { route: '/404.html', viewport: [1280, 800], theme: 'light', label: '404-desktop-light' },
     { route: '/404.html', viewport: [1280, 800], theme: 'dark', label: '404-desktop-dark' },
+    { route: '/404.html', viewport: [375, 667], theme: 'light', label: '404-mobile-light' },
+    { route: '/404.html', viewport: [375, 667], theme: 'dark', label: '404-mobile-dark' },
     { route: '/quality/', viewport: [1280, 800], theme: 'light', label: 'quality-desktop-light' },
     { route: '/quality/', viewport: [1280, 800], theme: 'dark', label: 'quality-desktop-dark' },
+    { route: '/quality/', viewport: [375, 667], theme: 'light', label: 'quality-mobile-light' },
+    { route: '/quality/', viewport: [375, 667], theme: 'dark', label: 'quality-mobile-dark' },
   ];
 
   matrix.forEach(({ route, viewport, theme, label }) => {

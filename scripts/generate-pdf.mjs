@@ -74,12 +74,12 @@ async function generatePdf() {
       return route.abort();
     });
 
+    await page.emulateMedia({ media: 'print', colorScheme: 'light' });
     await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
     await page.evaluate(() => {
       document.documentElement.classList.remove('dark');
       return document.fonts.ready;
     });
-    await page.emulateMedia({ media: 'print', colorScheme: 'light' });
 
     await page.pdf({
       path: pdfOutPath,
