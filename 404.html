@@ -20,6 +20,7 @@
     <link rel="preload" href="/assets/fonts/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/assets/fonts/GeistPixel-Square.woff2" as="font" type="font/woff2" crossorigin>
     <script src="/assets/js/theme.js" defer></script>
+    <script src="/assets/js/command-menu.js" defer></script>
 </head>
 <body class="subpage-body">
     <a href="#main-content" class="sr-only skip-link">Skip to main content</a>
@@ -29,7 +30,7 @@
             <header class="subpage-nav">
                 <div>
                     <a href="/" class="subpage-brand">Guilherme Vigneron de Oliveira</a>
-                    <p class="entry-sub">Principal Technologist | Quality, DevOps &amp; Developer Experience</p>
+                    <!-- SUBTITLE_START --><p class="entry-sub">Principal Technologist | Quality, DevOps &amp; Developer Experience</p><!-- SUBTITLE_END -->
                 </div>
                 <div class="subpage-nav-actions">
                     <button id="theme-toggle" type="button" class="icon-btn" aria-label="Switch to dark theme" aria-pressed="false" title="Switch to dark theme">
@@ -39,6 +40,12 @@
                         </svg>
                         <svg class="theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                    </button>
+                    <button id="command-trigger-mobile" type="button" class="icon-btn mobile-only-btn" aria-label="Open command menu" aria-haspopup="dialog" aria-controls="command-dialog" aria-expanded="false" title="Open command menu">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.3-4.3"></path>
                         </svg>
                     </button>
                 </div>
@@ -61,7 +68,7 @@
 
     <footer class="cv-footer-wrap">
         <div class="cv-footer-inner">
-            <span>&copy; 2026 Guilherme Vigneron de Oliveira</span>
+            <!-- COPYRIGHT_START --><span>&copy; 2026 Guilherme Vigneron de Oliveira</span><!-- COPYRIGHT_END -->
             <div class="cv-footer-links">
                 <a href="/">Portfolio</a>
                 <span aria-hidden="true">&middot;</span>
@@ -69,6 +76,13 @@
                 <span aria-hidden="true">&middot;</span>
                 <a href="/resume.json">JSON Resume</a>
             </div>
+        </div>
+        <div class="command-bar">
+            <button type="button" id="command-trigger" class="command-trigger" aria-haspopup="dialog" aria-controls="command-dialog" aria-expanded="false">
+                <span>Press</span>
+                <kbd class="kbd-chip"><span id="command-modifier">Ctrl</span>+J</kbd>
+                <span>to open the command menu</span>
+            </button>
         </div>
     </footer>
 </body>

@@ -73,6 +73,7 @@
   .command-bar,
   .cmd-backdrop,
   .cmd-dialog,
+  .cmd-toast,
   .skip-link,
   .no-print {
     display: none !important;

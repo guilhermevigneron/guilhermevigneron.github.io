@@ -3,6 +3,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { minifyHtml } from './minify-html.mjs';
+import { minifyCssFiles, minifyJsFiles } from './minify-assets.mjs';
+import { buildVCard } from './sync-resume.mjs';
 
 const ROOT = process.cwd();
 const siteDir = path.join(ROOT, '_site');
@@ -57,15 +59,7 @@ function rewriteTextFile(relPath, replacements) {
   fs.writeFileSync(target, content, 'utf8');
 }
 
-function compileCss(tailwindBin, inputRel, outputRel) {
-  execFileSync(
-    tailwindBin,
-    ['-i', path.join(ROOT, inputRel), '-o', path.join(siteDir, outputRel), '--minify'],
-    { stdio: 'inherit' }
-  );
-}
-
-console.log('1. Syncing resume.json -> llms.txt & index.html JSON-LD...');
+console.log('1. Syncing resume.json -> index.html, 404.html, llms.txt, manifest, sitemap...');
 runNodeScript('scripts/sync-resume.mjs');
 
 console.log('2. Validating single-source-of-truth parity...');
@@ -74,7 +68,12 @@ runNodeScript('scripts/validate-sync.mjs');
 console.log('3. Preparing clean _site/ directory...');
 fs.rmSync(siteDir, { recursive: true, force: true });
 fs.mkdirSync(siteDir, { recursive: true });
-for (const staleReport of ['html-validate.json', 'cypress-results.json', 'perf-report.json']) {
+for (const staleReport of [
+  'html-validate.json',
+  'cypress-results.json',
+  'perf-report.json',
+  'og-report.json',
+]) {
   fs.rmSync(path.join(reportsDir, staleReport), { force: true });
 }
 
@@ -97,11 +96,12 @@ for (const file of rootFiles) {
 copyFile('.well-known/security.txt');
 copyDir('assets');
 
-console.log('4. Compiling and minifying split CSS bundles...');
-const tailwindBin = path.join(ROOT, 'node_modules', '.bin', 'tailwindcss');
-compileCss(tailwindBin, 'src/styles.css', 'assets/css/styles.css');
-compileCss(tailwindBin, 'src/subpage.css', 'assets/css/subpage.css');
-compileCss(tailwindBin, 'src/print.css', 'assets/css/print.css');
+const resume = JSON.parse(fs.readFileSync(path.join(ROOT, 'resume.json'), 'utf8'));
+fs.writeFileSync(path.join(siteDir, 'contact.vcf'), buildVCard(resume), 'utf8');
+
+console.log('4. Minifying split CSS and JS bundles via esbuild...');
+await minifyCssFiles(siteDir);
+await minifyJsFiles(siteDir);
 
 console.log('4b. Fingerprinting fonts, CSS, JS, icons, and avatar assets...');
 const monoFontUrl = fingerprintAsset('assets/fonts/GeistMono-Variable.woff2');
@@ -186,7 +186,10 @@ fs.writeFileSync(
 console.log('5. Generating /resume.pdf via headless Chromium...');
 runNodeScript('scripts/generate-pdf.mjs');
 
-console.log('6. Generating initial /quality/index.html report...');
+console.log('6. Generating /assets/og-card.png (1200x630) via headless Chromium...');
+runNodeScript('scripts/generate-og-card.mjs');
+
+console.log('7. Generating initial /quality/index.html & /quality/report.json...');
 runNodeScript('scripts/generate-quality-report.mjs');
 
 console.log('Build complete: _site/ ready.');

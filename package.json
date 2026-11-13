@@ -4,8 +4,9 @@
   "description": "Personal portfolio website.",
   "scripts": {
     "sync": "node scripts/sync-resume.mjs",
-    "build:css": "tailwindcss -i ./src/styles.css -o ./_site/assets/css/styles.css --minify && tailwindcss -i ./src/subpage.css -o ./_site/assets/css/subpage.css --minify && tailwindcss -i ./src/print.css -o ./_site/assets/css/print.css --minify",
+    "build:css": "node scripts/minify-assets.mjs --css",
     "build:pdf": "node scripts/generate-pdf.mjs",
+    "build:og": "node scripts/generate-og-card.mjs",
     "build:quality": "node scripts/generate-quality-report.mjs",
     "build": "node scripts/build.mjs",
     "serve": "node scripts/serve.mjs",
@@ -15,6 +16,7 @@
     "test:perf": "node scripts/check-performance.mjs",
     "test:security": "npm audit --audit-level=high",
     "test:smoke:prod": "node scripts/prod-smoke.mjs",
+    "verify": "npm run test:security && npm run build && npm run test:html && npm run test:e2e && npm run test:perf && npm run build:quality && npm run test:html",
     "cy:run": "cypress run --browser chrome",
     "cy:run:chromium": "cypress run --browser chromium"
   },
@@ -24,9 +26,9 @@
     "axe-core": "^4.14.0",
     "cypress": "^15.21.2",
     "cypress-axe": "^1.7.0",
+    "esbuild": "^0.28.2",
     "html-validate": "^11.21.1",
-    "playwright-core": "^1.65.0",
-    "tailwindcss": "^3.4.19"
+    "playwright-core": "^1.65.0"
   },
   "overrides": {
     "tmp": "^0.2.7"

@@ -11,6 +11,7 @@ const MIME_TYPES = {
   '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.woff2': 'font/woff2',
   '.pdf': 'application/pdf',
+  '.vcf': 'text/vcard; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
   '.xml': 'application/xml; charset=utf-8',
   '.svg': 'image/svg+xml',

@@ -40,7 +40,7 @@ jobs:
       - name: Security Audit
         run: npm run test:security
 
-      - name: Build static site, Tailwind CSS & /resume.pdf
+      - name: Build static site, CSS/JS bundles, /resume.pdf & OG card
         run: npm run build
 
       - name: HTML5 Validation
@@ -50,7 +50,7 @@ jobs:
         id: lychee
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
-          args: --root-dir ${{ github.workspace }}/_site --accept 200..=299,999 --exclude '^https://guilhermevigneron\.dev/quality/$' --no-progress ./_site/index.html ./_site/404.html ./_site/quality/index.html
+          args: --root-dir ${{ github.workspace }}/_site --accept 200..=299,999 --exclude '^https://guilhermevigneron\.dev/(quality/|assets/og-card\.png)$' --no-progress ./_site/index.html ./_site/404.html ./_site/quality/index.html
 
       - name: Run Browser E2E & Accessibility Tests (Cypress)
         env:

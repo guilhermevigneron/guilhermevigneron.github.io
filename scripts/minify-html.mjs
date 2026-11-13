@@ -27,7 +27,7 @@ export function minifyHtml(html) {
   out = out.replace(/[ \t]{2,}/g, ' ');
 
   const blockTags =
-    'html|head|meta|link|title|body|main|header|section|footer|div|ul|ol|li|article|nav|h[1-6]|p|picture|source|script';
+    'html|head|meta|link|title|body|main|header|section|footer|div|ul|ol|li|article|nav|h[1-6]|p|picture|source|script|svg|path|circle|rect';
   const openBlockRe = new RegExp(`>\\s+<(${blockTags})\\b`, 'gi');
   const closeBlockRe = new RegExp(`</(${blockTags})>\\s+<`, 'gi');
 

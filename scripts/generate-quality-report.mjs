@@ -7,6 +7,7 @@ const siteDir = path.join(ROOT, '_site');
 const reportsDir = path.join(ROOT, '.ci-reports');
 const outDir = path.join(siteDir, 'quality');
 const outFile = path.join(outDir, 'index.html');
+const outJsonFile = path.join(outDir, 'report.json');
 
 function readJsonIfExists(filePath) {
   if (!fs.existsSync(filePath)) return null;
@@ -17,12 +18,17 @@ function readJsonIfExists(filePath) {
   }
 }
 
-function getFileSizeKb(filePath) {
+function getFileSizeBytes(filePath) {
   if (!fs.existsSync(filePath)) return null;
-  return `${(fs.statSync(filePath).size / 1024).toFixed(1)} KB`;
+  return fs.statSync(filePath).size;
 }
 
-function getCombinedFontsSizeKb(paths) {
+function formatKb(bytes) {
+  if (typeof bytes !== 'number') return 'N/A';
+  return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function getCombinedFontsSizeBytes(paths) {
   let totalBytes = 0;
   let foundAny = false;
   for (const filePath of paths) {
@@ -31,7 +37,7 @@ function getCombinedFontsSizeKb(paths) {
       foundAny = true;
     }
   }
-  return foundAny ? `${(totalBytes / 1024).toFixed(1)} KB` : null;
+  return foundAny ? totalBytes : null;
 }
 
 function getSecurityExpiryDays() {
@@ -64,8 +70,13 @@ function statusBadge(status) {
 }
 
 function buildQualityPage() {
+  const resume = readJsonIfExists(path.join(ROOT, 'resume.json'));
+  const ownerName = resume?.basics?.name || 'Guilherme Vigneron de Oliveira';
+  const currentYear = new Date().getUTCFullYear();
+
   const syncReport = readJsonIfExists(path.join(reportsDir, 'sync-validation.json'));
   const pdfReport = readJsonIfExists(path.join(reportsDir, 'pdf-report.json'));
+  const ogReport = readJsonIfExists(path.join(reportsDir, 'og-report.json'));
   const htmlReport = readJsonIfExists(path.join(reportsDir, 'html-validate.json'));
   const cypressReport = readJsonIfExists(path.join(reportsDir, 'cypress-results.json'));
   const perfReport = readJsonIfExists(path.join(reportsDir, 'perf-report.json'));
@@ -78,21 +89,31 @@ function buildQualityPage() {
   const pixelFontUrl = assetManifest?.pixelFontUrl || '/assets/fonts/GeistPixel-Square.woff2';
   const themeInitJsUrl = assetManifest?.themeInitJsUrl || '/assets/js/theme-init.js';
   const themeJsUrl = assetManifest?.themeJsUrl || '/assets/js/theme.js';
+  const commandMenuJsUrl = assetManifest?.commandMenuJsUrl || '/assets/js/command-menu.js';
   const faviconSvgUrl = assetManifest?.faviconSvgUrl || '/assets/favicon.svg';
   const appleTouchIconUrl = assetManifest?.appleTouchIconUrl || '/assets/apple-touch-icon.png';
 
-  const cssSize = getFileSizeKb(path.join(siteDir, 'assets', 'css', 'styles.css')) || 'N/A';
-  const fontSize =
-    getCombinedFontsSizeKb([
-      path.join(siteDir, 'assets', 'fonts', 'GeistMono-Variable.woff2'),
-      path.join(siteDir, 'assets', 'fonts', 'GeistPixel-Square.woff2'),
-    ]) || 'N/A';
-  const pdfSize = getFileSizeKb(path.join(siteDir, 'resume.pdf')) || 'N/A';
-  const indexSize = getFileSizeKb(path.join(siteDir, 'index.html')) || 'N/A';
+  const cssBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'css', 'styles.css'));
+  const subpageCssBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'css', 'subpage.css'));
+  const printCssBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'css', 'print.css'));
+  const fontsBytes = getCombinedFontsSizeBytes([
+    path.join(siteDir, 'assets', 'fonts', 'GeistMono-Variable.woff2'),
+    path.join(siteDir, 'assets', 'fonts', 'GeistPixel-Square.woff2'),
+  ]);
+  const pdfBytes = getFileSizeBytes(path.join(siteDir, 'resume.pdf'));
+  const indexBytes = getFileSizeBytes(path.join(siteDir, 'index.html'));
+  const ogCardBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'og-card.png'));
+  const contactVcfBytes = getFileSizeBytes(path.join(siteDir, 'contact.vcf'));
   const expiryDays = getSecurityExpiryDays();
+
+  const cssSize = formatKb(cssBytes);
+  const fontSize = formatKb(fontsBytes);
+  const pdfSize = formatKb(pdfBytes);
+  const indexSize = formatKb(indexBytes);
 
   const syncStatus = syncReport?.passed ? 'pass' : syncReport ? 'fail' : 'pending';
   const pdfStatus = pdfReport?.passed ? 'pass' : pdfReport ? 'fail' : 'pending';
+  const ogStatus = ogReport?.passed ? 'pass' : ogReport ? 'fail' : 'pending';
   const htmlStatus = htmlReport ? (htmlReport.valid ? 'pass' : 'fail') : 'pending';
   const cypressStatus = cypressReport
     ? cypressReport.totalTests > 0 && cypressReport.totalFailed === 0
@@ -119,10 +140,12 @@ function buildQualityPage() {
   const zeroNetStatus = cypressReport?.network
     ? cypressReport.network.pagesChecked >= 3 &&
       cypressReport.network.externalRequests === 0 &&
-      pdfReport?.blockedExternalRequests === 0
+      pdfReport?.blockedExternalRequests === 0 &&
+      ogReport?.blockedExternalRequests === 0
       ? 'pass'
       : 'fail'
-    : pdfReport && pdfReport.blockedExternalRequests > 0
+    : (pdfReport && pdfReport.blockedExternalRequests > 0) ||
+        (ogReport && ogReport.blockedExternalRequests > 0)
       ? 'fail'
       : 'pending';
   const lycheeStatus =
@@ -149,26 +172,30 @@ function buildQualityPage() {
 
   const cards = [
     {
+      id: 'zero-third-party-network',
       title: 'Zero Third-Party Network Requests',
       status: zeroNetStatus,
       summary:
-        'All CSS, fonts, images, icons, and scripts are locally bundled. Runtime network interception asserts 0 external third-party calls on page load and PDF rendering.',
-      metric: cypressReport?.network && cypressReport.network.pagesChecked > 0
-        ? `${cypressReport.network.externalRequests} external calls detected (${cypressReport.network.pagesChecked} routes checked)`
-        : pdfReport
-          ? `PDF renderer: ${pdfReport.blockedExternalRequests} blocked external calls (run Cypress for runtime route verification)`
-          : 'Pending PDF & Cypress runtime network verification',
+        'All CSS, fonts, images, icons, and scripts are locally bundled. Runtime network interception asserts 0 external third-party calls across pages, PDF rendering, and OG card generation.',
+      metric:
+        cypressReport?.network && cypressReport.network.pagesChecked > 0
+          ? `${cypressReport.network.externalRequests} external calls detected (${cypressReport.network.pagesChecked} routes checked)`
+          : pdfReport && ogReport
+            ? `PDF & OG renderers: ${pdfReport.blockedExternalRequests + ogReport.blockedExternalRequests} blocked external calls (run Cypress for runtime route verification)`
+            : 'Pending PDF, OG & Cypress runtime network verification',
     },
     {
+      id: 'web-vitals-budgets',
       title: 'Web Vitals & Asset Payload Budgets',
       status: perfStatus,
       summary:
-        'Headless mobile emulation (390x844, 4x CPU throttle) verifying subsetted fonts, split CSS bundles, responsive AVIF/WebP avatar, zero 404s, and Web Vitals thresholds.',
+        'Headless mobile emulation (390x844, 4x CPU throttle) verifying esbuild-minified CSS/JS, subsetted fonts, responsive AVIF/WebP avatar, zero 404s, and Web Vitals thresholds.',
       metric: perfReport?.mobileVitals
         ? `Transfer ${(perfReport.mobileVitals.totalTransferBytes / 1024).toFixed(1)} KB · FCP ${perfReport.mobileVitals.fcpMs}ms · LCP ${perfReport.mobileVitals.lcpMs}ms · CLS ${perfReport.mobileVitals.cls}`
         : 'Pending npm run test:perf execution',
     },
     {
+      id: 'mobile-compatibility',
       title: 'Mobile Compatibility & Touch Ergonomics',
       status: mobileStatus,
       summary:
@@ -180,6 +207,7 @@ function buildQualityPage() {
           : 'Pending mobile viewport suite',
     },
     {
+      id: 'html5-validation',
       title: 'HTML5 Standards Validation',
       status: htmlStatus,
       summary:
@@ -189,6 +217,7 @@ function buildQualityPage() {
         : 'Pending html-validate execution',
     },
     {
+      id: 'wcag-accessibility',
       title: 'WCAG 2.1 AA Accessibility (cypress-axe)',
       status: axeStatus,
       summary:
@@ -198,15 +227,28 @@ function buildQualityPage() {
         : 'Pending Cypress axe-core audit run',
     },
     {
+      id: 'e2e-suite',
       title: 'E2E Verification Suite (Cypress)',
       status: cypressStatus,
       summary:
-        'Full browser verification covering content, mobile & desktop command menu, navigation, theme persistence, resume.pdf binary payload, security.txt expiry, and parity.',
+        'Full browser verification covering content, cross-page command menu, clipboard actions, theme persistence, resume.pdf binary payload, security.txt expiry, and parity.',
       metric: cypressReport
         ? `${cypressReport.totalPassed}/${cypressReport.totalTests} tests passed (${cypressReport.totalFailed} failed)`
         : 'Pending Cypress execution',
     },
     {
+      id: 'pdf-og-rendering',
+      title: 'Print PDF & Social Card Pipeline',
+      status: pdfStatus === 'pass' && ogStatus === 'pass' ? 'pass' : pdfStatus === 'fail' || ogStatus === 'fail' ? 'fail' : 'pending',
+      summary:
+        'Headless Chromium print rendering enforcing single-page A4 layout bounds alongside automated 1200x630 Open Graph card generation.',
+      metric:
+        pdfReport && ogReport
+          ? `/resume.pdf: ${pdfReport.pages}/${pdfReport.maxPages} page (${pdfSize}) · og-card.png: ${formatKb(ogReport.bytes)}`
+          : 'Pending PDF & Open Graph artifact generation',
+    },
+    {
+      id: 'link-integrity',
       title: 'Link Integrity (Lychee)',
       status: lycheeStatus,
       summary:
@@ -219,20 +261,64 @@ function buildQualityPage() {
             : 'Checked via lychee-action in CI & weekly production cron',
     },
     {
+      id: 'source-parity-security',
       title: 'Single Source of Truth & Security Policy',
       status: syncStatus === 'pass' && secStatus === 'pass' ? 'pass' : syncStatus === 'fail' || secStatus === 'fail' ? 'fail' : 'pending',
       summary:
-        'Automated parity validation across /resume.json, Schema.org JSON-LD, /llms.txt, and rendered DOM, plus RFC 9116 /.well-known/security.txt freshness.',
+        'Automated parity across /resume.json, DOM, Schema.org JSON-LD, /llms.txt, webmanifest, sitemap, and 404, plus RFC 9116 /.well-known/security.txt freshness.',
       metric: `Sync: ${syncPassedCount}/${syncTotalCount} checks passed · security.txt expires in ${expiryDays ?? '?'} days (min 30d)`,
     },
   ];
+
+  const hasFail = cards.some((c) => c.status === 'fail');
+  const hasPending = cards.some((c) => c.status === 'pending');
+  const overallStatus = hasFail ? 'fail' : hasPending ? 'pending' : 'pass';
+
+  const reportPayload = {
+    schemaVersion: 1,
+    generatedAt,
+    overallStatus,
+    provenance: {
+      ref: branchRef,
+      commit: commitSha,
+      runUrl,
+    },
+    artifacts: {
+      cssBytes,
+      subpageCssBytes,
+      printCssBytes,
+      fontsBytes,
+      indexHtmlBytes: indexBytes,
+      resumePdfBytes: pdfBytes,
+      resumePdfPages: pdfReport?.pages ?? null,
+      ogCardBytes,
+      contactVcfBytes,
+    },
+    gates: cards,
+    endpoints: [
+      '/resume.pdf',
+      '/resume.json',
+      '/llms.txt',
+      '/contact.vcf',
+      '/assets/og-card.png',
+      '/quality/',
+      '/quality/report.json',
+      '/.well-known/security.txt',
+      '/sitemap.xml',
+      '/robots.txt',
+    ],
+  };
+
+  const pdfMetaNote = pdfReport
+    ? `${pdfReport.pages} page, ${pdfSize}, ${pdfStatus.toUpperCase()}`
+    : pdfStatus.toUpperCase();
 
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Quality &amp; Verification Report - Guilherme Vigneron de Oliveira</title>
+    <title>Quality &amp; Verification Report - ${escapeHtml(ownerName)}</title>
     <meta name="description" content="Automated CI/CD quality, accessibility, performance, and security verification report for guilhermevigneron.dev.">
     <meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0d0c0a" media="(prefers-color-scheme: dark)">
@@ -243,12 +329,14 @@ function buildQualityPage() {
     <link rel="apple-touch-icon" href="${escapeHtml(appleTouchIconUrl)}">
     <link rel="manifest" href="/site.webmanifest">
     <link rel="canonical" href="https://guilhermevigneron.dev/quality/">
+    <link rel="alternate" type="application/json" href="/quality/report.json" title="Quality Telemetry JSON">
     <script src="${escapeHtml(themeInitJsUrl)}"></script>
     <link rel="stylesheet" href="${escapeHtml(cssUrl)}">
     <link rel="stylesheet" href="${escapeHtml(subpageCssUrl)}">
     <link rel="preload" href="${escapeHtml(monoFontUrl)}" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="${escapeHtml(pixelFontUrl)}" as="font" type="font/woff2" crossorigin>
     <script src="${escapeHtml(themeJsUrl)}" defer></script>
+    <script src="${escapeHtml(commandMenuJsUrl)}" defer></script>
 </head>
 <body class="subpage-body">
     <a href="#main-content" class="sr-only skip-link">Skip to main content</a>
@@ -257,7 +345,7 @@ function buildQualityPage() {
         <div class="cv-shell">
             <header class="subpage-nav">
                 <div>
-                    <a href="/" class="subpage-brand">Guilherme Vigneron de Oliveira</a>
+                    <a href="/" class="subpage-brand">${escapeHtml(ownerName)}</a>
                     <p class="entry-sub">Self-Verifying Engineering Showcase &amp; Quality Report</p>
                 </div>
                 <div class="subpage-nav-actions">
@@ -269,6 +357,12 @@ function buildQualityPage() {
                         </svg>
                         <svg class="theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                    </button>
+                    <button id="command-trigger-mobile" type="button" class="icon-btn mobile-only-btn" aria-label="Open command menu" aria-haspopup="dialog" aria-controls="command-dialog" aria-expanded="false" title="Open command menu">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.3-4.3"></path>
                         </svg>
                     </button>
                 </div>
@@ -323,9 +417,12 @@ function buildQualityPage() {
                 <h2 class="section-title">published machine-readable endpoints</h2>
                 <div class="panel-card">
                     <ul class="endpoint-list">
-                        <li><a href="/resume.pdf">/resume.pdf</a> &mdash; Automated headless Chromium PDF build (${escapeHtml(pdfStatus.toUpperCase())})</li>
+                        <li><a href="/resume.pdf">/resume.pdf</a> &mdash; Automated headless Chromium PDF build (${escapeHtml(pdfMetaNote)})</li>
                         <li><a href="/resume.json">/resume.json</a> &mdash; Standardized JSON Resume source of truth</li>
                         <li><a href="/llms.txt">/llms.txt</a> &mdash; LLM-friendly markdown profile generated from resume.json</li>
+                        <li><a href="/contact.vcf">/contact.vcf</a> &mdash; Downloadable vCard contact generated from resume.json</li>
+                        <li><a href="/assets/og-card.png">/assets/og-card.png</a> &mdash; Automated 1200x630 Open Graph preview card</li>
+                        <li><a href="/quality/report.json">/quality/report.json</a> &mdash; Machine-readable CI telemetry JSON</li>
                         <li><a href="/.well-known/security.txt">/.well-known/security.txt</a> &mdash; RFC 9116 vulnerability disclosure policy</li>
                         <li><a href="/sitemap.xml">/sitemap.xml</a> &amp; <a href="/robots.txt">/robots.txt</a> &mdash; Search crawler directives</li>
                     </ul>
@@ -344,14 +441,23 @@ function buildQualityPage() {
 
     <footer class="cv-footer-wrap">
         <div class="cv-footer-inner">
-            <span>&copy; 2026 Guilherme Vigneron de Oliveira</span>
+            <span>&copy; ${escapeHtml(String(currentYear))} ${escapeHtml(ownerName)}</span>
             <div class="cv-footer-links">
                 <a href="/">Return to Portfolio</a>
+                <span aria-hidden="true">&middot;</span>
+                <a href="/quality/report.json">Telemetry JSON</a>
                 <span aria-hidden="true">&middot;</span>
                 <a href="/resume.json">JSON Resume</a>
                 <span aria-hidden="true">&middot;</span>
                 <a href="/llms.txt">llms.txt</a>
             </div>
+        </div>
+        <div class="command-bar">
+            <button type="button" id="command-trigger" class="command-trigger" aria-haspopup="dialog" aria-controls="command-dialog" aria-expanded="false">
+                <span>Press</span>
+                <kbd class="kbd-chip"><span id="command-modifier">Ctrl</span>+J</kbd>
+                <span>to open the command menu</span>
+            </button>
         </div>
     </footer>
 </body>
@@ -360,7 +466,8 @@ function buildQualityPage() {
 
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(outFile, minifyHtml(html), 'utf8');
-  console.log('Generated _site/quality/index.html');
+  fs.writeFileSync(outJsonFile, JSON.stringify(reportPayload, null, 2) + '\n', 'utf8');
+  console.log('Generated _site/quality/index.html & _site/quality/report.json');
 }
 
 buildQualityPage();

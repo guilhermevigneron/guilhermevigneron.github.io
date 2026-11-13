@@ -38,6 +38,17 @@
         "Led comprehensive test strategies and robust Selenium/C# automation frameworks, increasing test coverage and reducing defects.",
         "Conducted critical performance testing to optimize software scalability and reliability.",
         "Led cross-functional teams as a Scrum Master, fostering collaboration and driving sustained sprint delivery."
+      ],
+      "keywords": [
+        "Austin, TX",
+        "DX Snapshots",
+        "DevOps",
+        "Development",
+        "AI / LLMs",
+        "Azure DevOps",
+        "C#",
+        "Selenium",
+        "Scrum"
       ]
     },
     {
@@ -52,6 +63,14 @@
         "Designed a robust Page Object Model test framework using Selenium and C#.",
         "Orchestrated testing processes using Azure DevOps release pipelines.",
         "Mentored junior QA engineers, improving team productivity and knowledge sharing."
+      ],
+      "keywords": [
+        "São Paulo, Brazil",
+        "Selenium",
+        "C#",
+        "Page Object Model",
+        "Azure DevOps",
+        "Mentorship"
       ]
     },
     {
@@ -66,7 +85,44 @@
         "Pioneered the implementation of new test automation tools.",
         "Collaborated with cross-functional teams to optimize the software development lifecycle.",
         "Developed and delivered comprehensive training programs on testing techniques for QA analysts."
+      ],
+      "keywords": [
+        "São Paulo, Brazil",
+        "Risk-Based Testing",
+        "Test Automation",
+        "SDLC",
+        "QA Training"
       ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "guilhermevigneron.dev",
+      "subtitle": "Self-Verifying Portfolio & Resume Pipeline",
+      "description": "Zero-third-party static showcase driven by a single resume.json source of truth. Compiles fingerprinted bundles, Schema.org JSON-LD, llms.txt, vCard, Open Graph card, and A4 /resume.pdf, gated by HTML5 validation, Playwright mobile Web Vitals budgets, and 12-audit WCAG 2.1 AA Cypress + axe checks.",
+      "highlights": [
+        "Enforces strict default-src 'self' CSP with SHA-256 asset fingerprinting, subsetted Geist fonts, and responsive AVIF/WebP imagery.",
+        "Publishes live CI telemetry to /quality/ and /quality/report.json alongside weekly production smoke and link-rot checks."
+      ],
+      "keywords": [
+        "Node.js",
+        "Playwright",
+        "Cypress",
+        "axe-core",
+        "esbuild",
+        "GitHub Actions",
+        "CSP"
+      ],
+      "startDate": "2026",
+      "displayDate": "2026 · Open Source",
+      "url": "https://github.com/guilhermevigneron/guilhermevigneron.github.io",
+      "links": [
+        {
+          "label": "Live Quality Report",
+          "url": "/quality/"
+        }
+      ],
+      "showInPrint": false
     }
   ],
   "education": [
@@ -121,12 +177,23 @@
   ],
   "meta": {
     "canonical": "https://guilhermevigneron.dev",
+    "shortName": "G. Vigneron",
+    "pageTitle": "Guilherme Vigneron de Oliveira - Principal Technologist",
     "jobTitle": "Principal Software QA Engineer",
+    "metaDescription": "Guilherme Vigneron de Oliveira — Principal Technologist with 18+ years of experience in quality engineering, test automation, DevOps, software development, AI-assisted workflows, and company-wide Developer Experience (DX). Based in Austin, TX.",
+    "ogDescription": "Principal Technologist with 18+ years advancing software quality, test automation, DevOps CI/CD pipelines, AI-assisted engineering, and company-wide Developer Experience (DX).",
     "shortDescription": "Principal Technologist with 18+ years of experience advancing software quality, test automation, DevOps, AI-assisted engineering, and company-wide Developer Experience (DX).",
+    "manifestDescription": "Principal Technologist | Quality, DevOps & Developer Experience — Portfolio & Resume",
+    "ogImage": "/assets/og-card.png",
+    "ogImageUrl": "https://guilhermevigneron.dev/assets/og-card.png",
     "resumePdf": "/resume.pdf",
     "resumePdfUrl": "https://guilhermevigneron.dev/resume.pdf",
     "resumeJsonUrl": "https://guilhermevigneron.dev/resume.json",
+    "contactVcf": "/contact.vcf",
+    "contactVcfUrl": "https://guilhermevigneron.dev/contact.vcf",
     "qualityReportUrl": "https://guilhermevigneron.dev/quality/",
-    "securityTxtUrl": "https://guilhermevigneron.dev/.well-known/security.txt"
+    "qualityReportJsonUrl": "https://guilhermevigneron.dev/quality/report.json",
+    "securityTxtUrl": "https://guilhermevigneron.dev/.well-known/security.txt",
+    "maxPdfPages": 1
   }
 }
