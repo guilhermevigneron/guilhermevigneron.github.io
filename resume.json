@@ -36,7 +36,7 @@
         "Expanded into DevOps and software development, building CI/CD pipelines, release automation, and engineering deliverables in Azure DevOps.",
         "Integrated LLMs and AI-assisted workflows into daily engineering to accelerate development, testing, and data analysis while maintaining quality.",
         "Led comprehensive test strategies and robust Selenium/C# automation frameworks, increasing test coverage and reducing defects.",
-        "Conducted critical performance testing with JMeter to optimize software scalability and reliability.",
+        "Conducted critical performance testing to optimize software scalability and reliability.",
         "Led cross-functional teams as a Scrum Master, fostering collaboration and driving sustained sprint delivery."
       ]
     },
@@ -98,7 +98,6 @@
     { "name": "Selenium" },
     { "name": "Test Automation Frameworks" },
     { "name": "Performance Testing" },
-    { "name": "JMeter" },
     { "name": "Risk-Based Testing" },
     { "name": "Agile & Scrum" }
   ],

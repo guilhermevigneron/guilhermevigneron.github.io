@@ -517,7 +517,7 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
 
       expect(resume.basics.name).to.eq('Guilherme Vigneron de Oliveira');
       expect(resume.work).to.have.length(3);
-      expect(resume.skills).to.have.length(15);
+      expect(resume.skills).to.have.length(14);
       expect(resume.meta.resumePdf).to.eq('/resume.pdf');
 
       cy.visit('/');

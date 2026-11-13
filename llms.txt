@@ -11,7 +11,7 @@ Principal Technologist with 18+ years of experience advancing software quality, 
   - Expanded into DevOps and software development, building CI/CD pipelines, release automation, and engineering deliverables in Azure DevOps.
   - Integrated LLMs and AI-assisted workflows into daily engineering to accelerate development, testing, and data analysis while maintaining quality.
   - Led comprehensive test strategies and robust Selenium/C# automation frameworks, increasing test coverage and reducing defects.
-  - Conducted critical performance testing with JMeter to optimize software scalability and reliability.
+  - Conducted critical performance testing to optimize software scalability and reliability.
   - Led cross-functional teams as a Scrum Master, fostering collaboration and driving sustained sprint delivery.
 - Senior QA Engineer at AVEVA (Sep 2018 - Aug 2024), São Paulo, Brazil
   - Headed the development of test strategies, increasing test coverage and reducing defects.
@@ -25,7 +25,7 @@ Principal Technologist with 18+ years of experience advancing software quality, 
   - Developed and delivered comprehensive training programs on testing techniques for QA analysts.
 
 ## Core Skills
-Developer Experience (DX), DevOps, Software Development, AI / LLM Workflows, CI/CD, Azure DevOps, C#, Python, SQL, Selenium, Test Automation Frameworks, Performance Testing, JMeter, Risk-Based Testing, Agile & Scrum
+Developer Experience (DX), DevOps, Software Development, AI / LLM Workflows, CI/CD, Azure DevOps, C#, Python, SQL, Selenium, Test Automation Frameworks, Performance Testing, Risk-Based Testing, Agile & Scrum
 
 ## Education
 - Post-Graduation, Software Engineering (SOA) — Grupo Veris Educacional - IBTA (2010-2011)
