@@ -99,11 +99,13 @@ execFileSync(
 
 console.log('4b. Fingerprinting CSS and JS bundles for cache busting...');
 const cssUrl = fingerprintAsset('assets/css/styles.css');
+const themeInitJsUrl = fingerprintAsset('assets/js/theme-init.js');
 const themeJsUrl = fingerprintAsset('assets/js/theme.js');
 const commandMenuJsUrl = fingerprintAsset('assets/js/command-menu.js');
 
 const assetReplacements = {
   '/assets/css/styles.css': cssUrl,
+  '/assets/js/theme-init.js': themeInitJsUrl,
   '/assets/js/theme.js': themeJsUrl,
   '/assets/js/command-menu.js': commandMenuJsUrl,
 };
@@ -113,7 +115,7 @@ rewriteHtmlAssets('404.html', assetReplacements);
 fs.mkdirSync(reportsDir, { recursive: true });
 fs.writeFileSync(
   path.join(reportsDir, 'asset-manifest.json'),
-  JSON.stringify({ cssUrl, themeJsUrl, commandMenuJsUrl }, null, 2)
+  JSON.stringify({ cssUrl, themeInitJsUrl, themeJsUrl, commandMenuJsUrl }, null, 2)
 );
 
 console.log('5. Generating /resume.pdf via headless Chromium...');

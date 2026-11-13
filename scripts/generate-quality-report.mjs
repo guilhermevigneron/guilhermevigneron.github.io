@@ -71,6 +71,7 @@ function buildQualityPage() {
 
   const assetManifest = readJsonIfExists(path.join(reportsDir, 'asset-manifest.json'));
   const cssUrl = assetManifest?.cssUrl || '/assets/css/styles.css';
+  const themeInitJsUrl = assetManifest?.themeInitJsUrl || '/assets/js/theme-init.js';
   const themeJsUrl = assetManifest?.themeJsUrl || '/assets/js/theme.js';
 
   const cssSize = getFileSizeKb(path.join(siteDir, 'assets', 'css', 'styles.css')) || 'N/A';
@@ -187,18 +188,10 @@ function buildQualityPage() {
     <meta name="description" content="Automated CI/CD quality, accessibility, performance, and security verification report for guilhermevigneron.dev.">
     <meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0d0c0a" media="(prefers-color-scheme: dark)">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <link rel="canonical" href="https://guilhermevigneron.dev/quality/">
-    <script>
-      (() => {
-        try {
-          const stored = localStorage.getItem('theme');
-          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          if (stored === 'dark' || (!stored && prefersDark)) {
-            document.documentElement.classList.add('dark');
-          }
-        } catch {}
-      })();
-    </script>
+    <script src="${escapeHtml(themeInitJsUrl)}"></script>
     <link rel="preload" href="/assets/fonts/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/assets/fonts/GeistPixel-Square.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="${escapeHtml(cssUrl)}">
