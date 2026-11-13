@@ -110,6 +110,27 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
     });
 
     cy.visit('/');
+    cy.get('link[rel="stylesheet"]')
+      .should('have.attr', 'href')
+      .then((href) => {
+        expect(href).to.match(/^\/assets\/css\/styles\.[a-f0-9]+\.css$/);
+        cy.request(href).then((res) => {
+          expect(res.status).to.eq(200);
+          expect(res.headers['content-type']).to.include('text/css');
+          expect(res.body).to.include('.icon-btn svg');
+        });
+      });
+    cy.get('script[src*="/assets/js/theme"]').each(($script) => {
+      const src = $script.attr('src');
+      expect(src).to.match(/^\/assets\/js\/theme\.[a-f0-9]+\.js$/);
+      cy.request(src).its('status').should('eq', 200);
+    });
+    cy.get('script[src*="/assets/js/command-menu"]').each(($script) => {
+      const src = $script.attr('src');
+      expect(src).to.match(/^\/assets\/js\/command-menu\.[a-f0-9]+\.js$/);
+      cy.request(src).its('status').should('eq', 200);
+    });
+
     cy.document().then(async (doc) => {
       await doc.fonts.ready;
       expect(doc.fonts.check('400 16px "Geist Mono"')).to.eq(true);
@@ -168,6 +189,38 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
         .and('have.attr', 'href', 'mailto:guilhermevigneron@gmail.com');
 
       cy.get('svg[aria-hidden="true"][focusable="false"]').should('have.length', 3);
+    });
+  });
+
+  it('enforces explicit dimensions and compact rendered sizes on all SVG icons', () => {
+    ['/', '/404.html', '/quality/'].forEach((route) => {
+      cy.visit(route, { failOnStatusCode: route !== '/404.html' });
+      cy.get('link[rel="stylesheet"]')
+        .should('have.attr', 'href')
+        .and('match', /^\/assets\/css\/styles\.[a-f0-9]+\.css$/);
+
+      cy.get('svg')
+        .should('have.length.greaterThan', 0)
+        .each(($svg) => {
+          const widthAttr = Number($svg.attr('width'));
+          const heightAttr = Number($svg.attr('height'));
+          expect(widthAttr, `${route} svg width attr`).to.be.greaterThan(0).and.at.most(24);
+          expect(heightAttr, `${route} svg height attr`).to.be.greaterThan(0).and.at.most(24);
+          if ($svg.is(':visible')) {
+            const rect = $svg[0].getBoundingClientRect();
+            expect(rect.width, `${route} visible svg width`).to.be.greaterThan(0).and.at.most(24);
+            expect(rect.height, `${route} visible svg height`).to.be.greaterThan(0).and.at.most(24);
+          }
+        });
+    });
+
+    cy.viewport(1280, 800);
+    cy.visit('/');
+    cy.get('#command-trigger').click();
+    cy.get('#command-dialog svg').each(($svg) => {
+      const rect = $svg[0].getBoundingClientRect();
+      expect(rect.width, 'command dialog svg width').to.be.greaterThan(0).and.at.most(24);
+      expect(rect.height, 'command dialog svg height').to.be.greaterThan(0).and.at.most(24);
     });
   });
 

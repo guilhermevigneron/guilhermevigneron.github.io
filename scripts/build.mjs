@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 
 const ROOT = process.cwd();
 const siteDir = path.join(ROOT, '_site');
+const reportsDir = path.join(ROOT, '.ci-reports');
 
 function runNodeScript(relScript) {
   execFileSync(process.execPath, [path.join(ROOT, relScript)], {
@@ -23,6 +25,30 @@ function copyDir(srcRel, destRel = srcRel) {
   const dest = path.join(siteDir, destRel);
   if (!fs.existsSync(src)) return;
   fs.cpSync(src, dest, { recursive: true });
+}
+
+function fingerprintAsset(relPath) {
+  const fullPath = path.join(siteDir, relPath);
+  if (!fs.existsSync(fullPath)) return `/${relPath}`;
+  const hash = crypto
+    .createHash('sha256')
+    .update(fs.readFileSync(fullPath))
+    .digest('hex')
+    .slice(0, 8);
+  const parsed = path.posix.parse(relPath);
+  const hashedRel = path.posix.join(parsed.dir, `${parsed.name}.${hash}${parsed.ext}`);
+  fs.copyFileSync(fullPath, path.join(siteDir, hashedRel));
+  return `/${hashedRel}`;
+}
+
+function rewriteHtmlAssets(relHtmlPath, replacements) {
+  const target = path.join(siteDir, relHtmlPath);
+  if (!fs.existsSync(target)) return;
+  let html = fs.readFileSync(target, 'utf8');
+  for (const [fromUrl, toUrl] of Object.entries(replacements)) {
+    html = html.replaceAll(fromUrl, toUrl);
+  }
+  fs.writeFileSync(target, html, 'utf8');
 }
 
 console.log('1. Syncing resume.json -> llms.txt & index.html JSON-LD...');
@@ -66,6 +92,25 @@ execFileSync(
     '--minify',
   ],
   { stdio: 'inherit' }
+);
+
+console.log('4b. Fingerprinting CSS and JS bundles for cache busting...');
+const cssUrl = fingerprintAsset('assets/css/styles.css');
+const themeJsUrl = fingerprintAsset('assets/js/theme.js');
+const commandMenuJsUrl = fingerprintAsset('assets/js/command-menu.js');
+
+const assetReplacements = {
+  '/assets/css/styles.css': cssUrl,
+  '/assets/js/theme.js': themeJsUrl,
+  '/assets/js/command-menu.js': commandMenuJsUrl,
+};
+rewriteHtmlAssets('index.html', assetReplacements);
+rewriteHtmlAssets('404.html', assetReplacements);
+
+fs.mkdirSync(reportsDir, { recursive: true });
+fs.writeFileSync(
+  path.join(reportsDir, 'asset-manifest.json'),
+  JSON.stringify({ cssUrl, themeJsUrl, commandMenuJsUrl }, null, 2)
 );
 
 console.log('5. Generating /resume.pdf via headless Chromium...');

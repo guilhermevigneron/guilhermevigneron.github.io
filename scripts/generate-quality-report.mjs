@@ -69,6 +69,10 @@ function buildQualityPage() {
   const cypressReport = readJsonIfExists(path.join(reportsDir, 'cypress-results.json'));
   const lycheeExit = process.env.LYCHEE_STATUS;
 
+  const assetManifest = readJsonIfExists(path.join(reportsDir, 'asset-manifest.json'));
+  const cssUrl = assetManifest?.cssUrl || '/assets/css/styles.css';
+  const themeJsUrl = assetManifest?.themeJsUrl || '/assets/js/theme.js';
+
   const cssSize = getFileSizeKb(path.join(siteDir, 'assets', 'css', 'styles.css')) || 'N/A';
   const fontSize =
     getCombinedFontsSizeKb([
@@ -197,8 +201,8 @@ function buildQualityPage() {
     </script>
     <link rel="preload" href="/assets/fonts/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/assets/fonts/GeistPixel-Square.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/assets/css/styles.css">
-    <script src="/assets/js/theme.js" defer></script>
+    <link rel="stylesheet" href="${escapeHtml(cssUrl)}">
+    <script src="${escapeHtml(themeJsUrl)}" defer></script>
 </head>
 <body class="subpage-body">
     <a href="#main-content" class="sr-only skip-link">Skip to main content</a>
@@ -213,11 +217,11 @@ function buildQualityPage() {
                 <div class="subpage-nav-actions">
                     <a href="/" class="ghost-link">Portfolio</a>
                     <button id="theme-toggle" type="button" class="icon-btn" aria-label="Switch to dark theme" aria-pressed="false" title="Switch to dark theme">
-                        <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <svg class="theme-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                             <circle cx="12" cy="12" r="4"></circle>
                             <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
                         </svg>
-                        <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <svg class="theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
                         </svg>
                     </button>
