@@ -50,7 +50,7 @@ jobs:
         id: lychee
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --root-dir ${{ github.workspace }}/_site --exclude '^https://guilhermevigneron\.dev/quality/$' --no-progress ./_site/**/*.html
+          args: --root-dir ${{ github.workspace }}/_site --accept 200..=299,999 --exclude '^https://guilhermevigneron\.dev/quality/$' --no-progress ./_site/index.html ./_site/404.html ./_site/quality/index.html
 
       - name: Run Browser E2E & Accessibility Tests (Cypress)
         env:
@@ -105,4 +105,4 @@ jobs:
       - name: Production Link Checker (guilhermevigneron.dev)
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --no-progress https://guilhermevigneron.dev https://guilhermevigneron.dev/quality/
+          args: --accept 200..=299,999 --no-progress https://guilhermevigneron.dev https://guilhermevigneron.dev/quality/

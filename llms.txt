@@ -15,7 +15,7 @@ Selenium, C#, Python, Azure DevOps, JMeter, SQL, Test Automation Frameworks, Agi
 - B.S., Computing — Universidade Estadual de Campinas (2005-2009)
 
 ## Publications
-- "The Hidden Costs of Flaky Tests: A Deep Dive into Test Reliability" — StickyMinds (https://www.stickyminds.com/article/hidden-costs-flaky-tests-deep-dive-test-reliability)
+- "The Hidden Costs of Flaky Tests: A Deep Dive into Test Reliability" — StickyMinds (https://www.stickyminds.com/article/hidden-costs-flaky-tests-deep-dive-test-reliability-0)
 - "The Big Picture: Defining a Successful Test Automation Strategy" — Software Testing Magazine (https://www.softwaretestingmagazine.com/knowledge/the-big-picture-defining-a-successful-test-automation-strategy-for-long-term-value/)
 
 ## Awards
