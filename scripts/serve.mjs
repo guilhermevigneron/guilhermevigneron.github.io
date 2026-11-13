@@ -38,22 +38,38 @@ export function createStaticServer(siteDir) {
     }
 
     if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()) {
+      const stat = fs.statSync(candidatePath);
       const ext = path.extname(candidatePath).toLowerCase();
       const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-      res.writeHead(200, { 'Content-Type': contentType });
+      res.writeHead(200, {
+        'Content-Type': contentType,
+        'Content-Length': stat.size,
+      });
+      if (req.method === 'HEAD') {
+        res.end();
+        return;
+      }
       fs.createReadStream(candidatePath).pipe(res);
       return;
     }
 
     const notFoundPath = path.join(resolvedSiteDir, '404.html');
     if (fs.existsSync(notFoundPath)) {
-      res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
+      const stat = fs.statSync(notFoundPath);
+      res.writeHead(404, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Length': stat.size,
+      });
+      if (req.method === 'HEAD') {
+        res.end();
+        return;
+      }
       fs.createReadStream(notFoundPath).pipe(res);
       return;
     }
 
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('Not Found');
+    res.end(req.method === 'HEAD' ? undefined : 'Not Found');
   });
 }
 
