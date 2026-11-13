@@ -161,7 +161,7 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
   it('renders title, header, subtitle, five sections, and footer with quality link', () => {
     cy.title().should('eq', 'Guilherme Vigneron de Oliveira - Principal Technologist');
     cy.contains('h1', 'Guilherme Vigneron de Oliveira').should('be.visible');
-    cy.contains('Principal Technologist | QA & Software Testing Expert').should('be.visible');
+    cy.contains('Principal Technologist | Quality, DevOps & Developer Experience').should('be.visible');
 
     cy.contains('h2', 'About Me').should('be.visible');
     cy.contains('h2', 'Professional Experience').should('be.visible');
@@ -322,7 +322,7 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
 
       expect(resume.basics.name).to.eq('Guilherme Vigneron de Oliveira');
       expect(resume.work).to.have.length(3);
-      expect(resume.skills).to.have.length(11);
+      expect(resume.skills).to.have.length(15);
       expect(resume.meta.resumePdf).to.eq('/resume.pdf');
 
       cy.visit('/');
@@ -357,7 +357,7 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
       expect(res.status).to.eq(200);
       const body = res.body;
 
-      expect(body).to.match(/^Contact:\s*mailto:guilhermevigneron@gmail\.com$/m);
+      expect(body).to.match(/^Contact:\s*mailto:email@gvo\.simplelogin\.com$/m);
       expect(body).to.match(
         /^Canonical:\s*https:\/\/guilhermevigneron\.dev\/\.well-known\/security\.txt$/m
       );

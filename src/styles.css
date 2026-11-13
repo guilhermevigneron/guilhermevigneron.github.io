@@ -985,6 +985,10 @@ html.dark .theme-icon-moon {
     font-size: 1.5rem;
   }
 
+  .cv-tagline {
+    max-width: none;
+  }
+
   .cv-tagline,
   .summary-copy,
   .entry-role,

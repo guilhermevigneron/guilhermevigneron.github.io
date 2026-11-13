@@ -1,17 +1,18 @@
 # Guilherme Vigneron de Oliveira — Portfolio
 
-> This is the personal portfolio of Guilherme Vigneron de Oliveira, a Principal Software QA Engineer with 15+ years of experience.
+> This is the personal portfolio of Guilherme Vigneron de Oliveira, a Principal Software QA Engineer with 18+ years of experience.
 
 ## Summary
-As a seasoned Quality Assurance Engineer with over 15 years of experience, I elevate software quality through innovative testing strategies and automation. My relentless pursuit of excellence, global collaboration, and attention to detail ensure every project achieves the highest standards. I am passionate about advancing quality assurance and eager to bring my innovative strategies to a forward-thinking team.
+Principal Technologist with 18+ years of experience advancing software quality, engineering velocity, and developer experience. Grounded in quality engineering and automation, my work spans DevOps, software development, daily AI/LLM engineering workflows, and company-wide DX Snapshots that turn org-wide feedback into action.
 
 ## Experience
 - Principal Software QA Engineer at AVEVA (Nov 2023 - Present), Austin, TX
-  - Led the development and implementation of comprehensive test strategies, achieving significant increases in test coverage and reductions in defects.
-  - Designed and implemented robust test automation frameworks using Selenium and C#, enhancing maintainability and efficiency.
-  - Orchestrated automated and manual testing processes using Azure DevOps, improving deployment reliability.
-  - Conducted critical performance testing with JMeter to optimize software performance.
-  - Led cross-functional teams as a Scrum Master, fostering collaboration and driving increases in sprint velocity.
+  - Organized company-wide Developer Experience (DX) Snapshots and analyzed org-wide results to uncover engineering bottlenecks and inform priorities.
+  - Expanded into DevOps and software development, building CI/CD pipelines, release automation, and engineering deliverables in Azure DevOps.
+  - Integrated LLMs and AI-assisted workflows into daily engineering to accelerate development, testing, and data analysis while maintaining quality.
+  - Led comprehensive test strategies and robust Selenium/C# automation frameworks, increasing test coverage and reducing defects.
+  - Conducted critical performance testing with JMeter to optimize software scalability and reliability.
+  - Led cross-functional teams as a Scrum Master, fostering collaboration and driving sustained sprint delivery.
 - Senior QA Engineer at AVEVA (Sep 2018 - Aug 2024), São Paulo, Brazil
   - Headed the development of test strategies, increasing test coverage and reducing defects.
   - Designed a robust Page Object Model test framework using Selenium and C#.
@@ -24,7 +25,7 @@ As a seasoned Quality Assurance Engineer with over 15 years of experience, I ele
   - Developed and delivered comprehensive training programs on testing techniques for QA analysts.
 
 ## Core Skills
-Selenium, C#, Python, Azure DevOps, JMeter, SQL, Test Automation Frameworks, Agile & Scrum, CI/CD, Risk-Based Testing, Performance Testing
+Developer Experience (DX), DevOps, Software Development, AI / LLM Workflows, CI/CD, Azure DevOps, C#, Python, SQL, Selenium, Test Automation Frameworks, Performance Testing, JMeter, Risk-Based Testing, Agile & Scrum
 
 ## Education
 - Post-Graduation, Software Engineering (SOA) — Grupo Veris Educacional - IBTA (2010-2011)

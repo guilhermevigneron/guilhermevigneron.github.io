@@ -2,10 +2,10 @@
   "$schema": "https://raw.githubusercontent.com/jsonresume/resume-schema/v1.0.0/schema.json",
   "basics": {
     "name": "Guilherme Vigneron de Oliveira",
-    "label": "Principal Technologist | QA & Software Testing Expert",
+    "label": "Principal Technologist | Quality, DevOps & Developer Experience",
     "email": "email@gvo.simplelogin.com",
     "url": "https://guilhermevigneron.dev",
-    "summary": "As a seasoned Quality Assurance Engineer with over 15 years of experience, I elevate software quality through innovative testing strategies and automation. My relentless pursuit of excellence, global collaboration, and attention to detail ensure every project achieves the highest standards. I am passionate about advancing quality assurance and eager to bring my innovative strategies to a forward-thinking team.",
+    "summary": "Principal Technologist with 18+ years of experience advancing software quality, engineering velocity, and developer experience. Grounded in quality engineering and automation, my work spans DevOps, software development, daily AI/LLM engineering workflows, and company-wide DX Snapshots that turn org-wide feedback into action.",
     "location": {
       "city": "Austin",
       "region": "TX",
@@ -32,11 +32,12 @@
       "location": "Austin, TX",
       "displayDate": "Nov 2023 - Present",
       "highlights": [
-        "Led the development and implementation of comprehensive test strategies, achieving significant increases in test coverage and reductions in defects.",
-        "Designed and implemented robust test automation frameworks using Selenium and C#, enhancing maintainability and efficiency.",
-        "Orchestrated automated and manual testing processes using Azure DevOps, improving deployment reliability.",
-        "Conducted critical performance testing with JMeter to optimize software performance.",
-        "Led cross-functional teams as a Scrum Master, fostering collaboration and driving increases in sprint velocity."
+        "Organized company-wide Developer Experience (DX) Snapshots and analyzed org-wide results to uncover engineering bottlenecks and inform priorities.",
+        "Expanded into DevOps and software development, building CI/CD pipelines, release automation, and engineering deliverables in Azure DevOps.",
+        "Integrated LLMs and AI-assisted workflows into daily engineering to accelerate development, testing, and data analysis while maintaining quality.",
+        "Led comprehensive test strategies and robust Selenium/C# automation frameworks, increasing test coverage and reducing defects.",
+        "Conducted critical performance testing with JMeter to optimize software scalability and reliability.",
+        "Led cross-functional teams as a Scrum Master, fostering collaboration and driving sustained sprint delivery."
       ]
     },
     {
@@ -85,17 +86,21 @@
     }
   ],
   "skills": [
-    { "name": "Selenium" },
+    { "name": "Developer Experience (DX)" },
+    { "name": "DevOps" },
+    { "name": "Software Development" },
+    { "name": "AI / LLM Workflows" },
+    { "name": "CI/CD" },
+    { "name": "Azure DevOps" },
     { "name": "C#" },
     { "name": "Python" },
-    { "name": "Azure DevOps" },
-    { "name": "JMeter" },
     { "name": "SQL" },
+    { "name": "Selenium" },
     { "name": "Test Automation Frameworks" },
-    { "name": "Agile & Scrum" },
-    { "name": "CI/CD" },
+    { "name": "Performance Testing" },
+    { "name": "JMeter" },
     { "name": "Risk-Based Testing" },
-    { "name": "Performance Testing" }
+    { "name": "Agile & Scrum" }
   ],
   "publications": [
     {
@@ -118,7 +123,7 @@
   "meta": {
     "canonical": "https://guilhermevigneron.dev",
     "jobTitle": "Principal Software QA Engineer",
-    "shortDescription": "Seasoned Quality Assurance Engineer with over 15 years of experience elevating software quality through innovative testing strategies and automation.",
+    "shortDescription": "Principal Technologist with 18+ years of experience advancing software quality, test automation, DevOps, AI-assisted engineering, and company-wide Developer Experience (DX).",
     "resumePdf": "/resume.pdf",
     "resumePdfUrl": "https://guilhermevigneron.dev/resume.pdf",
     "resumeJsonUrl": "https://guilhermevigneron.dev/resume.json",

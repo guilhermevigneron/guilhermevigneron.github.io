@@ -68,7 +68,7 @@ function buildLlmsTxt(data) {
   return [
     `# ${data.basics.name} — Portfolio`,
     '',
-    `> This is the personal portfolio of ${data.basics.name}, a ${data.meta.jobTitle} with 15+ years of experience.`,
+    `> This is the personal portfolio of ${data.basics.name}, a ${data.meta.jobTitle} with 18+ years of experience.`,
     '',
     '## Summary',
     data.basics.summary,
