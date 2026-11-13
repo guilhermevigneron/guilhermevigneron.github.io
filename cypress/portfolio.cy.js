@@ -20,14 +20,20 @@ const CHROME_INTERNAL_HOSTS = new Set([
 ]);
 
 function isLocalUrl(rawUrl) {
-  const baseUrl = Cypress.config('baseUrl') || 'http://127.0.0.1:4000';
-  return (
-    rawUrl.startsWith(baseUrl) ||
-    rawUrl.startsWith('http://127.0.0.1') ||
-    rawUrl.startsWith('http://localhost') ||
-    rawUrl.startsWith('data:') ||
-    rawUrl.startsWith('blob:')
-  );
+  if (rawUrl.startsWith('data:') || rawUrl.startsWith('blob:')) {
+    return true;
+  }
+  try {
+    const parsed = new URL(rawUrl);
+    const baseOrigin = new URL(Cypress.config('baseUrl') || 'http://127.0.0.1:4000').origin;
+    return (
+      parsed.origin === baseOrigin ||
+      parsed.hostname === '127.0.0.1' ||
+      parsed.hostname === 'localhost'
+    );
+  } catch {
+    return false;
+  }
 }
 
 function isBrowserInternalRequest(req) {
@@ -280,6 +286,12 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
         .should('have.attr', 'href')
         .and('match', /^\/assets\/css\/styles\.[a-f0-9]+\.css$/);
 
+      if (route !== '/') {
+        cy.get('link[rel="stylesheet"][href*="/assets/css/subpage."]')
+          .should('have.attr', 'href')
+          .and('match', /^\/assets\/css\/subpage\.[a-f0-9]+\.css$/);
+      }
+
       cy.get('svg')
         .should('have.length.greaterThan', 0)
         .each(($svg) => {
@@ -346,14 +358,32 @@ describe('Theme Toggle & Persistence', () => {
     cy.get('meta[name="theme-color"]').first().should('have.attr', 'content', '#fafaf8');
     cy.window().its('localStorage').invoke('getItem', 'theme').should('eq', 'light');
   });
+
+  it('ignores non-theme localStorage values when resolving initial prefers-color-scheme', () => {
+    cy.visit('/', {
+      onBeforeLoad(win) {
+        win.localStorage.setItem('theme', 'system');
+        cy.stub(win, 'matchMedia').returns({
+          matches: true,
+          media: '(prefers-color-scheme: dark)',
+          addEventListener() {},
+          removeEventListener() {},
+        });
+      },
+    });
+    cy.get('html').should('have.class', 'dark');
+  });
 });
 
 describe('Command Menu Interaction', () => {
-  it('opens via trigger or Ctrl+J, passes axe-core while open, filters items, and closes cleanly', () => {
+  it('opens via trigger or Ctrl+J, ignores Ctrl+Shift+J, filters hints, syncs focus, and closes cleanly', () => {
     cy.viewport(1280, 800);
     cy.visit('/');
 
     cy.get('#command-dialog').should('not.be.visible');
+    cy.get('body').type('{ctrl}{shift}j');
+    cy.get('#command-dialog').should('not.be.visible');
+
     cy.get('#command-trigger').should('be.visible').click();
     cy.get('#command-dialog').should('be.visible');
     cy.focused().should('have.id', 'command-input');
@@ -361,12 +391,35 @@ describe('Command Menu Interaction', () => {
     cy.injectAxe();
     cy.checkA11y('#command-dialog');
 
-    cy.get('#command-input').type('{downarrow}');
-    cy.get('#command-dialog .cmd-item[data-selected="true"]').should('have.length', 1);
+    cy.get('#command-dialog .cmd-item[data-selected="true"]')
+      .should('have.length', 1)
+      .and('contain.text', 'Print / Save as PDF');
 
-    cy.get('#command-input').type('Quality');
-    cy.contains('#command-dialog .cmd-item:not([hidden])', 'Live Quality Report').should('be.visible');
-    cy.get('#command-empty').should('not.be.visible');
+    cy.get('#command-input').type('{downarrow}');
+    cy.get('#command-dialog .cmd-item[data-selected="true"]')
+      .should('have.length', 1)
+      .and('contain.text', 'Download Resume (PDF)');
+
+    cy.get('#command-dialog .cmd-item').first().focus();
+    cy.focused().should('contain.text', 'Print / Save as PDF');
+    cy.get('#command-dialog .cmd-item[data-selected="true"]')
+      .should('have.length', 1)
+      .and('contain.text', 'Print / Save as PDF');
+    cy.document().trigger('keydown', { key: 'ArrowDown' });
+    cy.focused()
+      .should('contain.text', 'Download Resume (PDF)')
+      .and('have.attr', 'data-selected', 'true');
+
+    [
+      { query: 'Live', expected: 'Live Quality Report' },
+      { query: 'Appearance', expected: 'Toggle Light / Dark Theme' },
+      { query: 'A4', expected: 'Print / Save as PDF' },
+      { query: 'simplelogin', expected: 'Email' },
+    ].forEach(({ query, expected }) => {
+      cy.get('#command-input').focus().clear().type(query);
+      cy.contains('#command-dialog .cmd-item:not([hidden])', expected).should('be.visible');
+      cy.get('#command-empty').should('not.be.visible');
+    });
 
     cy.get('#command-input').clear().type('nonexistent-command-xyz');
     cy.get('#command-empty').should('be.visible').and('contain.text', 'No results found.');
@@ -521,6 +574,20 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
       expect(resume.meta.resumePdf).to.eq('/resume.pdf');
 
       cy.visit('/');
+      cy.get('main').within(() => {
+        cy.get(`a[href="mailto:${resume.basics.email}"]`).should('exist');
+        resume.basics.profiles.forEach((profile) => {
+          cy.get(`a[href="${profile.url}"]`).should('exist');
+        });
+        resume.work.forEach((job) => {
+          cy.contains(job.position).should('be.visible');
+          cy.contains(job.displayDate).should('be.visible');
+        });
+        resume.skills.forEach((skill) => {
+          cy.get('#skills').should('contain.text', skill.name);
+        });
+      });
+
       cy.get('script[type="application/ld+json"]')
         .should('exist')
         .then(($script) => {

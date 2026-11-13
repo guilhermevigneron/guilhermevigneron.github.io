@@ -7,16 +7,24 @@ const resume = JSON.parse(fs.readFileSync(path.join(ROOT, 'resume.json'), 'utf8'
 const indexHtml = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const llmsTxt = fs.readFileSync(path.join(ROOT, 'llms.txt'), 'utf8');
 
+const HTML_ENTITIES = {
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+};
+
 function decodeHtmlEntities(text) {
-  return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+  return text.replace(/&(amp|lt|gt|quot|#39);/g, (entity) => HTML_ENTITIES[entity] || entity);
 }
 
-const decodedIndex = decodeHtmlEntities(indexHtml);
+const bodyMatch = indexHtml.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
+const bodySource = (bodyMatch ? bodyMatch[1] : indexHtml)
+  .replace(/<script\b[\s\S]*?<\/script>/gi, '')
+  .replace(/<style\b[\s\S]*?<\/style>/gi, '')
+  .replace(/<!--[\s\S]*?-->/g, '');
+const decodedIndex = decodeHtmlEntities(bodySource);
 const checks = [];
 
 function check(name, fn) {

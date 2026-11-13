@@ -1,99 +1,66 @@
-(function () {
+(() => {
   'use strict';
 
-  var backdrop = document.getElementById('command-backdrop');
-  var dialog = document.getElementById('command-dialog');
-  var triggers = Array.prototype.slice.call(
-    document.querySelectorAll('#command-trigger, #command-trigger-mobile')
-  );
-  var closeBtn = document.getElementById('command-close');
-  var input = document.getElementById('command-input');
-  var list = dialog ? dialog.querySelector('.cmd-list') : null;
-  var emptyState = document.getElementById('command-empty');
-  var modifierEl = document.getElementById('command-modifier');
+  const byId = (id) => document.getElementById(id);
+  const backdrop = byId('command-backdrop');
+  const dialog = byId('command-dialog');
+  const triggers = [...document.querySelectorAll('#command-trigger, #command-trigger-mobile')];
+  const closeBtn = byId('command-close');
+  const input = byId('command-input');
+  const list = dialog?.querySelector('.cmd-list');
+  const emptyState = byId('command-empty');
+  const modifierEl = byId('command-modifier');
 
-  if (!backdrop || !dialog || !input || !list || !emptyState) {
-    return;
-  }
+  if (!backdrop || !dialog || !input || !list || !emptyState) return;
 
-  var items = Array.prototype.slice.call(dialog.querySelectorAll('.cmd-item'));
-  var groups = Array.prototype.slice.call(dialog.querySelectorAll('.cmd-group'));
-  var lastFocused = null;
-  var activeIndex = -1;
+  const items = [...dialog.querySelectorAll('.cmd-item')];
+  const groups = [...dialog.querySelectorAll('.cmd-group')];
+  let lastFocused = null;
+  let activeIndex = -1;
 
   if (modifierEl && /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent)) {
     modifierEl.textContent = '\u2318';
   }
 
-  function isOpen() {
-    return !dialog.hidden;
-  }
+  const isOpen = () => !dialog.hidden;
+  const setExpanded = (v) => triggers.forEach((b) => b.setAttribute('aria-expanded', String(v)));
+  const getVisible = () => items.filter((item) => !item.hidden);
+  const getFocusables = () => [input, ...(closeBtn && !closeBtn.hidden ? [closeBtn] : []), ...getVisible()];
 
-  function setExpanded(expanded) {
-    triggers.forEach(function (btn) {
-      btn.setAttribute('aria-expanded', String(expanded));
-    });
-  }
-
-  function getVisibleItems() {
-    return items.filter(function (item) {
-      return !item.hidden;
-    });
-  }
-
-  function getFocusableElements() {
-    var focusables = [input];
-    if (closeBtn && !closeBtn.hidden) {
-      focusables.push(closeBtn);
-    }
-    return focusables.concat(getVisibleItems());
-  }
-
-  function setSelected(index, shouldScroll) {
-    var visible = getVisibleItems();
-    items.forEach(function (item) {
-      item.setAttribute('data-selected', 'false');
-    });
-
-    if (visible.length === 0) {
+  const setSelected = (index, scroll) => {
+    const visible = getVisible();
+    items.forEach((item) => item.setAttribute('data-selected', 'false'));
+    if (!visible.length) {
       activeIndex = -1;
       return;
     }
-
-    var clamped = ((index % visible.length) + visible.length) % visible.length;
+    const clamped = ((index % visible.length) + visible.length) % visible.length;
     activeIndex = clamped;
     visible[clamped].setAttribute('data-selected', 'true');
-    if (shouldScroll) {
-      visible[clamped].scrollIntoView({ block: 'nearest' });
-    }
-  }
+    if (scroll) visible[clamped].scrollIntoView({ block: 'nearest' });
+  };
 
-  function filterItems(query) {
-    var normalized = query.trim().toLowerCase();
-    var anyVisible = false;
-
-    groups.forEach(function (group) {
-      var groupItems = Array.prototype.slice.call(group.querySelectorAll('.cmd-item'));
-      var groupVisibleCount = 0;
-
-      groupItems.forEach(function (item) {
-        var label = (item.getAttribute('data-label') || item.textContent || '').toLowerCase();
-        var match = !normalized || label.indexOf(normalized) !== -1;
+  const filterItems = (query) => {
+    const q = query.trim().toLowerCase();
+    let any = false;
+    groups.forEach((group) => {
+      let count = 0;
+      group.querySelectorAll('.cmd-item').forEach((item) => {
+        const text = `${item.getAttribute('data-label') || ''} ${item.textContent || ''}`.toLowerCase();
+        const match = !q || text.includes(q);
         item.hidden = !match;
         if (match) {
-          groupVisibleCount += 1;
-          anyVisible = true;
+          count += 1;
+          any = true;
         }
       });
-
-      group.hidden = groupVisibleCount === 0;
+      group.hidden = count === 0;
     });
-
-    emptyState.hidden = anyVisible;
+    emptyState.hidden = any;
     setSelected(0, false);
-  }
+  };
 
-  function openMenu() {
+  const openMenu = () => {
     lastFocused = document.activeElement;
     input.value = '';
     filterItems('');
@@ -104,43 +71,42 @@
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
     input.focus({ preventScroll: true });
-  }
+  };
 
-  function closeMenu(restoreFocus) {
-    if (!isOpen()) {
-      return;
-    }
+  const closeMenu = (restore) => {
+    if (!isOpen()) return;
     backdrop.hidden = true;
     dialog.hidden = true;
     setExpanded(false);
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
-    if (restoreFocus && lastFocused instanceof HTMLElement && document.contains(lastFocused)) {
+    if (restore && lastFocused instanceof HTMLElement && document.contains(lastFocused)) {
       lastFocused.focus({ preventScroll: true });
     }
-  }
+  };
 
-  function runItem(item) {
-    if (!item) {
-      return;
-    }
-    var action = item.getAttribute('data-action');
-    var href = item.getAttribute('data-href');
-    var external = item.getAttribute('data-external') === 'true';
+  const runItem = (item) => {
+    if (!item) return;
+    const action = item.getAttribute('data-action');
+    const href = item.getAttribute('data-href');
+    const external = item.getAttribute('data-external') === 'true';
 
     if (action === 'print') {
+      const target = lastFocused;
       closeMenu(false);
-      window.setTimeout(function () {
-        window.print();
-      }, 20);
+      if (target instanceof HTMLElement && document.contains(target)) {
+        window.addEventListener(
+          'afterprint',
+          () => document.contains(target) && target.focus({ preventScroll: true }),
+          { once: true }
+        );
+      }
+      setTimeout(() => window.print(), 20);
       return;
     }
 
     if (action === 'toggle-theme') {
-      var themeToggle = document.getElementById('theme-toggle');
-      if (themeToggle) {
-        themeToggle.click();
-      }
+      byId('theme-toggle')?.click();
       closeMenu(true);
       return;
     }
@@ -153,37 +119,37 @@
         window.location.href = href;
       }
     }
-  }
+  };
 
-  document.addEventListener('keydown', function (event) {
-    if (event.key.toLowerCase() === 'j' && (event.metaKey || event.ctrlKey)) {
+  const syncHoveredOrFocused = (event) => {
+    const item = event.target instanceof Element ? event.target.closest('.cmd-item') : null;
+    if (!item || item.hidden) return;
+    const idx = getVisible().indexOf(item);
+    if (idx !== -1 && idx !== activeIndex) setSelected(idx, false);
+  };
+
+  document.addEventListener('keydown', (event) => {
+    if (
+      event.key.toLowerCase() === 'j' &&
+      (event.metaKey || event.ctrlKey) &&
+      !event.altKey &&
+      !event.shiftKey
+    ) {
       event.preventDefault();
-      if (isOpen()) {
-        closeMenu(true);
-      } else {
-        openMenu();
-      }
+      isOpen() ? closeMenu(true) : openMenu();
       return;
     }
-
-    if (!isOpen()) {
-      return;
-    }
+    if (!isOpen()) return;
 
     if (event.key === 'Tab') {
-      var focusables = getFocusableElements();
-      if (focusables.length === 0) {
-        return;
-      }
-      var currentIdx = focusables.indexOf(document.activeElement);
-      var nextIdx;
-      if (event.shiftKey) {
-        nextIdx = currentIdx <= 0 ? focusables.length - 1 : currentIdx - 1;
-      } else {
-        nextIdx = currentIdx === -1 || currentIdx >= focusables.length - 1 ? 0 : currentIdx + 1;
-      }
+      const focusables = getFocusables();
+      if (!focusables.length) return;
+      const cur = focusables.indexOf(document.activeElement);
+      const next = event.shiftKey
+        ? (cur <= 0 ? focusables.length - 1 : cur - 1)
+        : (cur === -1 || cur >= focusables.length - 1 ? 0 : cur + 1);
       event.preventDefault();
-      focusables[nextIdx].focus();
+      focusables[next].focus();
       return;
     }
 
@@ -193,20 +159,22 @@
       return;
     }
 
-    if (event.key === 'ArrowDown') {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
-      setSelected(activeIndex + 1, true);
-      return;
-    }
-
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setSelected(activeIndex - 1, true);
+      const onItem =
+        document.activeElement instanceof Element && Boolean(document.activeElement.closest('.cmd-item'));
+      setSelected(activeIndex + (event.key === 'ArrowDown' ? 1 : -1), true);
+      if (onItem) {
+        const visible = getVisible();
+        if (activeIndex >= 0 && visible[activeIndex]) {
+          visible[activeIndex].focus({ preventScroll: true });
+        }
+      }
       return;
     }
 
     if (event.key === 'Enter' && document.activeElement === input) {
-      var visible = getVisibleItems();
+      const visible = getVisible();
       if (activeIndex >= 0 && visible[activeIndex]) {
         event.preventDefault();
         runItem(visible[activeIndex]);
@@ -214,49 +182,14 @@
     }
   });
 
-  input.addEventListener('input', function () {
-    filterItems(input.value);
+  input.addEventListener('input', () => filterItems(input.value));
+  list.addEventListener('focusin', syncHoveredOrFocused);
+  list.addEventListener('pointerover', (e) => e.pointerType !== 'touch' && syncHoveredOrFocused(e));
+  list.addEventListener('click', (e) => {
+    const item = e.target instanceof Element ? e.target.closest('.cmd-item') : null;
+    if (item && !item.hidden) runItem(item);
   });
-
-  list.addEventListener('pointerover', function (event) {
-    if (event.pointerType === 'touch') {
-      return;
-    }
-    var item = event.target instanceof Element ? event.target.closest('.cmd-item') : null;
-    if (!item || item.hidden) {
-      return;
-    }
-    var visible = getVisibleItems();
-    var idx = visible.indexOf(item);
-    if (idx !== -1 && idx !== activeIndex) {
-      setSelected(idx, false);
-    }
-  });
-
-  list.addEventListener('click', function (event) {
-    var item = event.target instanceof Element ? event.target.closest('.cmd-item') : null;
-    if (item && !item.hidden) {
-      runItem(item);
-    }
-  });
-
-  triggers.forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      if (isOpen()) {
-        closeMenu(true);
-      } else {
-        openMenu();
-      }
-    });
-  });
-
-  if (closeBtn) {
-    closeBtn.addEventListener('click', function () {
-      closeMenu(true);
-    });
-  }
-
-  backdrop.addEventListener('click', function () {
-    closeMenu(true);
-  });
+  triggers.forEach((btn) => btn.addEventListener('click', () => (isOpen() ? closeMenu(true) : openMenu())));
+  closeBtn?.addEventListener('click', () => closeMenu(true));
+  backdrop.addEventListener('click', () => closeMenu(true));
 })();

@@ -52,7 +52,8 @@
 
     mediaQuery.addEventListener('change', (event) => {
       try {
-        if (localStorage.getItem(STORAGE_KEY)) return;
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored === 'dark' || stored === 'light') return;
       } catch {
         // Ignore storage errors
       }

@@ -8,7 +8,8 @@ export function minifyHtml(html) {
       let processed = full;
       if (tag.toLowerCase() === 'script' && /application\/ld\+json/i.test(attrs)) {
         try {
-          processed = `<script${attrs}>${JSON.stringify(JSON.parse(body))}</script>`;
+          const safeJson = JSON.stringify(JSON.parse(body)).replace(/<\//g, '<\\/');
+          processed = `<script${attrs}>${safeJson}</script>`;
         } catch {
           processed = full;
         }
@@ -36,7 +37,7 @@ export function minifyHtml(html) {
   out = out.replace(/(__HTML_MINIFY_PRESERVE_\d+__)\s+</g, '$1<');
 
   preserved.forEach((chunk, index) => {
-    out = out.replace(`${tokenPrefix}${index}__`, chunk);
+    out = out.replace(`${tokenPrefix}${index}__`, () => chunk);
   });
 
   return `${out.trim()}\n`;

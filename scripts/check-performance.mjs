@@ -106,6 +106,8 @@ async function main() {
   const failedRequests = [];
   const consoleErrors = [];
   const overflowChecks = [];
+  const blockedExternalRequests = [];
+  const baseOrigin = new URL(baseUrl).origin;
 
   try {
     browser = await chromium.launch({
@@ -129,9 +131,17 @@ async function main() {
 
     await page.route('**/*', (route) => {
       const url = route.request().url();
-      if (url.startsWith(baseUrl) || url.startsWith('data:') || url.startsWith('blob:')) {
+      if (url.startsWith('data:') || url.startsWith('blob:')) {
         return route.continue();
       }
+      try {
+        if (new URL(url).origin === baseOrigin) {
+          return route.continue();
+        }
+      } catch {
+        // Fall through to abort invalid URLs
+      }
+      blockedExternalRequests.push(url);
       return route.abort();
     });
 
@@ -196,8 +206,8 @@ async function main() {
       const docBytes = nav ? nav.encodedBodySize || nav.transferSize || 0 : 0;
       const avatarImg = document.querySelector('img.avatar');
       return {
-        fcpMs: Math.round(window.__perfMetrics.fcp || 0),
-        lcpMs: Math.round(window.__perfMetrics.lcp || 0),
+        fcpMs: window.__perfMetrics.fcp === null ? null : Math.round(window.__perfMetrics.fcp),
+        lcpMs: window.__perfMetrics.lcp === null ? null : Math.round(window.__perfMetrics.lcp),
         cls: Number((window.__perfMetrics.cls || 0).toFixed(4)),
         totalTransferBytes: docBytes + resourceTransferBytes,
         resourceCount: resources.length,
@@ -225,6 +235,11 @@ async function main() {
     }
 
     assert.equal(
+      blockedExternalRequests.length,
+      0,
+      `External requests detected during perf audit: ${blockedExternalRequests.join(', ')}`
+    );
+    assert.equal(
       failedRequests.length,
       0,
       `Failed subresource requests detected: ${JSON.stringify(failedRequests)}`
@@ -239,12 +254,12 @@ async function main() {
       `Mobile CLS ${vitals.cls} exceeds budget ${BUDGETS.clsMax}`
     );
     assert.ok(
-      vitals.lcpMs <= BUDGETS.lcpMaxMs,
-      `Mobile LCP ${vitals.lcpMs}ms exceeds budget ${BUDGETS.lcpMaxMs}ms`
+      typeof vitals.lcpMs === 'number' && vitals.lcpMs > 0 && vitals.lcpMs <= BUDGETS.lcpMaxMs,
+      `Mobile LCP ${vitals.lcpMs}ms missing or exceeds budget ${BUDGETS.lcpMaxMs}ms`
     );
     assert.ok(
-      vitals.fcpMs <= BUDGETS.fcpMaxMs,
-      `Mobile FCP ${vitals.fcpMs}ms exceeds budget ${BUDGETS.fcpMaxMs}ms`
+      typeof vitals.fcpMs === 'number' && vitals.fcpMs > 0 && vitals.fcpMs <= BUDGETS.fcpMaxMs,
+      `Mobile FCP ${vitals.fcpMs}ms missing or exceeds budget ${BUDGETS.fcpMaxMs}ms`
     );
     assert.ok(
       vitals.totalTransferBytes <= BUDGETS.totalMobileTransferMaxBytes,
@@ -272,7 +287,8 @@ async function main() {
     );
   } finally {
     if (browser) await browser.close();
-    server.close();
+    server.closeAllConnections?.();
+    await new Promise((resolve) => server.close(resolve));
   }
 }
 

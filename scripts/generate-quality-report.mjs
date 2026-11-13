@@ -95,7 +95,7 @@ function buildQualityPage() {
   const pdfStatus = pdfReport?.passed ? 'pass' : pdfReport ? 'fail' : 'pending';
   const htmlStatus = htmlReport ? (htmlReport.valid ? 'pass' : 'fail') : 'pending';
   const cypressStatus = cypressReport
-    ? cypressReport.totalFailed === 0
+    ? cypressReport.totalTests > 0 && cypressReport.totalFailed === 0
       ? 'pass'
       : 'fail'
     : 'pending';
@@ -105,19 +105,25 @@ function buildQualityPage() {
       : 'fail'
     : 'pending';
   const mobileStatus = cypressReport?.mobile
-    ? cypressReport.mobile.failures === 0 && cypressReport.mobile.checksRun >= 3
+    ? cypressReport.mobile.failures === 0 &&
+      cypressReport.mobile.checksRun >= 6 &&
+      (!perfReport || perfReport.passed)
       ? 'pass'
       : 'fail'
-    : perfReport?.passed
-      ? 'pass'
+    : perfReport
+      ? perfReport.passed
+        ? 'pass'
+        : 'fail'
       : 'pending';
   const perfStatus = perfReport ? (perfReport.passed ? 'pass' : 'fail') : 'pending';
   const zeroNetStatus = cypressReport?.network
-    ? cypressReport.network.externalRequests === 0 && pdfReport?.blockedExternalRequests === 0
+    ? cypressReport.network.pagesChecked >= 3 &&
+      cypressReport.network.externalRequests === 0 &&
+      pdfReport?.blockedExternalRequests === 0
       ? 'pass'
       : 'fail'
-    : pdfReport?.blockedExternalRequests === 0
-      ? 'pass'
+    : pdfReport && pdfReport.blockedExternalRequests > 0
+      ? 'fail'
       : 'pending';
   const lycheeStatus =
     lycheeExit === 'success' ? 'pass' : lycheeExit === 'failure' ? 'fail' : 'pending';
@@ -127,6 +133,11 @@ function buildQualityPage() {
       : typeof expiryDays === 'number'
         ? 'fail'
         : 'pending';
+
+  const syncPassedCount = Array.isArray(syncReport?.checks)
+    ? syncReport.checks.filter((c) => c.passed).length
+    : 0;
+  const syncTotalCount = Array.isArray(syncReport?.checks) ? syncReport.checks.length : 0;
 
   const generatedAt = new Date().toISOString();
   const commitSha = process.env.GITHUB_SHA ? process.env.GITHUB_SHA.slice(0, 7) : 'local';
@@ -142,9 +153,11 @@ function buildQualityPage() {
       status: zeroNetStatus,
       summary:
         'All CSS, fonts, images, icons, and scripts are locally bundled. Runtime network interception asserts 0 external third-party calls on page load and PDF rendering.',
-      metric: cypressReport?.network
+      metric: cypressReport?.network && cypressReport.network.pagesChecked > 0
         ? `${cypressReport.network.externalRequests} external calls detected (${cypressReport.network.pagesChecked} routes checked)`
-        : 'PDF renderer: 0 external calls (run Cypress for runtime route verification)',
+        : pdfReport
+          ? `PDF renderer: ${pdfReport.blockedExternalRequests} blocked external calls (run Cypress for runtime route verification)`
+          : 'Pending PDF & Cypress runtime network verification',
     },
     {
       title: 'Web Vitals & Asset Payload Budgets',
@@ -161,9 +174,9 @@ function buildQualityPage() {
       summary:
         'Multi-viewport verification (320px to 768px) asserting zero horizontal overflow, >=44x44px mobile touch targets, non-zooming search input, and mobile command palette.',
       metric: cypressReport?.mobile
-        ? `${cypressReport.mobile.checksRun} mobile layout checks passed (${cypressReport.mobile.failures} failures)`
+        ? `${cypressReport.mobile.checksRun} mobile layout checks (${cypressReport.mobile.failures} failures)`
         : perfReport
-          ? `${perfReport.overflowChecksCount} viewport overflow checks passed`
+          ? `${perfReport.overflowChecksCount} viewport overflow checks completed`
           : 'Pending mobile viewport suite',
     },
     {
@@ -210,7 +223,7 @@ function buildQualityPage() {
       status: syncStatus === 'pass' && secStatus === 'pass' ? 'pass' : syncStatus === 'fail' || secStatus === 'fail' ? 'fail' : 'pending',
       summary:
         'Automated parity validation across /resume.json, Schema.org JSON-LD, /llms.txt, and rendered DOM, plus RFC 9116 /.well-known/security.txt freshness.',
-      metric: `Sync: ${syncReport?.checks?.length || 0} checks passed · security.txt expires in ${expiryDays ?? '?'} days (min 30d)`,
+      metric: `Sync: ${syncPassedCount}/${syncTotalCount} checks passed · security.txt expires in ${expiryDays ?? '?'} days (min 30d)`,
     },
   ];
 

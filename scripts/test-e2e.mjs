@@ -17,8 +17,14 @@ function resolveBrowser() {
     if (resolved.includes('chromium')) {
       return 'chromium';
     }
+    return 'chrome';
   } catch {
-    // Fall back to chrome if /usr/bin/google-chrome is unavailable
+    // Probe chromium binaries when /usr/bin/google-chrome is unavailable
+  }
+  for (const candidate of ['/usr/bin/chromium', '/usr/bin/chromium-browser']) {
+    if (fs.existsSync(candidate)) {
+      return 'chromium';
+    }
   }
   return 'chrome';
 }

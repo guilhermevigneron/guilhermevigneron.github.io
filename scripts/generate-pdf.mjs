@@ -60,15 +60,20 @@ async function generatePdf() {
 
     const page = await context.newPage();
 
+    const baseOrigin = new URL(baseUrl).origin;
+
     // Enforce zero external network requests while rendering PDF
     await page.route('**/*', (route) => {
       const url = route.request().url();
-      if (
-        url.startsWith(baseUrl) ||
-        url.startsWith('data:') ||
-        url.startsWith('blob:')
-      ) {
+      if (url.startsWith('data:') || url.startsWith('blob:')) {
         return route.continue();
+      }
+      try {
+        if (new URL(url).origin === baseOrigin) {
+          return route.continue();
+        }
+      } catch {
+        // Fall through to block invalid URLs
       }
       blockedExternalRequests.push(url);
       return route.abort();

@@ -115,6 +115,7 @@ function syncIndexJsonLd(data) {
 
   const jsonLd = buildJsonLd(data);
   const formattedJson = JSON.stringify(jsonLd, null, 2)
+    .replace(/<\//g, '<\\/')
     .split('\n')
     .map((line) => `    ${line}`)
     .join('\n');

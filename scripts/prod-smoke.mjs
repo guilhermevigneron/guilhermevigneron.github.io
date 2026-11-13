@@ -51,6 +51,7 @@ async function main() {
   const activeCssText = await activeCssRes.text();
   assert.ok(activeCssText.includes('.icon-btn svg'), 'Active CSS missing .icon-btn svg rule');
   await checkEndpoint('/assets/css/styles.css', 200);
+  await checkEndpoint('/assets/css/subpage.css', 200);
   await checkEndpoint('/assets/css/print.css', 200);
   await checkEndpoint('/assets/fonts/GeistMono-Variable.woff2', 200);
   await checkEndpoint('/assets/fonts/GeistPixel-Square.woff2', 200);
@@ -98,6 +99,9 @@ async function main() {
   const qualityRes = await checkEndpoint('/quality/', 200);
   const qualityHtml = await qualityRes.text();
   assert.ok(qualityHtml.includes('Quality &amp; Verification Report') || qualityHtml.includes('Quality & Verification Report'));
+  const subpageCssMatch = qualityHtml.match(/<link rel="stylesheet" href="(\/assets\/css\/subpage(?:\.[a-f0-9]+)?\.css)">/);
+  assert.ok(subpageCssMatch, '/quality/ missing compiled subpage stylesheet link');
+  await checkEndpoint(subpageCssMatch[1], 200);
   await checkEndpoint('/sitemap.xml', 200);
   await checkEndpoint('/nonexistent-smoke-check-404', 404);
   console.log('PASS /quality/, /sitemap.xml, and 404 handling');

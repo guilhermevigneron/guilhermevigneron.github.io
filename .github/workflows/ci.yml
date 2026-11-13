@@ -66,6 +66,13 @@ jobs:
         run: |
           npm run build:quality
           npm run test:html
+          npm run test:perf
+          npm run test:e2e
+
+      - name: Link Checker (final /quality Report)
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: --root-dir ${{ github.workspace }}/_site --accept 200..=299,999 --exclude '^https://guilhermevigneron\.dev/quality/$' --no-progress ./_site/quality/index.html
 
       - name: Upload GitHub Pages artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

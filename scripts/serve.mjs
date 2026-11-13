@@ -26,11 +26,29 @@ export function createStaticServer(siteDir) {
   const resolvedSiteDir = path.resolve(siteDir);
 
   return http.createServer((req, res) => {
-    const reqUrl = new URL(req.url || '/', 'http://127.0.0.1');
+    const rawUrl = req.url || '/';
+    if (rawUrl.startsWith('//')) {
+      res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Bad Request');
+      return;
+    }
+
     let cleanPath;
     try {
+      const reqUrl = new URL(rawUrl, 'http://127.0.0.1');
+      if (reqUrl.origin !== 'http://127.0.0.1') {
+        res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Bad Request');
+        return;
+      }
       cleanPath = decodeURIComponent(reqUrl.pathname);
     } catch {
+      res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Bad Request');
+      return;
+    }
+
+    if (cleanPath.includes('\0')) {
       res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('Bad Request');
       return;
@@ -50,11 +68,9 @@ export function createStaticServer(siteDir) {
       candidatePath = path.join(candidatePath, 'index.html');
     }
 
-    if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()) {
-      const stat = fs.statSync(candidatePath);
-      const ext = path.extname(candidatePath).toLowerCase();
-      const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-      res.writeHead(200, {
+    const sendFile = (statusCode, filePath, contentType) => {
+      const stat = fs.statSync(filePath);
+      res.writeHead(statusCode, {
         'Content-Type': contentType,
         'Content-Length': stat.size,
       });
@@ -62,22 +78,28 @@ export function createStaticServer(siteDir) {
         res.end();
         return;
       }
-      fs.createReadStream(candidatePath).pipe(res);
+      const stream = fs.createReadStream(filePath);
+      stream.on('error', () => {
+        if (!res.headersSent) {
+          res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end('Internal Server Error');
+        } else {
+          res.destroy();
+        }
+      });
+      stream.pipe(res);
+    };
+
+    if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()) {
+      const ext = path.extname(candidatePath).toLowerCase();
+      const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+      sendFile(200, candidatePath, contentType);
       return;
     }
 
     const notFoundPath = path.join(resolvedSiteDir, '404.html');
     if (fs.existsSync(notFoundPath)) {
-      const stat = fs.statSync(notFoundPath);
-      res.writeHead(404, {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Content-Length': stat.size,
-      });
-      if (req.method === 'HEAD') {
-        res.end();
-        return;
-      }
-      fs.createReadStream(notFoundPath).pipe(res);
+      sendFile(404, notFoundPath, 'text/html; charset=utf-8');
       return;
     }
 
