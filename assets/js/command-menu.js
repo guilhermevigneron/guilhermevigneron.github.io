@@ -3,13 +3,16 @@
 
   var backdrop = document.getElementById('command-backdrop');
   var dialog = document.getElementById('command-dialog');
-  var trigger = document.getElementById('command-trigger');
+  var triggers = Array.prototype.slice.call(
+    document.querySelectorAll('#command-trigger, #command-trigger-mobile')
+  );
   var closeBtn = document.getElementById('command-close');
   var input = document.getElementById('command-input');
+  var list = dialog ? dialog.querySelector('.cmd-list') : null;
   var emptyState = document.getElementById('command-empty');
   var modifierEl = document.getElementById('command-modifier');
 
-  if (!backdrop || !dialog || !input || !emptyState) {
+  if (!backdrop || !dialog || !input || !list || !emptyState) {
     return;
   }
 
@@ -26,13 +29,27 @@
     return !dialog.hidden;
   }
 
+  function setExpanded(expanded) {
+    triggers.forEach(function (btn) {
+      btn.setAttribute('aria-expanded', String(expanded));
+    });
+  }
+
   function getVisibleItems() {
     return items.filter(function (item) {
       return !item.hidden;
     });
   }
 
-  function setSelected(index) {
+  function getFocusableElements() {
+    var focusables = [input];
+    if (closeBtn && !closeBtn.hidden) {
+      focusables.push(closeBtn);
+    }
+    return focusables.concat(getVisibleItems());
+  }
+
+  function setSelected(index, shouldScroll) {
     var visible = getVisibleItems();
     items.forEach(function (item) {
       item.setAttribute('data-selected', 'false');
@@ -46,15 +63,9 @@
     var clamped = ((index % visible.length) + visible.length) % visible.length;
     activeIndex = clamped;
     visible[clamped].setAttribute('data-selected', 'true');
-    visible[clamped].scrollIntoView({ block: 'nearest' });
-  }
-
-  function getFocusableElements() {
-    var focusables = [input];
-    if (closeBtn && !closeBtn.hidden) {
-      focusables.push(closeBtn);
+    if (shouldScroll) {
+      visible[clamped].scrollIntoView({ block: 'nearest' });
     }
-    return focusables.concat(getVisibleItems());
   }
 
   function filterItems(query) {
@@ -79,17 +90,20 @@
     });
 
     emptyState.hidden = anyVisible;
-    setSelected(0);
+    setSelected(0, false);
   }
 
   function openMenu() {
     lastFocused = document.activeElement;
     input.value = '';
     filterItems('');
+    list.scrollTop = 0;
     backdrop.hidden = false;
     dialog.hidden = false;
+    setExpanded(true);
+    document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
-    input.focus();
+    input.focus({ preventScroll: true });
   }
 
   function closeMenu(restoreFocus) {
@@ -98,6 +112,8 @@
     }
     backdrop.hidden = true;
     dialog.hidden = true;
+    setExpanded(false);
+    document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
     if (restoreFocus && lastFocused instanceof HTMLElement && document.contains(lastFocused)) {
       lastFocused.focus({ preventScroll: true });
@@ -179,17 +195,17 @@
 
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setSelected(activeIndex + 1);
+      setSelected(activeIndex + 1, true);
       return;
     }
 
     if (event.key === 'ArrowUp') {
       event.preventDefault();
-      setSelected(activeIndex - 1);
+      setSelected(activeIndex - 1, true);
       return;
     }
 
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' && document.activeElement === input) {
       var visible = getVisibleItems();
       if (activeIndex >= 0 && visible[activeIndex]) {
         event.preventDefault();
@@ -202,23 +218,37 @@
     filterItems(input.value);
   });
 
-  items.forEach(function (item) {
-    item.addEventListener('mouseenter', function () {
-      var visible = getVisibleItems();
-      var idx = visible.indexOf(item);
-      if (idx !== -1) {
-        setSelected(idx);
-      }
-    });
-
-    item.addEventListener('click', function () {
-      runItem(item);
-    });
+  list.addEventListener('pointerover', function (event) {
+    if (event.pointerType === 'touch') {
+      return;
+    }
+    var item = event.target instanceof Element ? event.target.closest('.cmd-item') : null;
+    if (!item || item.hidden) {
+      return;
+    }
+    var visible = getVisibleItems();
+    var idx = visible.indexOf(item);
+    if (idx !== -1 && idx !== activeIndex) {
+      setSelected(idx, false);
+    }
   });
 
-  if (trigger) {
-    trigger.addEventListener('click', openMenu);
-  }
+  list.addEventListener('click', function (event) {
+    var item = event.target instanceof Element ? event.target.closest('.cmd-item') : null;
+    if (item && !item.hidden) {
+      runItem(item);
+    }
+  });
+
+  triggers.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (isOpen()) {
+        closeMenu(true);
+      } else {
+        openMenu();
+      }
+    });
+  });
 
   if (closeBtn) {
     closeBtn.addEventListener('click', function () {

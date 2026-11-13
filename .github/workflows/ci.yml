@@ -57,6 +57,9 @@ jobs:
           CYPRESS_BROWSER: chrome
         run: npm run test:e2e
 
+      - name: Run Mobile Web Vitals & Asset Budget Audit
+        run: npm run test:perf
+
       - name: Publish CI Telemetry to /quality Report
         env:
           LYCHEE_STATUS: ${{ steps.lychee.outcome }}

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { minifyHtml } from './minify-html.mjs';
 
 const ROOT = process.cwd();
 const siteDir = path.join(ROOT, '_site');
@@ -41,14 +42,27 @@ function fingerprintAsset(relPath) {
   return `/${hashedRel}`;
 }
 
-function rewriteHtmlAssets(relHtmlPath, replacements) {
-  const target = path.join(siteDir, relHtmlPath);
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function rewriteTextFile(relPath, replacements) {
+  const target = path.join(siteDir, relPath);
   if (!fs.existsSync(target)) return;
-  let html = fs.readFileSync(target, 'utf8');
+  let content = fs.readFileSync(target, 'utf8');
   for (const [fromUrl, toUrl] of Object.entries(replacements)) {
-    html = html.replaceAll(fromUrl, toUrl);
+    const pattern = new RegExp(`(["'(,\\s])${escapeRegExp(fromUrl)}`, 'g');
+    content = content.replace(pattern, `$1${toUrl}`);
   }
-  fs.writeFileSync(target, html, 'utf8');
+  fs.writeFileSync(target, content, 'utf8');
+}
+
+function compileCss(tailwindBin, inputRel, outputRel) {
+  execFileSync(
+    tailwindBin,
+    ['-i', path.join(ROOT, inputRel), '-o', path.join(siteDir, outputRel), '--minify'],
+    { stdio: 'inherit' }
+  );
 }
 
 console.log('1. Syncing resume.json -> llms.txt & index.html JSON-LD...');
@@ -60,7 +74,7 @@ runNodeScript('scripts/validate-sync.mjs');
 console.log('3. Preparing clean _site/ directory...');
 fs.rmSync(siteDir, { recursive: true, force: true });
 fs.mkdirSync(siteDir, { recursive: true });
-for (const staleReport of ['html-validate.json', 'cypress-results.json']) {
+for (const staleReport of ['html-validate.json', 'cypress-results.json', 'perf-report.json']) {
   fs.rmSync(path.join(reportsDir, staleReport), { force: true });
 }
 
@@ -72,6 +86,8 @@ const rootFiles = [
   'robots.txt',
   'CNAME',
   'sitemap.xml',
+  'favicon.ico',
+  'site.webmanifest',
   '.nojekyll',
 ];
 
@@ -79,41 +95,89 @@ for (const file of rootFiles) {
   copyFile(file);
 }
 copyFile('.well-known/security.txt');
-copyFile('assets/avatar.jpg');
-copyDir('assets/fonts');
-copyDir('assets/js');
+copyDir('assets');
 
-console.log('4. Compiling and minifying Tailwind CSS...');
+console.log('4. Compiling and minifying split CSS bundles...');
 const tailwindBin = path.join(ROOT, 'node_modules', '.bin', 'tailwindcss');
-execFileSync(
-  tailwindBin,
-  [
-    '-i',
-    path.join(ROOT, 'src', 'styles.css'),
-    '-o',
-    path.join(siteDir, 'assets', 'css', 'styles.css'),
-    '--minify',
-  ],
-  { stdio: 'inherit' }
-);
+compileCss(tailwindBin, 'src/styles.css', 'assets/css/styles.css');
+compileCss(tailwindBin, 'src/subpage.css', 'assets/css/subpage.css');
+compileCss(tailwindBin, 'src/print.css', 'assets/css/print.css');
 
-console.log('4b. Fingerprinting CSS and JS bundles for cache busting...');
+console.log('4b. Fingerprinting fonts, CSS, JS, icons, and avatar assets...');
+const monoFontUrl = fingerprintAsset('assets/fonts/GeistMono-Variable.woff2');
+const pixelFontUrl = fingerprintAsset('assets/fonts/GeistPixel-Square.woff2');
+
+const fontReplacements = {
+  '/assets/fonts/GeistMono-Variable.woff2': monoFontUrl,
+  '/assets/fonts/GeistPixel-Square.woff2': pixelFontUrl,
+};
+rewriteTextFile('assets/css/styles.css', fontReplacements);
+
 const cssUrl = fingerprintAsset('assets/css/styles.css');
+const subpageCssUrl = fingerprintAsset('assets/css/subpage.css');
+const printCssUrl = fingerprintAsset('assets/css/print.css');
 const themeJsUrl = fingerprintAsset('assets/js/theme.js');
 const commandMenuJsUrl = fingerprintAsset('assets/js/command-menu.js');
+const faviconSvgUrl = fingerprintAsset('assets/favicon.svg');
+const appleTouchIconUrl = fingerprintAsset('assets/apple-touch-icon.png');
+
+const avatarAssets = [
+  'assets/avatar-168.avif',
+  'assets/avatar-224.avif',
+  'assets/avatar-336.avif',
+  'assets/avatar-168.webp',
+  'assets/avatar-224.webp',
+  'assets/avatar-336.webp',
+  'assets/avatar.jpg',
+];
+const avatarReplacements = {};
+for (const rel of avatarAssets) {
+  avatarReplacements[`/${rel}`] = fingerprintAsset(rel);
+}
 
 const assetReplacements = {
+  ...fontReplacements,
+  ...avatarReplacements,
   '/assets/css/styles.css': cssUrl,
+  '/assets/css/subpage.css': subpageCssUrl,
+  '/assets/css/print.css': printCssUrl,
   '/assets/js/theme.js': themeJsUrl,
   '/assets/js/command-menu.js': commandMenuJsUrl,
+  '/assets/favicon.svg': faviconSvgUrl,
+  '/assets/apple-touch-icon.png': appleTouchIconUrl,
 };
-rewriteHtmlAssets('index.html', assetReplacements);
-rewriteHtmlAssets('404.html', assetReplacements);
+rewriteTextFile('index.html', assetReplacements);
+rewriteTextFile('404.html', assetReplacements);
+rewriteTextFile('site.webmanifest', {
+  '/assets/favicon.svg': faviconSvgUrl,
+  '/assets/apple-touch-icon.png': appleTouchIconUrl,
+});
+
+console.log('4c. Minifying built HTML documents...');
+for (const htmlFile of ['index.html', '404.html']) {
+  const full = path.join(siteDir, htmlFile);
+  fs.writeFileSync(full, minifyHtml(fs.readFileSync(full, 'utf8')), 'utf8');
+}
 
 fs.mkdirSync(reportsDir, { recursive: true });
 fs.writeFileSync(
   path.join(reportsDir, 'asset-manifest.json'),
-  JSON.stringify({ cssUrl, themeJsUrl, commandMenuJsUrl }, null, 2)
+  JSON.stringify(
+    {
+      cssUrl,
+      subpageCssUrl,
+      printCssUrl,
+      monoFontUrl,
+      pixelFontUrl,
+      themeJsUrl,
+      commandMenuJsUrl,
+      faviconSvgUrl,
+      appleTouchIconUrl,
+      avatarReplacements,
+    },
+    null,
+    2
+  )
 );
 
 console.log('5. Generating /resume.pdf via headless Chromium...');

@@ -1,5 +1,7 @@
 (() => {
   const STORAGE_KEY = 'theme';
+  const LIGHT_COLOR = '#fafaf8';
+  const DARK_COLOR = '#0d0c0a';
   const root = document.documentElement;
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
@@ -7,9 +9,17 @@
     return root.classList.contains('dark') ? 'dark' : 'light';
   }
 
+  function syncThemeColorMeta(isDark) {
+    const color = isDark ? DARK_COLOR : LIGHT_COLOR;
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+      meta.setAttribute('content', color);
+    });
+  }
+
   function applyTheme(theme) {
     const isDark = theme === 'dark';
     root.classList.toggle('dark', isDark);
+    syncThemeColorMeta(isDark);
     const toggle = document.getElementById('theme-toggle');
     if (toggle) {
       toggle.setAttribute('aria-pressed', String(isDark));

@@ -11,6 +11,11 @@ const state = {
     violations: 0,
     audits: [],
   },
+  mobile: {
+    checksRun: 0,
+    failures: 0,
+    checks: [],
+  },
   network: {
     pagesChecked: 0,
     externalRequests: 0,
@@ -48,6 +53,7 @@ module.exports = defineConfig({
 
       on('before:run', () => {
         state.a11y = { checksRun: 0, violations: 0, audits: [] };
+        state.mobile = { checksRun: 0, failures: 0, checks: [] };
         state.network = { pagesChecked: 0, externalRequests: 0, blockedUrls: [] };
         persistMetrics({ totalTests: 0, totalPassed: 0, totalFailed: 0 });
       });
@@ -57,6 +63,13 @@ module.exports = defineConfig({
           state.a11y.checksRun += 1;
           state.a11y.violations += violations;
           state.a11y.audits.push({ label, violations });
+          persistMetrics();
+          return null;
+        },
+        recordMobileAudit({ label, passed }) {
+          state.mobile.checksRun += 1;
+          if (!passed) state.mobile.failures += 1;
+          state.mobile.checks.push({ label, passed });
           persistMetrics();
           return null;
         },

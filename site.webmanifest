@@ -1,0 +1,21 @@
+{
+  "name": "Guilherme Vigneron de Oliveira",
+  "short_name": "G. Vigneron",
+  "description": "Principal Software QA Engineer — Portfolio & Resume",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafaf8",
+  "theme_color": "#fafaf8",
+  "icons": [
+    {
+      "src": "/assets/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/assets/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}
