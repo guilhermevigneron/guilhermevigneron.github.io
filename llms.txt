@@ -1,6 +1,6 @@
 # Guilherme Vigneron de Oliveira — Portfolio
 
-> This is the personal portfolio of Guilherme Vigneron de Oliveira, a Principal Software QA Engineer with 18+ years of experience.
+> This is the personal portfolio of Guilherme Vigneron de Oliveira, a Principal Technologist | Quality, DevOps & Developer Experience with 18+ years of experience.
 
 ## Summary
 Principal Technologist with 18+ years of experience advancing software quality, engineering velocity, and developer experience. Grounded in quality engineering and automation, my work spans DevOps, software development, daily AI/LLM engineering workflows, and company-wide DX Snapshots that turn org-wide feedback into action.
@@ -13,7 +13,7 @@ Principal Technologist with 18+ years of experience advancing software quality, 
   - Led comprehensive test strategies and robust Selenium/C# automation frameworks, increasing test coverage and reducing defects.
   - Conducted critical performance testing to optimize software scalability and reliability.
   - Led cross-functional teams as a Scrum Master, fostering collaboration and driving sustained sprint delivery.
-- Senior QA Engineer at AVEVA (Sep 2018 - Nov 2023), São Paulo, Brazil
+- Senior QA Engineer at AVEVA (Sep 2018 - Nov 2023), Austin, TX
   - Headed the development of test strategies, increasing test coverage and reducing defects.
   - Designed a robust Page Object Model test framework using Selenium and C#.
   - Orchestrated testing processes using Azure DevOps release pipelines.
@@ -37,12 +37,17 @@ Developer Experience (DX), DevOps, Software Development, AI / LLM Workflows, CI/
 - Post-Graduation, Software Engineering (SOA) — Grupo Veris Educacional - IBTA (2010-2011)
 - B.S., Computing — Universidade Estadual de Campinas (2005-2009)
 
+## Languages
+- Portuguese (Native)
+- English (Fluent)
+
 ## Publications
 - "The Hidden Costs of Flaky Tests: A Deep Dive into Test Reliability" — StickyMinds (https://www.stickyminds.com/article/hidden-costs-flaky-tests-deep-dive-test-reliability-0)
 - "The Big Picture: Defining a Successful Test Automation Strategy" — Software Testing Magazine (https://www.softwaretestingmagazine.com/knowledge/the-big-picture-defining-a-successful-test-automation-strategy-for-long-term-value/)
 
 ## Awards
-- AVEVA Innovation and Creativity Recognition Award
+- AVEVA Innovation and Creativity Recognition Award (AVEVA, 2025-07-01)
+  - Awarded for turning an idea into a working prototype at CanAms Hackathon 2025, finishing 4th place out of ~41 ideas.
 
 ## Machine-Readable & Verification Endpoints
 - Resume PDF: https://guilhermevigneron.dev/resume.pdf

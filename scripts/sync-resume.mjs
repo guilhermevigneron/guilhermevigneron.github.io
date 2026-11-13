@@ -51,6 +51,9 @@ export function buildJsonLd(data) {
       name: data.work[0].name,
     },
     knowsAbout: data.skills.map((s) => s.name),
+    ...(data.languages?.length
+      ? { knowsLanguage: data.languages.map((l) => l.language) }
+      : {}),
     alumniOf: uniqueSchools,
     address: {
       '@type': 'PostalAddress',
@@ -105,7 +108,14 @@ export function buildLlmsTxt(data) {
   const publicationLines = data.publications.map(
     (pub) => `- "${pub.name}" — ${pub.publisher} (${pub.url})`
   );
-  const awardLines = data.awards.map((award) => `- ${award.title}`);
+  const awardLines = data.awards.flatMap((award) => {
+    const meta = [award.awarder, award.date].filter(Boolean).join(', ');
+    const header = meta ? `- ${award.title} (${meta})` : `- ${award.title}`;
+    return award.summary ? [header, `  - ${award.summary}`] : [header];
+  });
+  const languageLines = (data.languages || []).map(
+    (lang) => `- ${lang.language} (${lang.fluency})`
+  );
   const profileLines = data.basics.profiles.map(
     (profile) => `- ${profile.network}: ${profile.url}`
   );
@@ -129,6 +139,7 @@ export function buildLlmsTxt(data) {
     '',
     '## Education',
     ...educationLines,
+    ...(languageLines.length ? ['', '## Languages', ...languageLines] : []),
     '',
     '## Publications',
     ...publicationLines,
@@ -294,14 +305,39 @@ ${highlights}
     )
     .join('\n\n');
 
+  const formatAwardDate = (iso) => {
+    const m = String(iso || '').match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/);
+    if (!m) return iso || '';
+    const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3] || 1)));
+    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+  };
+
   const awardHtml = data.awards
-    .map(
-      (award) => `                    <article>
-                        <h3 class="entry-heading">${escapeHtml(award.title)}</h3>
-                        <p class="entry-sub">Award <span aria-hidden="true">&middot;</span> ${escapeHtml(award.awarder)}</p>
-                    </article>`
-    )
+    .map((award) => {
+      const dateStr = award.date ? formatAwardDate(award.date) : '';
+      const headingRow = dateStr
+        ? `<div class="entry-top">\n                            <h3 class="entry-heading">${escapeHtml(award.title)}</h3>\n                            <div class="date-range" title="Award date: ${escapeHtml(dateStr)}">${escapeHtml(dateStr)}</div>\n                        </div>`
+        : `<h3 class="entry-heading">${escapeHtml(award.title)}</h3>`;
+      const summaryHtml = award.summary
+        ? `\n                        <p class="entry-sub">${escapeHtml(award.summary)}</p>`
+        : '';
+      return `                    <article>
+                        ${headingRow}
+                        <p class="entry-sub">Award <span aria-hidden="true">&middot;</span> ${escapeHtml(award.awarder)}</p>${summaryHtml}
+                    </article>`;
+    })
     .join('\n\n');
+
+  const languageItems = (data.languages || [])
+    .map((lang, idx, arr) => {
+      const sep =
+        idx < arr.length - 1
+          ? '<span class="tag-sep" aria-hidden="true">&nbsp;&middot; </span>'
+          : '';
+      const label = lang.fluency ? `${lang.language} (${lang.fluency})` : lang.language;
+      return `                    <li class="tag-item">${escapeHtml(label)}${sep}</li>`;
+    })
+    .join('\n');
 
   const eduHtml = data.education
     .map(
@@ -446,7 +482,18 @@ ${awardHtml}
                 <div class="stack-list stack-list--compact">
 ${eduHtml}
                 </div>
-            </section>`;
+            </section>${
+              languageItems
+                ? `
+
+            <section id="languages" aria-labelledby="languages-heading" class="cv-section animate-fade-in delay-6">
+                <h2 id="languages-heading" class="section-title">Languages</h2>
+                <ul class="tag-list tag-list--skills">
+${languageItems}
+                </ul>
+            </section>`
+                : ''
+            }`;
 }
 
 function replaceMarkedSection(content, startMarker, endMarker, innerBlock, fileName, indent = '') {

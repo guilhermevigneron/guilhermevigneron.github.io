@@ -55,7 +55,7 @@
       "position": "Senior QA Engineer",
       "startDate": "2018-09",
       "endDate": "2023-11",
-      "location": "São Paulo, Brazil",
+      "location": "Austin, TX",
       "displayDate": "Sep 2018 - Nov 2023",
       "highlights": [
         "Headed the development of test strategies, increasing test coverage and reducing defects.",
@@ -157,6 +157,16 @@
     { "name": "Risk-Based Testing" },
     { "name": "Agile & Scrum" }
   ],
+  "languages": [
+    {
+      "language": "Portuguese",
+      "fluency": "Native"
+    },
+    {
+      "language": "English",
+      "fluency": "Fluent"
+    }
+  ],
   "publications": [
     {
       "name": "The Hidden Costs of Flaky Tests: A Deep Dive into Test Reliability",
@@ -172,14 +182,16 @@
   "awards": [
     {
       "title": "AVEVA Innovation and Creativity Recognition Award",
-      "awarder": "AVEVA"
+      "date": "2025-07-01",
+      "awarder": "AVEVA",
+      "summary": "Awarded for turning an idea into a working prototype at CanAms Hackathon 2025, finishing 4th place out of ~41 ideas."
     }
   ],
   "meta": {
     "canonical": "https://guilhermevigneron.dev",
     "shortName": "G. Vigneron",
     "pageTitle": "Guilherme Vigneron de Oliveira - Principal Technologist",
-    "jobTitle": "Principal Software QA Engineer",
+    "jobTitle": "Principal Technologist | Quality, DevOps & Developer Experience",
     "metaDescription": "Guilherme Vigneron de Oliveira — Principal Technologist with 18+ years of experience in quality engineering, test automation, DevOps, software development, AI-assisted workflows, and company-wide Developer Experience (DX). Based in Austin, TX.",
     "ogDescription": "Principal Technologist with 18+ years advancing software quality, test automation, DevOps CI/CD pipelines, AI-assisted engineering, and company-wide Developer Experience (DX).",
     "shortDescription": "Principal Technologist with 18+ years of experience advancing software quality, test automation, DevOps, AI-assisted engineering, and company-wide Developer Experience (DX).",
