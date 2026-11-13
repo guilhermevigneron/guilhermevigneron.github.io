@@ -8,24 +8,13 @@
     <meta name="robots" content="noindex">
     <meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0d0c0a" media="(prefers-color-scheme: dark)">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
     <link rel="icon" href="/favicon.ico" sizes="32x32">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
     <link rel="manifest" href="/site.webmanifest">
-    <script>
-      (() => {
-        try {
-          const stored = localStorage.getItem('theme');
-          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          const isDark = stored === 'dark' || (!stored && prefersDark);
-          if (isDark) {
-            document.documentElement.classList.add('dark');
-          }
-          const color = isDark ? '#0d0c0a' : '#fafaf8';
-          document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', color));
-        } catch {}
-      })();
-    </script>
+    <script src="/assets/js/theme-init.js"></script>
     <link rel="stylesheet" href="/assets/css/styles.css">
     <link rel="stylesheet" href="/assets/css/subpage.css">
     <link rel="preload" href="/assets/fonts/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin>

@@ -116,6 +116,7 @@ rewriteTextFile('assets/css/styles.css', fontReplacements);
 const cssUrl = fingerprintAsset('assets/css/styles.css');
 const subpageCssUrl = fingerprintAsset('assets/css/subpage.css');
 const printCssUrl = fingerprintAsset('assets/css/print.css');
+const themeInitJsUrl = fingerprintAsset('assets/js/theme-init.js');
 const themeJsUrl = fingerprintAsset('assets/js/theme.js');
 const commandMenuJsUrl = fingerprintAsset('assets/js/command-menu.js');
 const faviconSvgUrl = fingerprintAsset('assets/favicon.svg');
@@ -141,6 +142,7 @@ const assetReplacements = {
   '/assets/css/styles.css': cssUrl,
   '/assets/css/subpage.css': subpageCssUrl,
   '/assets/css/print.css': printCssUrl,
+  '/assets/js/theme-init.js': themeInitJsUrl,
   '/assets/js/theme.js': themeJsUrl,
   '/assets/js/command-menu.js': commandMenuJsUrl,
   '/assets/favicon.svg': faviconSvgUrl,
@@ -169,6 +171,7 @@ fs.writeFileSync(
       printCssUrl,
       monoFontUrl,
       pixelFontUrl,
+      themeInitJsUrl,
       themeJsUrl,
       commandMenuJsUrl,
       faviconSvgUrl,

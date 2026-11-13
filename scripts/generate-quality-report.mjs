@@ -76,6 +76,7 @@ function buildQualityPage() {
   const subpageCssUrl = assetManifest?.subpageCssUrl || '/assets/css/subpage.css';
   const monoFontUrl = assetManifest?.monoFontUrl || '/assets/fonts/GeistMono-Variable.woff2';
   const pixelFontUrl = assetManifest?.pixelFontUrl || '/assets/fonts/GeistPixel-Square.woff2';
+  const themeInitJsUrl = assetManifest?.themeInitJsUrl || '/assets/js/theme-init.js';
   const themeJsUrl = assetManifest?.themeJsUrl || '/assets/js/theme.js';
   const faviconSvgUrl = assetManifest?.faviconSvgUrl || '/assets/favicon.svg';
   const appleTouchIconUrl = assetManifest?.appleTouchIconUrl || '/assets/apple-touch-icon.png';
@@ -222,25 +223,14 @@ function buildQualityPage() {
     <meta name="description" content="Automated CI/CD quality, accessibility, performance, and security verification report for guilhermevigneron.dev.">
     <meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0d0c0a" media="(prefers-color-scheme: dark)">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <link rel="icon" type="image/svg+xml" href="${escapeHtml(faviconSvgUrl)}">
     <link rel="icon" href="/favicon.ico" sizes="32x32">
     <link rel="apple-touch-icon" href="${escapeHtml(appleTouchIconUrl)}">
     <link rel="manifest" href="/site.webmanifest">
     <link rel="canonical" href="https://guilhermevigneron.dev/quality/">
-    <script>
-      (() => {
-        try {
-          const stored = localStorage.getItem('theme');
-          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          const isDark = stored === 'dark' || (!stored && prefersDark);
-          if (isDark) {
-            document.documentElement.classList.add('dark');
-          }
-          const color = isDark ? '#0d0c0a' : '#fafaf8';
-          document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', color));
-        } catch {}
-      })();
-    </script>
+    <script src="${escapeHtml(themeInitJsUrl)}"></script>
     <link rel="stylesheet" href="${escapeHtml(cssUrl)}">
     <link rel="stylesheet" href="${escapeHtml(subpageCssUrl)}">
     <link rel="preload" href="${escapeHtml(monoFontUrl)}" as="font" type="font/woff2" crossorigin>

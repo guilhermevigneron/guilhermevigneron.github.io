@@ -142,12 +142,17 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
     cy.get('link[rel="stylesheet"][media="print"]')
       .should('have.attr', 'href')
       .and('match', /^\/assets\/css\/print\.[a-f0-9]+\.css$/);
-    cy.get('script[src*="/assets/js/theme"]').each(($script) => {
+    cy.get('script[src*="/assets/js/theme-init."]').each(($script) => {
+      const src = $script.attr('src');
+      expect(src).to.match(/^\/assets\/js\/theme-init\.[a-f0-9]+\.js$/);
+      cy.request(src).its('status').should('eq', 200);
+    });
+    cy.get('script[src*="/assets/js/theme."]').each(($script) => {
       const src = $script.attr('src');
       expect(src).to.match(/^\/assets\/js\/theme\.[a-f0-9]+\.js$/);
       cy.request(src).its('status').should('eq', 200);
     });
-    cy.get('script[src*="/assets/js/command-menu"]').each(($script) => {
+    cy.get('script[src*="/assets/js/command-menu."]').each(($script) => {
       const src = $script.attr('src');
       expect(src).to.match(/^\/assets\/js\/command-menu\.[a-f0-9]+\.js$/);
       cy.request(src).its('status').should('eq', 200);
@@ -176,6 +181,56 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
     });
 
     cy.get('i[class*="fa"]').should('have.length', 0);
+  });
+
+  it('enforces a strict Content-Security-Policy and referrer policy with zero violations', () => {
+    ['/', '/404.html', '/quality/'].forEach((route) => {
+      const violations = [];
+      cy.visit(route, {
+        failOnStatusCode: route !== '/404.html',
+        onBeforeLoad(win) {
+          win.addEventListener('securitypolicyviolation', (event) => {
+            violations.push(`${event.violatedDirective}:${event.blockedURI}`);
+          });
+        },
+      });
+
+      cy.get('meta[http-equiv="Content-Security-Policy"]')
+        .should('have.attr', 'content')
+        .then((csp) => {
+          expect(csp).to.include("default-src 'self'");
+          expect(csp).to.include("script-src 'self'");
+          expect(csp).to.include("style-src 'self'");
+          expect(csp).to.include("object-src 'none'");
+          expect(csp).to.include("form-action 'none'");
+          expect(csp).to.not.include("'unsafe-inline'");
+          expect(csp).to.not.include("'unsafe-eval'");
+        });
+
+      cy.get('meta[name="referrer"]').should(
+        'have.attr',
+        'content',
+        'strict-origin-when-cross-origin'
+      );
+
+      cy.request({ url: route, failOnStatusCode: route !== '/404.html' }).then((res) => {
+        const parsed = new DOMParser().parseFromString(res.body, 'text/html');
+        const scripts = Array.from(parsed.querySelectorAll('script'));
+        scripts.forEach((script) => {
+          if (script.getAttribute('type') === 'application/ld+json') {
+            return;
+          }
+          expect(
+            script.getAttribute('src'),
+            `${route} executable script must use src`
+          ).to.be.a('string').and.not.be.empty;
+        });
+      });
+
+      cy.then(() => {
+        expect(violations, `CSP violations on ${route}`).to.deep.equal([]);
+      });
+    });
   });
 });
 

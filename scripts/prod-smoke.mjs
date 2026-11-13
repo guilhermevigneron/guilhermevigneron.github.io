@@ -25,6 +25,14 @@ async function main() {
   assert.ok(homeHtml.includes('Guilherme Vigneron de Oliveira'), 'Homepage missing name');
   assert.ok(homeHtml.includes('href="/resume.pdf"'), 'Homepage missing /resume.pdf link');
   assert.ok(homeHtml.includes('href="/quality/"'), 'Homepage missing /quality/ link');
+  assert.ok(
+    homeHtml.includes('http-equiv="Content-Security-Policy"'),
+    'Homepage missing Content-Security-Policy meta tag'
+  );
+  assert.ok(
+    homeHtml.includes('name="referrer"'),
+    'Homepage missing referrer policy meta tag'
+  );
   for (const banned of [
     'cdn.tailwindcss.com',
     'cdnjs.cloudflare.com',
@@ -34,7 +42,7 @@ async function main() {
   ]) {
     assert.ok(!homeHtml.includes(banned), `Homepage still references third-party host: ${banned}`);
   }
-  console.log('PASS / (200, zero third-party references)');
+  console.log('PASS / (200, strict CSP, zero third-party references)');
 
   // 2. Self-hosted CSS, fonts, icons & responsive avatar
   const cssMatch = homeHtml.match(/<link rel="stylesheet" href="(\/assets\/css\/styles(?:\.[a-f0-9]+)?\.css)">/);
