@@ -204,6 +204,7 @@ export function initCommandMenuPanel() {
     g.remove();
   });
 
+  const itemActions = new WeakMap();
   let itemCounter = 0;
   getGroups(Boolean(byId('about'))).forEach(([heading, rows], groupIdx) => {
     const headingId = `cmd-group-${groupIdx}`;
@@ -217,6 +218,12 @@ export function initCommandMenuPanel() {
     rows.forEach(([title, hint, target, extras, dl]) => {
       const itemId = `cmd-item-${itemCounter}`;
       itemCounter += 1;
+      const meta = {
+        action: target[0] === ':' ? target.slice(1) : null,
+        href: target[0] === ':' ? null : target[0] === '>' ? target.slice(1) : target,
+        external: target[0] === '>',
+        dl: dl || null,
+      };
       const attrs = {
         id: itemId,
         type: 'button',
@@ -224,18 +231,16 @@ export function initCommandMenuPanel() {
         'aria-selected': 'false',
         'data-selected': 'false',
         'data-label': `${title} ${hint} ${extras || ''}`.trim(),
-        'data-download': dl || null,
+        'data-download': meta.dl,
       };
-      if (target[0] === ':') {
-        attrs['data-action'] = target.slice(1);
-      } else if (target[0] === '>') {
-        attrs['data-href'] = target.slice(1);
-        attrs['data-external'] = 'true';
+      if (meta.action) {
+        attrs['data-action'] = meta.action;
       } else {
-        attrs['data-href'] = target;
-        attrs['data-external'] = 'false';
+        attrs['data-href'] = meta.href;
+        attrs['data-external'] = String(meta.external);
       }
       const btn = el('button', 'cmd-item', null, attrs);
+      itemActions.set(btn, meta);
       btn.append(el('span', '', title), el('span', 'cmd-item-hint', hint));
       group.appendChild(btn);
     });
@@ -402,11 +407,9 @@ export function initCommandMenuPanel() {
   };
 
   const runItem = (item) => {
-    if (!item) return;
-    const action = item.getAttribute('data-action');
-    const href = item.getAttribute('data-href');
-    const dl = item.getAttribute('data-download');
-    const external = item.getAttribute('data-external') === 'true';
+    const meta = item ? itemActions.get(item) : null;
+    if (!meta) return;
+    const { action, href, dl, external } = meta;
 
     if (action === 'print') {
       const target = lastFocused;
@@ -456,7 +459,7 @@ export function initCommandMenuPanel() {
     } else if (href) {
       if (href[0] === '#') {
         closeMenu(false);
-        const target = D.querySelector(href);
+        const target = byId(href.slice(1));
         if (target) {
           let reduced = false;
           try {
@@ -471,7 +474,7 @@ export function initCommandMenuPanel() {
           target.focus({ preventScroll: true });
           W.history?.replaceState?.(null, '', href);
         }
-      } else if (dl) {
+      } else if (dl && href.startsWith('/')) {
         closeMenu(true);
         const link = el('a', '', null, { href, download: dl });
         D.body.appendChild(link);
@@ -480,10 +483,10 @@ export function initCommandMenuPanel() {
         showToast('Downloading contact vCard');
       } else {
         closeMenu(true);
-        if (external) {
+        if (external && /^https?:\/\//i.test(href)) {
           if (!W.open(href, '_blank', 'noopener,noreferrer')) showToast('Pop-up blocked');
-        } else {
-          W.location.href = href;
+        } else if (href.startsWith('/') || href.startsWith('mailto:')) {
+          W.location.assign(href);
         }
       }
     }
