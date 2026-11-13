@@ -47,7 +47,7 @@ Developer Experience (DX), DevOps, Software Development, AI / LLM Workflows, CI/
 
 ## Awards
 - AVEVA Innovation and Creativity Recognition Award (AVEVA, 2025-07-01)
-  - Awarded for turning an idea into a working prototype at CanAms Hackathon 2025, finishing 4th place out of ~41 ideas.
+  - Built a working prototype at CanAms Hackathon 2025 (4th of ~41 ideas).
 
 ## Machine-Readable & Verification Endpoints
 - Resume PDF: https://guilhermevigneron.dev/resume.pdf

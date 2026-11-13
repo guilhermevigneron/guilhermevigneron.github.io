@@ -316,28 +316,22 @@ ${highlights}
     .map((award) => {
       const dateStr = award.date ? formatAwardDate(award.date) : '';
       const headingRow = dateStr
-        ? `<div class="entry-top">\n                            <h3 class="entry-heading">${escapeHtml(award.title)}</h3>\n                            <div class="date-range" title="Award date: ${escapeHtml(dateStr)}">${escapeHtml(dateStr)}</div>\n                        </div>`
+        ? `<div class="entry-top">\n                            <h3 class="entry-heading">${escapeHtml(award.title)}</h3>\n                            <div class="date-range">${escapeHtml(dateStr)}</div>\n                        </div>`
         : `<h3 class="entry-heading">${escapeHtml(award.title)}</h3>`;
-      const summaryHtml = award.summary
-        ? `\n                        <p class="entry-sub">${escapeHtml(award.summary)}</p>`
-        : '';
+      const subParts = [
+        `Award <span aria-hidden="true">&middot;</span> ${escapeHtml(award.awarder)}`,
+        award.summary ? escapeHtml(award.summary) : '',
+      ].filter(Boolean);
       return `                    <article>
                         ${headingRow}
-                        <p class="entry-sub">Award <span aria-hidden="true">&middot;</span> ${escapeHtml(award.awarder)}</p>${summaryHtml}
+                        <p class="entry-sub">${subParts.join(' <span aria-hidden="true">&middot;</span> ')}</p>
                     </article>`;
     })
     .join('\n\n');
 
-  const languageItems = (data.languages || [])
-    .map((lang, idx, arr) => {
-      const sep =
-        idx < arr.length - 1
-          ? '<span class="tag-sep" aria-hidden="true">&nbsp;&middot; </span>'
-          : '';
-      const label = lang.fluency ? `${lang.language} (${lang.fluency})` : lang.language;
-      return `                    <li class="tag-item">${escapeHtml(label)}${sep}</li>`;
-    })
-    .join('\n');
+  const languagesText = (data.languages || [])
+    .map((lang) => escapeHtml(lang.fluency ? `${lang.language} (${lang.fluency})` : lang.language))
+    .join(' &middot; ');
 
   const eduHtml = data.education
     .map(
@@ -483,14 +477,12 @@ ${awardHtml}
 ${eduHtml}
                 </div>
             </section>${
-              languageItems
+              languagesText
                 ? `
 
-            <section id="languages" aria-labelledby="languages-heading" class="cv-section animate-fade-in delay-6">
+            <section id="languages" aria-labelledby="languages-heading" class="cv-section">
                 <h2 id="languages-heading" class="section-title">Languages</h2>
-                <ul class="tag-list tag-list--skills">
-${languageItems}
-                </ul>
+                <p class="edu-degree">${languagesText}</p>
             </section>`
                 : ''
             }`;
