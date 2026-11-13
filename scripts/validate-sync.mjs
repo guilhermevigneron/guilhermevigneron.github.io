@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { buildCommandMenuConfig } from './lib/site-config.mjs';
 
 const ROOT = process.cwd();
 
@@ -792,30 +793,52 @@ export function validateSyncState({
         const host = baseUrl.replace(/^https?:\/\//, '');
         const github = resume.basics.profiles.find((p) => p.network.toLowerCase() === 'github');
         const linkedin = resume.basics.profiles.find((p) => p.network.toLowerCase() === 'linkedin');
-        assert.ok(
-          commandPanelJs.includes(`email: '${resume.basics.email}'`),
-          'command-menu-panel.js email out of sync'
-        );
-        assert.ok(
-          commandPanelJs.includes(`siteUrl: '${baseUrl}'`),
-          'command-menu-panel.js siteUrl out of sync'
-        );
-        assert.ok(
-          commandPanelJs.includes(`host: '${host}'`),
-          'command-menu-panel.js host out of sync'
-        );
-        assert.ok(
-          commandPanelJs.includes(`githubUrl: '${github?.url || ''}'`),
-          'command-menu-panel.js githubUrl out of sync'
-        );
-        assert.ok(
-          commandPanelJs.includes(`linkedinUrl: '${linkedin?.url || ''}'`),
-          'command-menu-panel.js linkedinUrl out of sync'
-        );
-        assert.ok(
-          commandPanelJs.includes(`hasLanguages: ${Boolean(resume.languages?.length)}`),
-          'command-menu-panel.js hasLanguages out of sync'
-        );
+        if (commandPanelJs.includes("from 'site-config'")) {
+          const cfg = buildCommandMenuConfig(resume);
+          assert.equal(cfg.email, resume.basics.email, 'site-config email out of sync');
+          assert.equal(cfg.siteUrl, baseUrl, 'site-config siteUrl out of sync');
+          assert.equal(cfg.host, host, 'site-config host out of sync');
+          assert.equal(
+            cfg.profiles.find((p) => p.network.toLowerCase() === 'github')?.url || '',
+            github?.url || '',
+            'site-config githubUrl out of sync'
+          );
+          assert.equal(
+            cfg.profiles.find((p) => p.network.toLowerCase() === 'linkedin')?.url || '',
+            linkedin?.url || '',
+            'site-config linkedinUrl out of sync'
+          );
+          assert.equal(
+            cfg.sections.some((s) => s.id === 'languages'),
+            Boolean(resume.languages?.length),
+            'site-config hasLanguages out of sync'
+          );
+        } else {
+          assert.ok(
+            commandPanelJs.includes(`email: '${resume.basics.email}'`),
+            'command-menu-panel.js email out of sync'
+          );
+          assert.ok(
+            commandPanelJs.includes(`siteUrl: '${baseUrl}'`),
+            'command-menu-panel.js siteUrl out of sync'
+          );
+          assert.ok(
+            commandPanelJs.includes(`host: '${host}'`),
+            'command-menu-panel.js host out of sync'
+          );
+          assert.ok(
+            commandPanelJs.includes(`githubUrl: '${github?.url || ''}'`),
+            'command-menu-panel.js githubUrl out of sync'
+          );
+          assert.ok(
+            commandPanelJs.includes(`linkedinUrl: '${linkedin?.url || ''}'`),
+            'command-menu-panel.js linkedinUrl out of sync'
+          );
+          assert.ok(
+            commandPanelJs.includes(`hasLanguages: ${Boolean(resume.languages?.length)}`),
+            'command-menu-panel.js hasLanguages out of sync'
+          );
+        }
       }
 
       assert.ok(decoded404.includes(resume.basics.name), '404.html owner name out of sync');

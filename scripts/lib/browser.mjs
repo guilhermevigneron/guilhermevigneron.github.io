@@ -127,3 +127,62 @@ export function registerCleanupSignals(onSignal) {
     process.off('SIGTERM', sigterm);
   };
 }
+
+export async function withStaticServer(siteDir, fn, { host = '127.0.0.1', port = 0 } = {}) {
+  const { server, baseUrl, port: boundPort } = await startStaticServer(siteDir, host, port);
+  const unregister = registerCleanupSignals(async () => {
+    await stopStaticServer(server);
+  });
+  try {
+    return await fn({ server, baseUrl, port: boundPort, host });
+  } finally {
+    unregister();
+    await stopStaticServer(server);
+  }
+}
+
+export async function withBrowser(fn, timeoutMs = 30_000) {
+  let browser;
+  const unregister = registerCleanupSignals(async () => {
+    await closeBrowserSafely(browser);
+  });
+  try {
+    const launched = await launchHeadlessBrowser(timeoutMs);
+    browser = launched.browser;
+    return await fn(browser, launched.executablePath);
+  } finally {
+    unregister();
+    await closeBrowserSafely(browser);
+  }
+}
+
+export async function enforceLocalRouting(
+  page,
+  baseOrigin,
+  blockedExternalRequests,
+  virtualRoutes = {}
+) {
+  await page.route('**/*', (route) => {
+    const url = route.request().url();
+    if (Object.hasOwn(virtualRoutes, url)) {
+      const entry = virtualRoutes[url];
+      return route.fulfill({
+        status: entry.status ?? 200,
+        contentType: entry.contentType ?? 'text/html; charset=utf-8',
+        body: entry.body,
+      });
+    }
+    if (url.startsWith('data:') || url.startsWith('blob:')) {
+      return route.continue();
+    }
+    try {
+      if (new URL(url).origin === baseOrigin) {
+        return route.continue();
+      }
+    } catch {
+      // Fall through to abort invalid URLs
+    }
+    blockedExternalRequests.push(url);
+    return route.abort();
+  });
+}

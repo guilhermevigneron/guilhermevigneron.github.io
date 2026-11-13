@@ -1,24 +1,13 @@
-/* RESUME_META_START */
-const RESUME_META = {
-  email: 'email@gvo.simplelogin.com',
-  siteUrl: 'https://guilhermevigneron.dev',
-  host: 'guilhermevigneron.dev',
-  githubUrl: 'https://github.com/guilhermevigneron',
-  linkedinUrl: 'https://www.linkedin.com/in/guilherme-vigneron-de-oliveira',
-  hasLanguages: true,
-};
-/* RESUME_META_END */
+import SITE_CFG from 'site-config';
 
 const COPIED = ' copied to clipboard';
 
-function formatDisplayUrl(url) {
-  return String(url || '').replace(/^https?:\/\/(www\.)?/, '');
-}
+const { email, host, siteUrl, toggleEvent, profiles, sections, ep } = SITE_CFG;
+const [pdfPath, , vcfPath, vcfDl, archPath, qualPath, qJsonPath, llmsPath] = ep;
 
 export function initCommandMenuPanel() {
   const D = document;
   const W = window;
-  const { email, siteUrl, host, githubUrl, linkedinUrl, hasLanguages } = RESUME_META;
 
   const byId = (id) => D.getElementById(id);
   const qa = (root, sel) => [...root.querySelectorAll(sel)];
@@ -147,51 +136,31 @@ export function initCommandMenuPanel() {
 
   function getGroups(isHome) {
     const nav = isHome
-      ? [
-          ['Summary', 'Section', '#about', 'jump about me'],
-          ['Professional Experience', 'Section', '#experience', 'jump work'],
-          ['Selected Projects', 'Section', '#projects', 'jump open source'],
-          ['Skills', 'Section', '#skills', 'jump core competencies'],
-          ['Publications & Awards', 'Section', '#publications', 'jump'],
-          ['Education', 'Section', '#education', 'jump'],
-          ...(hasLanguages ? [['Languages', 'Section', '#languages', 'jump']] : []),
-        ]
+      ? sections.map(([id, title, extras]) => [title, 'Section', `#${id}`, extras])
       : [
           ['Portfolio Home', '/', '/', 'main cv'],
-          ['Professional Experience', '/#experience', '/#experience', 'jump portfolio'],
-          ['Selected Projects', '/#projects', '/#projects', 'jump portfolio'],
-          ['Skills', '/#skills', '/#skills', 'jump portfolio core competencies'],
+          ...sections
+            .filter(([id]) => id === 'experience' || id === 'projects' || id === 'skills')
+            .map(([id, title, extras]) => [title, `/#${id}`, `/#${id}`, `${extras} portfolio`]),
         ];
 
-    const links = [];
-    if (githubUrl) {
-      links.push(['GitHub', formatDisplayUrl(githubUrl), `>${githubUrl}`, 'profile']);
-    }
-    if (linkedinUrl) {
-      links.push(['LinkedIn', formatDisplayUrl(linkedinUrl), `>${linkedinUrl}`, 'profile']);
-    }
-    links.push(
+    const links = [
+      ...profiles.map(([network, display, url]) => [network, display, `>${url}`, 'profile']),
       ['Email', email, `mailto:${email}`],
-      ['Architecture Overview', '/architecture/', '/architecture/', 'diagram pipeline'],
-      ['Live Quality Report', '/quality/', '/quality/', 'verification ci'],
-      ['Quality Telemetry (JSON)', '/quality/report.json', '/quality/report.json', 'api'],
-      ['JSON Resume', '/resume.json', '/resume.json', 'schema'],
-      ['llms.txt', '/llms.txt', '/llms.txt', 'markdown profile']
-    );
+      ['Architecture Overview', archPath, archPath, 'diagram pipeline'],
+      ['Live Quality Report', qualPath, qualPath, 'verification ci'],
+      ['Quality Telemetry (JSON)', qJsonPath, qJsonPath, 'api'],
+      ['JSON Resume', ep[1], ep[1], 'schema'],
+      ['llms.txt', llmsPath, llmsPath, 'markdown profile'],
+    ];
 
     return [
       [
         'Actions',
         [
           ['Print / Save as PDF', 'A4 layout', ':print'],
-          ['Download Resume (PDF)', 'resume.pdf', '/resume.pdf', 'my'],
-          [
-            'Save Contact (vCard)',
-            'contact.vcf',
-            '/contact.vcf',
-            'vcf download',
-            'guilherme-vigneron.vcf',
-          ],
+          ['Download Resume (PDF)', 'resume.pdf', pdfPath, 'my'],
+          ['Save Contact (vCard)', 'contact.vcf', vcfPath, 'vcf download', vcfDl],
           ['Copy Email Address', email, ':copy-email', 'clipboard contact'],
           ['Copy Profile URL', host, ':copy-url', 'link share clipboard'],
           ['Copy Markdown Resume', 'llms.txt', ':copy-llms', 'plain text clipboard'],
@@ -473,7 +442,7 @@ export function initCommandMenuPanel() {
 
     if (action === 'toggle-theme') {
       const wasDark = D.documentElement.classList.contains('dark');
-      byId('theme-toggle')?.click();
+      D.dispatchEvent(new CustomEvent(toggleEvent));
       closeMenu(true);
       const isDark = D.documentElement.classList.contains('dark');
       showToast(

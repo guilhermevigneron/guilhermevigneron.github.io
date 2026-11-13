@@ -9,20 +9,21 @@ Zero-third-party-runtime-dependency personal portfolio & resume static site buil
 ## Core Architecture & Single Source of Truth
 
 - **`resume.json` is the single source of truth** for all profile content, experience, projects, skills, education, publications, awards, and metadata.
-- **Never hand-edit generated/synced blocks** in `index.html`, `404.html`, `llms.txt`, `site.webmanifest`, `sitemap.xml`, `robots.txt`, `.well-known/security.txt`, or `assets/js/command-menu-panel.js`. Instead, edit `resume.json` (or the template logic in `scripts/sync-resume.mjs`) and run:
+- **Never hand-edit generated/synced output** in `index.html`, `404.html`, `llms.txt`, `site.webmanifest`, `sitemap.xml`, `robots.txt`, `CNAME`, or `.well-known/security.txt`. Instead, edit `resume.json` (or `src/templates/index.html`, `src/theme-tokens.json`, or `scripts/sync-resume.mjs`) and run:
 
   ```bash
   npm run sync
   ```
+- Client scripts receive metadata and theme tokens at bundle time via `src/theme-tokens.json`, `src/js/theme-shared.js`, and the `esbuild` virtual module `'site-config'` in `scripts/minify-assets.mjs`.
 - Verify parity at any time with `npm run test:sync`.
 - `_site/` and `.ci-reports/` are generated build/test outputs (gitignored; do not edit manually).
 
 ## Key Directories & Files
 
 - `resume.json` — Canonical JSON Resume data.
-- `src/` — Source stylesheets (`styles.css`, `subpage.css`, `print.css`).
+- `src/` — Source stylesheets (`styles.css`, `command-menu.css`, `subpage.css`, `print.css`), declarative HTML shell (`templates/index.html`), shared theme config (`theme-tokens.json`), and shared JS module (`js/theme-shared.js`).
 - `assets/js/` — Client scripts (`theme-init.js`, `theme.js`, eager loader `command-menu.js`, lazy ES module `command-menu-panel.js`).
-- `scripts/` — Build, sync, PDF/OG generation, HTML validation, perf, gate telemetry (`run-gate.mjs`), and report generators, backed by shared helpers in `scripts/lib/` (`browser.mjs`, `chrome.mjs`, `pdf.mjs`).
+- `scripts/` — Build, sync, PDF/OG generation, HTML validation, perf, gate telemetry (`run-gate.mjs`), and report generators, backed by shared helpers in `scripts/lib/` (`paths.mjs`, `io.mjs`, `site-config.mjs`, `html.mjs`, `browser.mjs`, `pdf.mjs`, `png.mjs`).
 - `tests/unit.test.mjs` — Node built-in unit tests (`node --test`).
 - `cypress/portfolio.cy.js` — E2E, mobile, CSP, lazy module loading, and WCAG 2.1 AA (`cypress-axe`) tests.
 

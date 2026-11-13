@@ -1,66 +1,29 @@
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import {
-  closeBrowserSafely,
-  launchHeadlessBrowser,
-  registerCleanupSignals,
-  startStaticServer,
-  stopStaticServer,
-} from './lib/browser.mjs';
-import { atomicWriteFileSync, escapeHtml } from './lib/chrome.mjs';
+import { enforceLocalRouting, withBrowser, withStaticServer } from './lib/browser.mjs';
+import { escapeHtml } from './lib/html.mjs';
+import { readJson, resolveBuildTimestampMs, resolveBuildYear, writeReportJson } from './lib/io.mjs';
+import { isEntrypoint, ROOT, resolveRootPaths } from './lib/paths.mjs';
+import { normalizePng } from './lib/png.mjs';
+import { getSiteEndpoints, THEME_COLORS } from './lib/site-config.mjs';
 import { computeYearsOfExperience } from './sync-resume.mjs';
 
-const ROOT = process.cwd();
-const siteDir = path.join(ROOT, '_site');
-const ogOutPath = path.join(siteDir, 'assets', 'og-card.png');
-const ogTempPath = `${ogOutPath}.tmp`;
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-export function parsePngDimensions(pngBytes) {
-  if (!Buffer.isBuffer(pngBytes) || pngBytes.length < 24) {
-    return null;
-  }
-  const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-  if (!pngBytes.subarray(0, 8).equals(pngSignature)) {
-    return null;
-  }
-  if (pngBytes.subarray(12, 16).toString('ascii') !== 'IHDR') {
-    return null;
-  }
-  return {
-    width: pngBytes.readUInt32BE(16),
-    height: pngBytes.readUInt32BE(20),
-  };
-}
-
-export function validatePngBuffer(
-  pngBytes,
-  expectedWidth = 1200,
-  expectedHeight = 630,
-  minBytes = 5000
-) {
-  const dims = parsePngDimensions(pngBytes);
-  if (!dims) {
-    throw new Error('Generated og-card.png does not have valid PNG/IHDR header');
-  }
-  if (dims.width !== expectedWidth || dims.height !== expectedHeight) {
-    throw new Error(
-      `Generated og-card.png dimensions ${dims.width}x${dims.height} do not match ${expectedWidth}x${expectedHeight}`
-    );
-  }
-  if (pngBytes.length < minBytes) {
-    throw new Error(`Generated og-card.png unexpectedly small (${pngBytes.length} bytes)`);
-  }
-  return dims;
-}
-
-export function buildCardHtml(resume) {
-  const years = computeYearsOfExperience(resume) || 18;
-  const domain = String(resume.basics.url || '').replace(/^https?:\/\//, '');
-  const loc = [resume.basics.location?.city, resume.basics.location?.region]
+function buildCardHtml(resume, buildYear) {
+  const endpoints = getSiteEndpoints(resume);
+  const years = computeYearsOfExperience(resume, buildYear);
+  const loc = [resume.basics?.location?.city, resume.basics?.location?.region]
     .filter(Boolean)
     .join(', ');
+  const badgeLabel = [years !== null ? `${years}+ years` : '', loc].filter(Boolean).join(' · ');
   const highlights = (resume.skills || []).slice(0, 4).map((s) => s.name);
+  const footerEndpoints = [
+    endpoints.resumePdfPath,
+    endpoints.resumeJsonPath,
+    endpoints.qualityPath,
+  ].join(' · ');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -96,7 +59,7 @@ export function buildCardHtml(resume) {
     flex: 1;
     width: 100%;
     min-width: 0;
-    background: #fafaf8;
+    background: ${THEME_COLORS.light};
     border: 1px solid #dbd8d3;
     border-radius: 18px;
     padding: 52px 56px;
@@ -185,8 +148,8 @@ export function buildCardHtml(resume) {
 <body>
   <div class="card">
     <div class="top-bar">
-      <span>${escapeHtml(domain)}</span>
-      <span class="badge"><span class="dot"></span>${escapeHtml(String(years))}+ years &middot; ${escapeHtml(loc)}</span>
+      <span>${escapeHtml(endpoints.domain)}</span>
+      ${badgeLabel ? `<span class="badge"><span class="dot"></span>${escapeHtml(badgeLabel)}</span>` : ''}
     </div>
     <div class="hero">
       <div class="hero-text">
@@ -198,161 +161,127 @@ export function buildCardHtml(resume) {
     </div>
     <div class="footer">
       <span>Zero-Third-Party &middot; WCAG 2.1 AA &middot; Strict CSP</span>
-      <span class="endpoints">${escapeHtml(resume.meta?.resumePdf || '/resume.pdf')} &middot; /resume.json &middot; ${escapeHtml(new URL(resume.meta?.qualityReportUrl || 'https://guilhermevigneron.dev/quality/').pathname)}</span>
+      <span class="endpoints">${escapeHtml(footerEndpoints)}</span>
     </div>
   </div>
 </body>
 </html>`;
 }
 
-export async function generateOgCard() {
-  if (!fs.existsSync(path.join(siteDir, 'assets', 'avatar.jpg'))) {
-    throw new Error('_site/assets/avatar.jpg not found. Copy assets before generating OG card.');
-  }
-
-  const resume = JSON.parse(fs.readFileSync(path.join(ROOT, 'resume.json'), 'utf8'));
-  const cardHtml = buildCardHtml(resume);
-
-  fs.mkdirSync(path.dirname(ogOutPath), { recursive: true });
-  fs.rmSync(ogTempPath, { force: true });
-
-  const { server, baseUrl } = await startStaticServer(siteDir);
+async function renderOgWithPage({ browser, baseUrl, rootDir, siteDir, reportsDir, resume }) {
+  const endpoints = getSiteEndpoints(resume);
+  const ogRelPath = endpoints.ogImagePath.replace(/^\/+/, '');
+  const ogOutPath = path.join(siteDir, ogRelPath);
+  const buildTimestampMs = resolveBuildTimestampMs(rootDir);
+  const buildYear = resolveBuildYear(resume, rootDir);
+  const cardHtml = buildCardHtml(resume, buildYear);
   const virtualUrl = `${baseUrl}/__og-card__.html`;
 
-  let browser;
   const blockedExternalRequests = [];
-  const pageErrors = [];
-  const localFailures = [];
-
-  const unregisterSignals = registerCleanupSignals(async () => {
-    fs.rmSync(ogTempPath, { force: true });
-    await closeBrowserSafely(browser);
-    await stopStaticServer(server);
+  const context = await browser.newContext({
+    viewport: { width: 1200, height: 630 },
+    deviceScaleFactor: 1,
   });
 
   try {
-    ({ browser } = await launchHeadlessBrowser(30_000));
-
-    const context = await browser.newContext({
-      viewport: { width: 1200, height: 630 },
-      deviceScaleFactor: 1,
-    });
-    context.setDefaultTimeout(30_000);
-    context.setDefaultNavigationTimeout(30_000);
-
     const page = await context.newPage();
-    page.on('pageerror', (err) => pageErrors.push(`pageerror: ${err.message}`));
-    page.on('crash', () => pageErrors.push('page crashed while rendering OG card'));
-
-    const baseOrigin = new URL(baseUrl).origin;
-    page.on('response', (res) => {
-      try {
-        if (new URL(res.url()).origin === baseOrigin && res.status() >= 400) {
-          localFailures.push(`${res.status()} ${new URL(res.url()).pathname}`);
-        }
-      } catch {
-        // Ignore non-URL responses
-      }
+    await enforceLocalRouting(page, new URL(baseUrl).origin, blockedExternalRequests, {
+      [virtualUrl]: { body: cardHtml },
     });
 
-    await page.route('**/*', (route) => {
-      const url = route.request().url();
-      if (url === virtualUrl) {
-        return route.fulfill({
-          status: 200,
-          contentType: 'text/html; charset=utf-8',
-          body: cardHtml,
-        });
-      }
-      if (url.startsWith('data:') || url.startsWith('blob:')) {
-        return route.continue();
-      }
-      try {
-        if (new URL(url).origin === baseOrigin) {
-          return route.continue();
-        }
-      } catch {
-        // Fall through to block invalid URLs
-      }
-      blockedExternalRequests.push(url);
-      return route.abort();
-    });
-
-    await page.goto(virtualUrl, { waitUntil: 'load', timeout: 30_000 });
+    await page.goto(virtualUrl, { waitUntil: 'load' });
     await page.evaluate(async () => {
-      await Promise.race([
-        document.fonts.ready,
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('fonts.ready timed out')), 10_000)
-        ),
-      ]);
-      const avatar = document.querySelector('img.avatar');
-      if (!avatar?.complete || avatar.naturalWidth === 0) {
-        throw new Error('OG card avatar image failed to load');
-      }
-      if (
-        !document.fonts.check('400 16px "Geist Mono"') ||
-        !document.fonts.check('500 24px "Geist Pixel Square"')
-      ) {
-        throw new Error('OG card web fonts failed to load');
-      }
+      await document.fonts.ready;
+      await Promise.all(Array.from(document.images, (img) => img.decode().catch(() => {})));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     });
 
-    if (pageErrors.length > 0) {
-      throw new Error(`Page errors during OG card render: ${pageErrors.join('; ')}`);
-    }
-    if (localFailures.length > 0) {
-      throw new Error(`Local asset errors during OG card render: ${localFailures.join(', ')}`);
-    }
+    const rawPng = await page.screenshot({ type: 'png' });
 
-    await page.screenshot({ path: ogTempPath, type: 'png' });
+    assert.equal(
+      blockedExternalRequests.length,
+      0,
+      `External requests detected during OG card build: ${blockedExternalRequests.join(', ')}`
+    );
 
-    if (blockedExternalRequests.length > 0) {
-      throw new Error(
-        `External requests detected during OG card build: ${blockedExternalRequests.join(', ')}`
-      );
-    }
+    const pngBytes = normalizePng(rawPng);
+    assert.ok(
+      pngBytes.subarray(0, 8).equals(PNG_SIGNATURE),
+      'Generated og-card.png does not have valid PNG magic signature'
+    );
+    assert.ok(
+      pngBytes.length >= 5000,
+      `Generated og-card.png unexpectedly small (${pngBytes.length} bytes)`
+    );
 
-    const pngBytes = fs.readFileSync(ogTempPath);
-    const { width, height } = validatePngBuffer(pngBytes, 1200, 630);
+    fs.mkdirSync(path.dirname(ogOutPath), { recursive: true });
+    fs.writeFileSync(ogOutPath, pngBytes);
 
-    fs.renameSync(ogTempPath, ogOutPath);
-
-    fs.mkdirSync(path.join(ROOT, '.ci-reports'), { recursive: true });
-    atomicWriteFileSync(
-      path.join(ROOT, '.ci-reports', 'og-report.json'),
-      JSON.stringify(
-        {
-          passed: true,
-          path: '/assets/og-card.png',
-          width,
-          height,
-          bytes: pngBytes.length,
-          blockedExternalRequests: blockedExternalRequests.length,
-          timestamp: new Date().toISOString(),
-        },
-        null,
-        2
-      ),
-      'utf8'
+    writeReportJson(
+      'og-report.json',
+      {
+        passed: true,
+        path: endpoints.ogImagePath,
+        width: 1200,
+        height: 630,
+        bytes: pngBytes.length,
+        blockedExternalRequests: blockedExternalRequests.length,
+        timestamp: new Date(buildTimestampMs).toISOString(),
+      },
+      reportsDir
     );
 
     console.log(
-      `Generated _site/assets/og-card.png (${width}x${height}, ${(pngBytes.length / 1024).toFixed(1)} KB)`
+      `Generated _site${endpoints.ogImagePath} (1200x630, ${(pngBytes.length / 1024).toFixed(1)} KB)`
     );
   } finally {
-    unregisterSignals();
-    fs.rmSync(ogTempPath, { force: true });
-    await closeBrowserSafely(browser);
-    await stopStaticServer(server);
+    await context.close();
   }
 }
 
-const isEntrypoint =
-  Boolean(process.argv[1]) &&
-  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
+export async function generateOgCard({
+  browser = null,
+  baseUrl = null,
+  rootDir = ROOT,
+  siteDir = null,
+  reportsDir = null,
+  resume: resumeArg = null,
+} = {}) {
+  const paths = resolveRootPaths(rootDir);
+  const resolvedSiteDir = siteDir || paths.siteDir;
+  const resolvedReportsDir = reportsDir || paths.reportsDir;
+  const resume = resumeArg || readJson(paths.resumePath);
 
-if (isEntrypoint) {
+  if (!fs.existsSync(path.join(resolvedSiteDir, 'assets', 'avatar.jpg'))) {
+    throw new Error('_site/assets/avatar.jpg not found. Copy assets before generating OG card.');
+  }
+
+  if (browser && baseUrl) {
+    return renderOgWithPage({
+      browser,
+      baseUrl,
+      rootDir,
+      siteDir: resolvedSiteDir,
+      reportsDir: resolvedReportsDir,
+      resume,
+    });
+  }
+
+  return withStaticServer(resolvedSiteDir, async ({ baseUrl: srvBaseUrl }) =>
+    withBrowser(async (launchedBrowser) =>
+      renderOgWithPage({
+        browser: launchedBrowser,
+        baseUrl: srvBaseUrl,
+        rootDir,
+        siteDir: resolvedSiteDir,
+        reportsDir: resolvedReportsDir,
+        resume,
+      })
+    )
+  );
+}
+
+if (isEntrypoint(import.meta.url)) {
   generateOgCard().catch((err) => {
     console.error(err);
     process.exit(1);

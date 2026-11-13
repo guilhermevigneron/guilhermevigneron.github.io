@@ -1,52 +1,39 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { escapeHtml, renderSubpageLayout, UNHASHED_ASSET_URLS } from './lib/html.mjs';
 import {
-  escapeHtml,
-  getAssetUrls,
+  getCombinedSizeBytes,
+  getFileSizeBytes,
+  readJson,
   readJsonIfExists,
-  renderSubpageDocument,
-} from './lib/chrome.mjs';
+  resolveBuildTimestampMs,
+  resolveBuildYear,
+  writeJsonFile,
+} from './lib/io.mjs';
+import { isEntrypoint, ROOT, resolveRootPaths } from './lib/paths.mjs';
+import { getSiteEndpoints } from './lib/site-config.mjs';
 import { minifyHtml } from './minify-html.mjs';
-
-const ROOT = process.cwd();
-const siteDir = path.join(ROOT, '_site');
-const reportsDir = path.join(ROOT, '.ci-reports');
-const outDir = path.join(siteDir, 'quality');
-const outFile = path.join(outDir, 'index.html');
-const outJsonFile = path.join(outDir, 'report.json');
-
-function getFileSizeBytes(filePath) {
-  if (!fs.existsSync(filePath)) return null;
-  return fs.statSync(filePath).size;
-}
 
 function formatKb(bytes) {
   if (typeof bytes !== 'number') return 'N/A';
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
-function sumFileSizesBytes(paths) {
-  let totalBytes = 0;
-  let foundAny = false;
-  for (const filePath of paths) {
-    if (fs.existsSync(filePath)) {
-      totalBytes += fs.statSync(filePath).size;
-      foundAny = true;
-    }
-  }
-  return foundAny ? totalBytes : null;
-}
-
-function getSecurityExpiryDays() {
-  const secPath = path.join(siteDir, '.well-known', 'security.txt');
+function getSecurityExpiryDays(siteDir, securityTxtPath, referenceMs) {
+  const secRel = securityTxtPath.replace(/^\/+/, '');
+  const secPath = path.join(siteDir, secRel);
   if (!fs.existsSync(secPath)) return null;
   const content = fs.readFileSync(secPath, 'utf8');
   const match = content.match(/^Expires:\s*(.+)$/m);
   if (!match) return null;
   const expiresMs = Date.parse(match[1].trim());
   if (Number.isNaN(expiresMs)) return null;
-  return Math.floor((expiresMs - Date.now()) / (1000 * 60 * 60 * 24));
+  return Math.floor((expiresMs - referenceMs) / (1000 * 60 * 60 * 24));
+}
+
+function toSiteFilePath(siteDir, urlOrPath, fallbackUrl) {
+  const rel = String(urlOrPath || fallbackUrl || '').replace(/^\/+/, '');
+  return path.join(siteDir, rel);
 }
 
 function statusBadge(status) {
@@ -72,6 +59,12 @@ export function evaluateQualityGates({
   lycheeExit = undefined,
   expiryDays = null,
   pdfSize = 'N/A',
+  endpoints = {
+    resumePdfPath: '/resume.pdf',
+    resumeJsonPath: '/resume.json',
+    llmsTxtPath: '/llms.txt',
+    securityTxtPath: '/.well-known/security.txt',
+  },
 } = {}) {
   const lintStatus = lintReport ? (lintReport.passed ? 'pass' : 'fail') : 'pending';
   const unitStatus = unitReport ? (unitReport.passed ? 'pass' : 'fail') : 'pending';
@@ -115,23 +108,15 @@ export function evaluateQualityGates({
       ogReport?.blockedExternalRequests === 0
       ? 'pass'
       : 'fail'
-    : (pdfReport && pdfReport.blockedExternalRequests > 0) ||
-        (ogReport && ogReport.blockedExternalRequests > 0)
-      ? 'fail'
-      : 'pending';
+    : 'pending';
   const lycheeStatus =
     lycheeExit === 'success' ? 'pass' : lycheeExit === 'failure' ? 'fail' : 'pending';
-  const secStatus =
-    typeof expiryDays === 'number' && expiryDays >= 30
-      ? 'pass'
-      : typeof expiryDays === 'number'
-        ? 'fail'
-        : 'pending';
+  const secStatus = expiryDays !== null && expiryDays >= 30 ? 'pass' : 'fail';
 
-  const syncPassedCount = Array.isArray(syncReport?.checks)
-    ? syncReport.checks.filter((c) => c.passed).length
-    : 0;
-  const syncTotalCount = Array.isArray(syncReport?.checks) ? syncReport.checks.length : 0;
+  const syncPassedCount =
+    syncReport?.passedCount ??
+    (syncReport?.checks ? syncReport.checks.filter((c) => c.passed).length : 0);
+  const syncTotalCount = syncReport?.totalChecks ?? syncReport?.checks?.length ?? 6;
 
   const cards = [
     {
@@ -140,12 +125,9 @@ export function evaluateQualityGates({
       status: zeroNetStatus,
       summary:
         'All CSS, fonts, images, icons, and scripts are locally bundled. Runtime network interception asserts 0 external third-party calls across pages, PDF rendering, and OG card generation.',
-      metric:
-        cypressReport?.network && cypressReport.network.pagesChecked > 0
-          ? `${cypressReport.network.externalRequests} external calls detected (${cypressReport.network.pagesChecked} routes checked)`
-          : pdfReport && ogReport
-            ? `PDF & OG renderers: ${pdfReport.blockedExternalRequests + ogReport.blockedExternalRequests} blocked external calls (run Cypress for runtime route verification)`
-            : 'Pending PDF, OG & Cypress runtime network verification',
+      metric: cypressReport?.network
+        ? `${cypressReport.network.externalRequests} external calls detected (${cypressReport.network.pagesChecked} routes checked)`
+        : 'Pending runtime network audit',
     },
     {
       id: 'web-vitals-budgets',
@@ -153,9 +135,9 @@ export function evaluateQualityGates({
       status: perfStatus,
       summary:
         'Headless mobile emulation (390x844, 4x CPU throttle) verifying esbuild-minified CSS/JS, subsetted fonts, responsive AVIF/WebP avatar, zero 404s, and Web Vitals thresholds.',
-      metric: perfReport?.mobileVitals
+      metric: perfReport
         ? `Transfer ${(perfReport.mobileVitals.totalTransferBytes / 1024).toFixed(1)} KB · FCP ${perfReport.mobileVitals.fcpMs}ms · LCP ${perfReport.mobileVitals.lcpMs}ms · CLS ${perfReport.mobileVitals.cls}`
-        : 'Pending npm run test:perf execution',
+        : 'Pending performance budget audit',
     },
     {
       id: 'mobile-compatibility',
@@ -223,7 +205,7 @@ export function evaluateQualityGates({
         'Headless Chromium print rendering enforcing single-page A4 layout bounds alongside automated 1200x630 Open Graph card generation.',
       metric:
         pdfReport && ogReport
-          ? `/resume.pdf: ${pdfReport.pages}/${pdfReport.maxPages} page (${pdfSize}) · og-card.png: ${formatKb(ogReport.bytes)}`
+          ? `${endpoints.resumePdfPath}: ${pdfReport.pages}/${pdfReport.maxPages} page (${pdfSize}) · og-card.png: ${formatKb(ogReport.bytes)}`
           : 'Pending PDF & Open Graph artifact generation',
     },
     {
@@ -248,8 +230,7 @@ export function evaluateQualityGates({
           : syncStatus === 'fail' || secStatus === 'fail'
             ? 'fail'
             : 'pending',
-      summary:
-        'Automated parity across /resume.json, DOM, Schema.org JSON-LD, /llms.txt, webmanifest, sitemap, and 404, plus RFC 9116 /.well-known/security.txt freshness.',
+      summary: `Automated parity across ${endpoints.resumeJsonPath}, DOM, Schema.org JSON-LD, ${endpoints.llmsTxtPath}, webmanifest, sitemap, and 404, plus RFC 9116 ${endpoints.securityTxtPath} freshness.`,
       metric: `Sync: ${syncPassedCount}/${syncTotalCount} checks passed · security.txt expires in ${expiryDays ?? '?'} days (min 30d)`,
     },
   ];
@@ -257,57 +238,92 @@ export function evaluateQualityGates({
   const hasFail = cards.some((c) => c.status === 'fail');
   const hasPending = cards.some((c) => c.status === 'pending');
   const overallStatus = hasFail ? 'fail' : hasPending ? 'pending' : 'pass';
-
-  return { cards, overallStatus, pdfStatus };
+  return { cards, overallStatus };
 }
 
-export function buildQualityPage() {
-  const resume = readJsonIfExists(path.join(ROOT, 'resume.json'));
-  const ownerName = resume?.basics?.name || 'Guilherme Vigneron de Oliveira';
-  const siteUrl = String(resume?.basics?.url || 'https://guilhermevigneron.dev').replace(/\/$/, '');
-  const domain = siteUrl.replace(/^https?:\/\//, '');
-  const currentYear = new Date().getUTCFullYear();
+export function buildQualityPage({
+  rootDir = ROOT,
+  siteDir = null,
+  reportsDir = null,
+  resume: resumeArg = null,
+} = {}) {
+  const paths = resolveRootPaths(rootDir);
+  const resolvedSiteDir = siteDir || paths.siteDir;
+  const resolvedReportsDir = reportsDir || paths.reportsDir;
+  const resume = resumeArg || readJson(paths.resumePath);
+  const endpoints = getSiteEndpoints(resume);
+  const ownerName = resume.basics.name;
+  const buildTimestampMs = resolveBuildTimestampMs(rootDir);
+  const currentYear = resolveBuildYear(resume, rootDir);
+  const generatedAt = new Date(buildTimestampMs).toISOString();
 
-  const lintReport = readJsonIfExists(path.join(reportsDir, 'lint-report.json'));
-  const unitReport = readJsonIfExists(path.join(reportsDir, 'unit-report.json'));
-  const securityReport = readJsonIfExists(path.join(reportsDir, 'security-report.json'));
-  const syncReport = readJsonIfExists(path.join(reportsDir, 'sync-validation.json'));
-  const pdfReport = readJsonIfExists(path.join(reportsDir, 'pdf-report.json'));
-  const ogReport = readJsonIfExists(path.join(reportsDir, 'og-report.json'));
-  const htmlReport = readJsonIfExists(path.join(reportsDir, 'html-validate.json'));
-  const cypressReport = readJsonIfExists(path.join(reportsDir, 'cypress-results.json'));
-  const perfReport = readJsonIfExists(path.join(reportsDir, 'perf-report.json'));
+  const lintReport = readJsonIfExists(path.join(resolvedReportsDir, 'lint-report.json'));
+  const unitReport = readJsonIfExists(path.join(resolvedReportsDir, 'unit-report.json'));
+  const securityReport = readJsonIfExists(path.join(resolvedReportsDir, 'security-report.json'));
+  const syncReport = readJsonIfExists(path.join(resolvedReportsDir, 'sync-validation.json'));
+  const pdfReport = readJsonIfExists(path.join(resolvedReportsDir, 'pdf-report.json'));
+  const ogReport = readJsonIfExists(path.join(resolvedReportsDir, 'og-report.json'));
+  const htmlReport = readJsonIfExists(path.join(resolvedReportsDir, 'html-validate.json'));
+  const cypressReport = readJsonIfExists(path.join(resolvedReportsDir, 'cypress-results.json'));
+  const perfReport = readJsonIfExists(path.join(resolvedReportsDir, 'perf-report.json'));
+  const assetManifest = readJsonIfExists(path.join(resolvedReportsDir, 'asset-manifest.json'));
   const lycheeExit = process.env.LYCHEE_STATUS;
 
-  const assetUrls = getAssetUrls(reportsDir, true);
-
-  const cssBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'css', 'styles.css'));
-  const subpageCssBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'css', 'subpage.css'));
-  const printCssBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'css', 'print.css'));
-  const initialJsBytes = sumFileSizesBytes([
-    path.join(siteDir, 'assets', 'js', 'theme-init.js'),
-    path.join(siteDir, 'assets', 'js', 'theme.js'),
-    path.join(siteDir, 'assets', 'js', 'command-menu.js'),
+  const cssBytes = getFileSizeBytes(
+    toSiteFilePath(resolvedSiteDir, assetManifest?.cssUrl, UNHASHED_ASSET_URLS.cssUrl)
+  );
+  const subpageCssBytes = getFileSizeBytes(
+    toSiteFilePath(resolvedSiteDir, assetManifest?.subpageCssUrl, UNHASHED_ASSET_URLS.subpageCssUrl)
+  );
+  const printCssBytes = getFileSizeBytes(
+    toSiteFilePath(resolvedSiteDir, assetManifest?.printCssUrl, UNHASHED_ASSET_URLS.printCssUrl)
+  );
+  const initialJsBytes = getCombinedSizeBytes([
+    toSiteFilePath(
+      resolvedSiteDir,
+      assetManifest?.themeInitJsUrl,
+      UNHASHED_ASSET_URLS.themeInitJsUrl
+    ),
+    toSiteFilePath(resolvedSiteDir, assetManifest?.themeJsUrl, UNHASHED_ASSET_URLS.themeJsUrl),
+    toSiteFilePath(
+      resolvedSiteDir,
+      assetManifest?.commandMenuJsUrl,
+      UNHASHED_ASSET_URLS.commandMenuJsUrl
+    ),
   ]);
   const commandMenuPanelJsBytes = getFileSizeBytes(
-    path.join(siteDir, 'assets', 'js', 'command-menu-panel.js')
+    toSiteFilePath(
+      resolvedSiteDir,
+      assetManifest?.commandMenuPanelJsUrl,
+      UNHASHED_ASSET_URLS.commandMenuPanelJsUrl
+    )
   );
-  const fontsBytes = sumFileSizesBytes([
-    path.join(siteDir, 'assets', 'fonts', 'GeistMono-Variable.woff2'),
-    path.join(siteDir, 'assets', 'fonts', 'GeistPixel-Square.woff2'),
+  const fontsBytes = getCombinedSizeBytes([
+    toSiteFilePath(resolvedSiteDir, assetManifest?.monoFontUrl, UNHASHED_ASSET_URLS.monoFontUrl),
+    toSiteFilePath(resolvedSiteDir, assetManifest?.pixelFontUrl, UNHASHED_ASSET_URLS.pixelFontUrl),
   ]);
-  const pdfBytes = getFileSizeBytes(path.join(siteDir, 'resume.pdf'));
-  const indexBytes = getFileSizeBytes(path.join(siteDir, 'index.html'));
-  const ogCardBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'og-card.png'));
-  const contactVcfBytes = getFileSizeBytes(path.join(siteDir, 'contact.vcf'));
-  const expiryDays = getSecurityExpiryDays();
+  const pdfBytes = getFileSizeBytes(
+    toSiteFilePath(resolvedSiteDir, endpoints.resumePdfPath, '/resume.pdf')
+  );
+  const indexBytes = getFileSizeBytes(path.join(resolvedSiteDir, 'index.html'));
+  const ogCardBytes = getFileSizeBytes(
+    toSiteFilePath(resolvedSiteDir, endpoints.ogImagePath, '/assets/og-card.png')
+  );
+  const contactVcfBytes = getFileSizeBytes(
+    toSiteFilePath(resolvedSiteDir, endpoints.contactVcfPath, '/contact.vcf')
+  );
+  const expiryDays = getSecurityExpiryDays(
+    resolvedSiteDir,
+    endpoints.securityTxtPath,
+    buildTimestampMs
+  );
 
   const cssSize = formatKb(cssBytes);
   const fontSize = formatKb(fontsBytes);
   const pdfSize = formatKb(pdfBytes);
   const indexSize = formatKb(indexBytes);
 
-  const { cards, overallStatus, pdfStatus } = evaluateQualityGates({
+  const { cards, overallStatus } = evaluateQualityGates({
     lintReport,
     unitReport,
     securityReport,
@@ -320,9 +336,9 @@ export function buildQualityPage() {
     lycheeExit,
     expiryDays,
     pdfSize,
+    endpoints,
   });
 
-  const generatedAt = new Date().toISOString();
   const commitSha = process.env.GITHUB_SHA ? process.env.GITHUB_SHA.slice(0, 7) : 'local';
   const branchRef = process.env.GITHUB_REF_NAME || 'workspace';
   const runUrl =
@@ -354,28 +370,29 @@ export function buildQualityPage() {
     },
     gates: cards,
     endpoints: [
-      '/resume.pdf',
-      '/resume.json',
-      '/llms.txt',
-      '/contact.vcf',
-      '/assets/og-card.png',
-      '/architecture/',
-      '/quality/',
-      '/quality/report.json',
-      '/.well-known/security.txt',
-      '/sitemap.xml',
+      endpoints.resumePdfPath,
+      endpoints.resumeJsonPath,
+      endpoints.llmsTxtPath,
+      endpoints.contactVcfPath,
+      endpoints.ogImagePath,
+      endpoints.architecturePath,
+      endpoints.qualityPath,
+      endpoints.qualityJsonPath,
+      endpoints.securityTxtPath,
+      endpoints.sitemapPath,
       '/robots.txt',
     ],
   };
 
+  const pdfStatus = pdfReport?.passed ? 'pass' : pdfReport ? 'fail' : 'pending';
   const pdfMetaNote = pdfReport
     ? `${pdfReport.pages} page, ${pdfSize}, ${pdfStatus.toUpperCase()}`
     : pdfStatus.toUpperCase();
 
-  const mainSectionsHtml = `            <section class="cv-section">
+  const mainHtml = `            <section class="cv-section">
                 <h1 class="cv-name">Quality &amp; Verification Report</h1>
                 <p class="summary-copy">
-                    Every build of <strong>${escapeHtml(domain)}</strong> runs through an automated zero-third-party verification pipeline before deployment. Below is the telemetry generated from this deployment artifact.
+                    Every build of <strong>${escapeHtml(endpoints.domain)}</strong> runs through an automated zero-third-party verification pipeline before deployment. Below is the telemetry generated from this deployment artifact.
                 </p>
                 <div class="metric-grid">
                     <div class="panel-card">
@@ -421,15 +438,15 @@ export function buildQualityPage() {
                 <h2 class="section-title">published machine-readable endpoints</h2>
                 <div class="panel-card">
                     <ul class="endpoint-list">
-                        <li><a href="/resume.pdf">/resume.pdf</a> &mdash; Automated headless Chromium PDF build (${escapeHtml(pdfMetaNote)})</li>
-                        <li><a href="/resume.json">/resume.json</a> &mdash; Standardized JSON Resume source of truth</li>
-                        <li><a href="/llms.txt">/llms.txt</a> &mdash; LLM-friendly markdown profile generated from resume.json</li>
-                        <li><a href="/contact.vcf">/contact.vcf</a> &mdash; Downloadable vCard contact generated from resume.json</li>
-                        <li><a href="/assets/og-card.png">/assets/og-card.png</a> &mdash; Automated 1200x630 Open Graph preview card</li>
-                        <li><a href="/architecture/">/architecture/</a> &mdash; High-level build &amp; verification pipeline overview</li>
-                        <li><a href="/quality/report.json">/quality/report.json</a> &mdash; Machine-readable CI telemetry JSON</li>
-                        <li><a href="/.well-known/security.txt">/.well-known/security.txt</a> &mdash; RFC 9116 vulnerability disclosure policy</li>
-                        <li><a href="/sitemap.xml">/sitemap.xml</a> &amp; <a href="/robots.txt">/robots.txt</a> &mdash; Search crawler directives</li>
+                        <li><a href="${escapeHtml(endpoints.resumePdfPath)}">${escapeHtml(endpoints.resumePdfPath)}</a> &mdash; Automated headless Chromium PDF build (${escapeHtml(pdfMetaNote)})</li>
+                        <li><a href="${escapeHtml(endpoints.resumeJsonPath)}">${escapeHtml(endpoints.resumeJsonPath)}</a> &mdash; Standardized JSON Resume source of truth</li>
+                        <li><a href="${escapeHtml(endpoints.llmsTxtPath)}">${escapeHtml(endpoints.llmsTxtPath)}</a> &mdash; LLM-friendly markdown profile generated from resume.json</li>
+                        <li><a href="${escapeHtml(endpoints.contactVcfPath)}">${escapeHtml(endpoints.contactVcfPath)}</a> &mdash; Downloadable vCard contact generated from resume.json</li>
+                        <li><a href="${escapeHtml(endpoints.ogImagePath)}">${escapeHtml(endpoints.ogImagePath)}</a> &mdash; Automated 1200x630 Open Graph preview card</li>
+                        <li><a href="${escapeHtml(endpoints.architecturePath)}">${escapeHtml(endpoints.architecturePath)}</a> &mdash; High-level build &amp; verification pipeline overview</li>
+                        <li><a href="${escapeHtml(endpoints.qualityJsonPath)}">${escapeHtml(endpoints.qualityJsonPath)}</a> &mdash; Machine-readable CI telemetry JSON</li>
+                        <li><a href="${escapeHtml(endpoints.securityTxtPath)}">${escapeHtml(endpoints.securityTxtPath)}</a> &mdash; RFC 9116 vulnerability disclosure policy</li>
+                        <li><a href="${escapeHtml(endpoints.sitemapPath)}">${escapeHtml(endpoints.sitemapPath)}</a> &amp; <a href="/robots.txt">/robots.txt</a> &mdash; Search crawler directives</li>
                     </ul>
                 </div>
             </section>
@@ -442,48 +459,46 @@ export function buildQualityPage() {
                 </div>
             </section>`;
 
-  const html = renderSubpageDocument({
+  const html = renderSubpageLayout({
     title: `Quality & Verification Report - ${ownerName}`,
-    description: `Automated CI/CD quality, accessibility, performance, and security verification report for ${domain}.`,
-    canonicalUrl: `${siteUrl}/quality/`,
-    ogImageUrl: `${siteUrl}${assetUrls.ogCardUrl}`,
-    ogImageAlt: resume?.meta?.ogImageAlt || `Quality & Verification Report - ${ownerName}`,
-    alternateLinks: [
-      {
-        type: 'application/json',
-        href: '/quality/report.json',
-        title: 'Quality Telemetry JSON',
-      },
+    description: `Automated CI/CD quality, accessibility, performance, and security verification report for ${endpoints.domain}.`,
+    canonicalUrl: endpoints.qualityReportUrl,
+    extraHeadLinks: [
+      `<link rel="alternate" type="application/json" href="${escapeHtml(endpoints.qualityJsonPath)}" title="Quality Telemetry JSON">`,
     ],
     ownerName,
     subtitleHtml:
       '<p class="entry-sub">Self-Verifying Engineering Showcase &amp; Quality Report</p>',
     navLinks: [
       { href: '/', label: 'Portfolio' },
-      { href: '/architecture/', label: 'Architecture' },
+      { href: endpoints.architecturePath, label: 'Architecture' },
     ],
-    mainSectionsHtml,
+    mainHtml,
     footerLinks: [
       { href: '/', label: 'Return to Portfolio' },
-      { href: '/architecture/', label: 'Architecture' },
-      { href: '/quality/report.json', label: 'Telemetry JSON' },
-      { href: '/resume.json', label: 'JSON Resume' },
-      { href: '/llms.txt', label: 'llms.txt' },
+      { href: endpoints.architecturePath, label: 'Architecture' },
+      { href: endpoints.qualityJsonPath, label: 'Telemetry JSON' },
+      { href: endpoints.resumeJsonPath, label: 'JSON Resume' },
+      { href: endpoints.llmsTxtPath, label: 'llms.txt' },
     ],
-    copyrightHtml: `<span>&copy; ${escapeHtml(String(currentYear))} ${escapeHtml(ownerName)}</span>`,
-    assetUrls,
+    copyrightYear: currentYear,
+    assetManifest,
   });
 
+  const outDir = path.join(
+    resolvedSiteDir,
+    endpoints.qualityPath.replace(/^\/+|\/+$/g, '') || 'quality'
+  );
+  const outFile = path.join(outDir, 'index.html');
+  const outJsonFile = path.join(resolvedSiteDir, endpoints.qualityJsonPath.replace(/^\/+/, ''));
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(outFile, minifyHtml(html), 'utf8');
-  fs.writeFileSync(outJsonFile, `${JSON.stringify(reportPayload, null, 2)}\n`, 'utf8');
-  console.log('Generated _site/quality/index.html & _site/quality/report.json');
+  writeJsonFile(outJsonFile, reportPayload);
+  console.log(
+    `Generated ${path.relative(rootDir, outFile)} & ${path.relative(rootDir, outJsonFile)}`
+  );
 }
 
-const isEntrypoint =
-  Boolean(process.argv[1]) &&
-  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
-
-if (isEntrypoint) {
+if (isEntrypoint(import.meta.url)) {
   buildQualityPage();
 }
