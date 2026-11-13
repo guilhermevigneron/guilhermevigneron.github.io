@@ -26,7 +26,7 @@ Principal Technologist with 18+ years of experience advancing software quality, 
 
 ## Selected Projects
 - guilhermevigneron.dev — Self-Verifying Portfolio & Resume Pipeline (https://github.com/guilhermevigneron/guilhermevigneron.github.io)
-  - Zero-third-party static showcase driven by a single resume.json source of truth. Compiles fingerprinted bundles, Schema.org JSON-LD, llms.txt, vCard, Open Graph card, and A4 /resume.pdf, gated by HTML5 validation, Playwright mobile Web Vitals budgets, and 12-audit WCAG 2.1 AA Cypress + axe checks.
+  - Zero-third-party static showcase driven by a single resume.json source of truth. Compiles fingerprinted bundles, Schema.org JSON-LD, llms.txt, vCard, Open Graph card, and A4 /resume.pdf, gated by HTML5 validation, Playwright mobile Web Vitals budgets, and 16-audit WCAG 2.1 AA Cypress + axe checks.
   - Enforces strict default-src 'self' CSP with SHA-256 asset fingerprinting, subsetted Geist fonts, and responsive AVIF/WebP imagery.
   - Publishes live CI telemetry to /quality/ and /quality/report.json alongside weekly production smoke and link-rot checks.
 
@@ -48,6 +48,7 @@ Developer Experience (DX), DevOps, Software Development, AI / LLM Workflows, CI/
 - Resume PDF: https://guilhermevigneron.dev/resume.pdf
 - JSON Resume: https://guilhermevigneron.dev/resume.json
 - Contact vCard: https://guilhermevigneron.dev/contact.vcf
+- Architecture Overview: https://guilhermevigneron.dev/architecture/
 - Quality Report: https://guilhermevigneron.dev/quality/
 - Quality Telemetry JSON: https://guilhermevigneron.dev/quality/report.json
 - Security Policy: https://guilhermevigneron.dev/.well-known/security.txt

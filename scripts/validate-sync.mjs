@@ -163,6 +163,7 @@ try {
     assert.ok(llmsTxt.includes(resume.meta.resumePdfUrl));
     assert.ok(llmsTxt.includes(resume.meta.resumeJsonUrl));
     assert.ok(llmsTxt.includes(resume.meta.contactVcfUrl));
+    assert.ok(llmsTxt.includes(`${resume.basics.url}/architecture/`));
     assert.ok(llmsTxt.includes(resume.meta.qualityReportUrl));
     assert.ok(llmsTxt.includes(resume.meta.qualityReportJsonUrl));
     assert.ok(!llmsTxt.includes('drive.google.com'), 'External Google Drive link in llms.txt');
@@ -200,6 +201,7 @@ try {
       resume.meta.resumeJsonUrl,
       `${resume.basics.url}/llms.txt`,
       resume.meta.contactVcfUrl,
+      `${resume.basics.url}/architecture/`,
       resume.meta.qualityReportUrl,
       resume.meta.qualityReportJsonUrl,
     ]) {

@@ -140,6 +140,7 @@ export function buildLlmsTxt(data) {
     `- Resume PDF: ${data.meta.resumePdfUrl}`,
     `- JSON Resume: ${data.meta.resumeJsonUrl}`,
     `- Contact vCard: ${data.meta.contactVcfUrl}`,
+    `- Architecture Overview: ${data.basics.url}/architecture/`,
     `- Quality Report: ${data.meta.qualityReportUrl}`,
     `- Quality Telemetry JSON: ${data.meta.qualityReportJsonUrl}`,
     `- Security Policy: ${data.meta.securityTxtUrl}`,

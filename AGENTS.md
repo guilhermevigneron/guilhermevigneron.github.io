@@ -36,7 +36,7 @@ Zero-third-party-runtime-dependency personal portfolio & resume static site buil
    - `CLS <= 0.01`, `LCP <= 2500 ms`, `FCP <= 1800 ms`
    - `/resume.pdf` must remain **1 page** (`maxPdfPages: 1`).
 3. **Accessibility & HTML Validity:**
-   - All built HTML (`_site/index.html`, `_site/404.html`, `_site/quality/index.html`) must pass `html-validate`.
+   - All built HTML (`_site/index.html`, `_site/404.html`, `_site/quality/index.html`, `_site/architecture/index.html`) must pass `html-validate`.
    - Inline `<svg>` icons must include explicit dimensions, `aria-hidden="true"`, and `focusable="false"`.
    - External links must use `rel="noopener noreferrer"`.
 4. **Code Style:**
@@ -56,7 +56,7 @@ Or run targeted checks as needed:
 - `npm run lint:fix` — Auto-fix Biome lint issues
 - `npm run test:unit` — Unit tests (`tests/unit.test.mjs`)
 - `npm run test:sync` — Validate `resume.json` parity across synced files
-- `npm run build` — Sync, validate, bundle/fingerprint assets, generate `/resume.pdf`, OG card, and `/quality/`
+- `npm run build` — Sync, validate, bundle/fingerprint assets, generate `/resume.pdf`, OG card, `/quality/`, and `/architecture/`
 - `npm run test:html` — Validate built HTML5 in `_site/`
 - `npm run test:e2e` — Run Cypress + `axe-core` suite
 - `npm run test:perf` — Run Playwright mobile Web Vitals & byte-budget audit

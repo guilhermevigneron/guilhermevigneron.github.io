@@ -66,7 +66,7 @@ function buildArchitecturePage() {
     {
       title: '4. Built-In Quality Gates',
       summary:
-        'Before anything goes live, automated checks verify HTML5 validity, mobile speed budgets, 12-audit WCAG 2.1 AA accessibility, and zero broken links.',
+        'Before anything goes live, automated checks verify HTML5 validity, mobile speed budgets, 16-audit WCAG 2.1 AA accessibility, and zero broken links.',
       detail: 'Live results published to /quality/',
     },
   ];

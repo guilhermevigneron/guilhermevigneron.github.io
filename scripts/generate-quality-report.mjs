@@ -121,7 +121,7 @@ function buildQualityPage() {
       : 'fail'
     : 'pending';
   const axeStatus = cypressReport?.a11y
-    ? cypressReport.a11y.violations === 0 && cypressReport.a11y.checksRun >= 12
+    ? cypressReport.a11y.violations === 0 && cypressReport.a11y.checksRun >= 16
       ? 'pass'
       : 'fail'
     : 'pending';
@@ -138,7 +138,7 @@ function buildQualityPage() {
       : 'pending';
   const perfStatus = perfReport ? (perfReport.passed ? 'pass' : 'fail') : 'pending';
   const zeroNetStatus = cypressReport?.network
-    ? cypressReport.network.pagesChecked >= 3 &&
+    ? cypressReport.network.pagesChecked >= 4 &&
       cypressReport.network.externalRequests === 0 &&
       pdfReport?.blockedExternalRequests === 0 &&
       ogReport?.blockedExternalRequests === 0
@@ -444,6 +444,8 @@ function buildQualityPage() {
             <span>&copy; ${escapeHtml(String(currentYear))} ${escapeHtml(ownerName)}</span>
             <div class="cv-footer-links">
                 <a href="/">Return to Portfolio</a>
+                <span aria-hidden="true">&middot;</span>
+                <a href="/architecture/">Architecture</a>
                 <span aria-hidden="true">&middot;</span>
                 <a href="/quality/report.json">Telemetry JSON</a>
                 <span aria-hidden="true">&middot;</span>

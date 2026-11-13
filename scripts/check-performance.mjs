@@ -220,7 +220,7 @@ async function main() {
     // Check overflow across mobile viewports & routes
     for (const width of [320, 375, 390, 768]) {
       await page.setViewportSize({ width, height: 800 });
-      for (const route of ['/', '/404.html', '/quality/']) {
+      for (const route of ['/', '/404.html', '/quality/', '/architecture/']) {
         await page.goto(`${baseUrl}${route}`, { waitUntil: 'networkidle' });
         const overflow = await page.evaluate(() => ({
           scrollWidth: document.documentElement.scrollWidth,

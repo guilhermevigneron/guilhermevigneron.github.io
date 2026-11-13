@@ -209,7 +209,7 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
   });
 
   it('enforces a strict Content-Security-Policy and referrer policy with zero violations', () => {
-    ['/', '/404.html', '/quality/'].forEach((route) => {
+    ['/', '/404.html', '/quality/', '/architecture/'].forEach((route) => {
       const violations = [];
       cy.visit(route, {
         failOnStatusCode: route !== '/404.html',
@@ -514,8 +514,8 @@ describe('Command Menu Interaction', () => {
     cy.location('hash').should('eq', '#projects');
   });
 
-  it('works across /quality/ and /404.html via Ctrl+J and mobile search trigger', () => {
-    ['/quality/', '/404.html'].forEach((route) => {
+  it('works across /quality/, /architecture/, and /404.html via Ctrl+J and mobile search trigger', () => {
+    ['/quality/', '/architecture/', '/404.html'].forEach((route) => {
       cy.viewport(1280, 800);
       cy.visit(route, { failOnStatusCode: route !== '/404.html' });
       cy.get('#command-trigger').click();
@@ -543,7 +543,7 @@ describe('Mobile Device Compatibility & Touch UX', () => {
   ].forEach(({ width, height, label }) => {
     it(`renders without horizontal overflow across routes at ${width}x${height}`, () => {
       cy.viewport(width, height);
-      ['/', '/404.html', '/quality/'].forEach((route) => {
+      ['/', '/404.html', '/quality/', '/architecture/'].forEach((route) => {
         cy.visit(route, { failOnStatusCode: route !== '/404.html' });
         cy.window().then((win) => {
           const docEl = win.document.documentElement;

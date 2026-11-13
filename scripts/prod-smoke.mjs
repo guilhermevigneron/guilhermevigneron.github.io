@@ -143,9 +143,18 @@ async function main() {
   const sitemapRes = await checkEndpoint('/sitemap.xml', 200);
   const sitemapText = await sitemapRes.text();
   assert.ok(sitemapText.includes('/contact.vcf'), 'sitemap.xml missing /contact.vcf');
+  assert.ok(sitemapText.includes('/architecture/'), 'sitemap.xml missing /architecture/');
   assert.ok(sitemapText.includes('/quality/report.json'), 'sitemap.xml missing /quality/report.json');
+
+  const archRes = await checkEndpoint('/architecture/', 200);
+  const archHtml = await archRes.text();
+  assert.ok(archHtml.includes('Architecture Overview'), '/architecture/ missing heading');
+  const archCssMatch = archHtml.match(/<link rel="stylesheet" href="(\/assets\/css\/subpage(?:\.[a-f0-9]+)?\.css)">/);
+  assert.ok(archCssMatch, '/architecture/ missing compiled subpage stylesheet link');
+  await checkEndpoint(archCssMatch[1], 200);
+
   await checkEndpoint('/nonexistent-smoke-check-404', 404);
-  console.log('PASS /quality/, /quality/report.json, /contact.vcf, /sitemap.xml, and 404 handling');
+  console.log('PASS /quality/, /quality/report.json, /architecture/, /contact.vcf, /sitemap.xml, and 404 handling');
 
   console.log('All production smoke tests passed!');
 }
