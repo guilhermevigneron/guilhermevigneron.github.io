@@ -889,7 +889,7 @@ html.dark .theme-icon-moon {
 }
 
 .cmd-item:hover,
-.cmd-item[aria-selected="true"] {
+.cmd-item[data-selected="true"] {
   background-color: var(--wash);
   color: var(--ink);
 }
@@ -897,6 +897,11 @@ html.dark .theme-icon-moon {
 .cmd-item-hint {
   font-size: 0.75rem;
   color: var(--faint);
+}
+
+.cmd-item:hover .cmd-item-hint,
+.cmd-item[data-selected="true"] .cmd-item-hint {
+  color: var(--body);
 }
 
 /* Entrance Animation */

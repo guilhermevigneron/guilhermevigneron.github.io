@@ -83,7 +83,7 @@ async function generatePdf() {
 
     await page.pdf({
       path: pdfOutPath,
-      format: 'Letter',
+      format: 'A4',
       printBackground: true,
       preferCSSPageSize: true,
       margin: {
@@ -130,7 +130,8 @@ async function generatePdf() {
     );
   } finally {
     if (browser) await browser.close();
-    server.close();
+    server.closeAllConnections?.();
+    await new Promise((resolve) => server.close(resolve));
   }
 }
 

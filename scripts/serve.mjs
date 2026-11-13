@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -23,7 +24,14 @@ export function createStaticServer(siteDir) {
 
   return http.createServer((req, res) => {
     const reqUrl = new URL(req.url || '/', 'http://127.0.0.1');
-    const cleanPath = decodeURIComponent(reqUrl.pathname);
+    let cleanPath;
+    try {
+      cleanPath = decodeURIComponent(reqUrl.pathname);
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Bad Request');
+      return;
+    }
 
     let candidatePath = path.resolve(resolvedSiteDir, `.${cleanPath}`);
     if (
@@ -75,7 +83,11 @@ export function createStaticServer(siteDir) {
   });
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isEntrypoint =
+  Boolean(process.argv[1]) &&
+  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
+
+if (isEntrypoint) {
   const siteDir = path.join(process.cwd(), '_site');
   const port = Number(process.env.PORT || 4000);
   const host = process.env.HOST || '127.0.0.1';

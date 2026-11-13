@@ -35,7 +35,7 @@
   function setSelected(index) {
     var visible = getVisibleItems();
     items.forEach(function (item) {
-      item.setAttribute('aria-selected', 'false');
+      item.setAttribute('data-selected', 'false');
     });
 
     if (visible.length === 0) {
@@ -45,8 +45,16 @@
 
     var clamped = ((index % visible.length) + visible.length) % visible.length;
     activeIndex = clamped;
-    visible[clamped].setAttribute('aria-selected', 'true');
+    visible[clamped].setAttribute('data-selected', 'true');
     visible[clamped].scrollIntoView({ block: 'nearest' });
+  }
+
+  function getFocusableElements() {
+    var focusables = [input];
+    if (closeBtn && !closeBtn.hidden) {
+      focusables.push(closeBtn);
+    }
+    return focusables.concat(getVisibleItems());
   }
 
   function filterItems(query) {
@@ -91,7 +99,7 @@
     backdrop.hidden = true;
     dialog.hidden = true;
     document.body.style.overflow = '';
-    if (restoreFocus && lastFocused instanceof HTMLElement) {
+    if (restoreFocus && lastFocused instanceof HTMLElement && document.contains(lastFocused)) {
       lastFocused.focus({ preventScroll: true });
     }
   }
@@ -143,6 +151,23 @@
     }
 
     if (!isOpen()) {
+      return;
+    }
+
+    if (event.key === 'Tab') {
+      var focusables = getFocusableElements();
+      if (focusables.length === 0) {
+        return;
+      }
+      var currentIdx = focusables.indexOf(document.activeElement);
+      var nextIdx;
+      if (event.shiftKey) {
+        nextIdx = currentIdx <= 0 ? focusables.length - 1 : currentIdx - 1;
+      } else {
+        nextIdx = currentIdx === -1 || currentIdx >= focusables.length - 1 ? 0 : currentIdx + 1;
+      }
+      event.preventDefault();
+      focusables[nextIdx].focus();
       return;
     }
 

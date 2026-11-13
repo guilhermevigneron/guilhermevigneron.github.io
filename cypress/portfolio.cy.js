@@ -265,13 +265,20 @@ describe('Theme Toggle & Persistence', () => {
 });
 
 describe('Command Menu Interaction', () => {
-  it('opens via trigger or Ctrl+J, filters items, toggles theme, and closes cleanly', () => {
+  it('opens via trigger or Ctrl+J, passes axe-core while open, filters items, and closes cleanly', () => {
     cy.viewport(1280, 800);
     cy.visit('/');
 
     cy.get('#command-dialog').should('not.be.visible');
     cy.get('#command-trigger').should('be.visible').click();
     cy.get('#command-dialog').should('be.visible');
+    cy.focused().should('have.id', 'command-input');
+
+    cy.injectAxe();
+    cy.checkA11y('#command-dialog');
+
+    cy.get('#command-input').type('{downarrow}');
+    cy.get('#command-dialog .cmd-item[data-selected="true"]').should('have.length', 1);
 
     cy.get('#command-input').type('Quality');
     cy.contains('#command-dialog .cmd-item:not([hidden])', 'Live Quality Report').should('be.visible');
@@ -369,10 +376,14 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
     });
   });
 
-  it('serves branded 404.html with a working link back to /', () => {
+  it('serves branded 404.html with a working link back to / and handles malformed URLs cleanly', () => {
     cy.request({ url: '/nonexistent-route-check', failOnStatusCode: false }).then((res) => {
       expect(res.status).to.eq(404);
       expect(res.body).to.include('Page Not Found');
+    });
+
+    cy.request({ url: '/%E0%A4%A', failOnStatusCode: false }).then((res) => {
+      expect(res.status).to.eq(400);
     });
 
     cy.visit('/404.html');

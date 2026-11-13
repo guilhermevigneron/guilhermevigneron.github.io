@@ -60,6 +60,9 @@ runNodeScript('scripts/validate-sync.mjs');
 console.log('3. Preparing clean _site/ directory...');
 fs.rmSync(siteDir, { recursive: true, force: true });
 fs.mkdirSync(siteDir, { recursive: true });
+for (const staleReport of ['html-validate.json', 'cypress-results.json']) {
+  fs.rmSync(path.join(reportsDir, staleReport), { force: true });
+}
 
 const rootFiles = [
   'index.html',
