@@ -1,0 +1,128 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jsonresume/resume-schema/v1.0.0/schema.json",
+  "basics": {
+    "name": "Guilherme Vigneron de Oliveira",
+    "label": "Principal Technologist | QA & Software Testing Expert",
+    "email": "guilhermevigneron@gmail.com",
+    "url": "https://guilhermevigneron.dev",
+    "summary": "As a seasoned Quality Assurance Engineer with over 15 years of experience, I elevate software quality through innovative testing strategies and automation. My relentless pursuit of excellence, global collaboration, and attention to detail ensure every project achieves the highest standards. I am passionate about advancing quality assurance and eager to bring my innovative strategies to a forward-thinking team.",
+    "location": {
+      "city": "Austin",
+      "region": "TX",
+      "countryCode": "US"
+    },
+    "profiles": [
+      {
+        "network": "LinkedIn",
+        "username": "guilherme-vigneron-de-oliveira",
+        "url": "https://www.linkedin.com/in/guilherme-vigneron-de-oliveira"
+      },
+      {
+        "network": "GitHub",
+        "username": "guilhermevigneron",
+        "url": "https://github.com/guilhermevigneron"
+      }
+    ]
+  },
+  "work": [
+    {
+      "name": "AVEVA",
+      "position": "Principal Software QA Engineer",
+      "startDate": "2023-11",
+      "location": "Austin, TX",
+      "displayDate": "Nov 2023 - Present",
+      "highlights": [
+        "Led the development and implementation of comprehensive test strategies, achieving significant increases in test coverage and reductions in defects.",
+        "Designed and implemented robust test automation frameworks using Selenium and C#, enhancing maintainability and efficiency.",
+        "Orchestrated automated and manual testing processes using Azure DevOps, improving deployment reliability.",
+        "Conducted critical performance testing with JMeter to optimize software performance.",
+        "Led cross-functional teams as a Scrum Master, fostering collaboration and driving increases in sprint velocity."
+      ]
+    },
+    {
+      "name": "AVEVA",
+      "position": "Senior QA Engineer",
+      "startDate": "2018-09",
+      "endDate": "2024-08",
+      "location": "São Paulo, Brazil",
+      "displayDate": "Sep 2018 - Aug 2024",
+      "highlights": [
+        "Headed the development of test strategies, increasing test coverage and reducing defects.",
+        "Designed a robust Page Object Model test framework using Selenium and C#.",
+        "Orchestrated testing processes using Azure DevOps release pipelines.",
+        "Mentored junior QA engineers, improving team productivity and knowledge sharing."
+      ]
+    },
+    {
+      "name": "AVEVA",
+      "position": "Quality and Test Analyst",
+      "startDate": "2008-10",
+      "endDate": "2018-09",
+      "location": "São Paulo, Brazil",
+      "displayDate": "Oct 2008 - Sep 2018",
+      "highlights": [
+        "Led the implementation of a risk-based testing approach, prioritizing test cases based on business impact.",
+        "Pioneered the implementation of new test automation tools.",
+        "Collaborated with cross-functional teams to optimize the software development lifecycle.",
+        "Developed and delivered comprehensive training programs on testing techniques for QA analysts."
+      ]
+    }
+  ],
+  "education": [
+    {
+      "institution": "Grupo Veris Educacional - IBTA",
+      "studyType": "Post-Graduation",
+      "area": "Software Engineering (SOA)",
+      "startDate": "2010",
+      "endDate": "2011"
+    },
+    {
+      "institution": "Universidade Estadual de Campinas",
+      "studyType": "B.S.",
+      "area": "Computing",
+      "startDate": "2005",
+      "endDate": "2009"
+    }
+  ],
+  "skills": [
+    { "name": "Selenium" },
+    { "name": "C#" },
+    { "name": "Python" },
+    { "name": "Azure DevOps" },
+    { "name": "JMeter" },
+    { "name": "SQL" },
+    { "name": "Test Automation Frameworks" },
+    { "name": "Agile & Scrum" },
+    { "name": "CI/CD" },
+    { "name": "Risk-Based Testing" },
+    { "name": "Performance Testing" }
+  ],
+  "publications": [
+    {
+      "name": "The Hidden Costs of Flaky Tests: A Deep Dive into Test Reliability",
+      "publisher": "StickyMinds",
+      "url": "https://www.stickyminds.com/article/hidden-costs-flaky-tests-deep-dive-test-reliability"
+    },
+    {
+      "name": "The Big Picture: Defining a Successful Test Automation Strategy",
+      "publisher": "Software Testing Magazine",
+      "url": "https://www.softwaretestingmagazine.com/knowledge/the-big-picture-defining-a-successful-test-automation-strategy-for-long-term-value/"
+    }
+  ],
+  "awards": [
+    {
+      "title": "AVEVA Innovation and Creativity Recognition Award",
+      "awarder": "AVEVA"
+    }
+  ],
+  "meta": {
+    "canonical": "https://guilhermevigneron.dev",
+    "jobTitle": "Principal Software QA Engineer",
+    "shortDescription": "Seasoned Quality Assurance Engineer with over 15 years of experience elevating software quality through innovative testing strategies and automation.",
+    "resumePdf": "/resume.pdf",
+    "resumePdfUrl": "https://guilhermevigneron.dev/resume.pdf",
+    "resumeJsonUrl": "https://guilhermevigneron.dev/resume.json",
+    "qualityReportUrl": "https://guilhermevigneron.dev/quality/",
+    "securityTxtUrl": "https://guilhermevigneron.dev/.well-known/security.txt"
+  }
+}

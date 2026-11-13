@@ -3,20 +3,30 @@
   "version": "1.0.0",
   "description": "Personal portfolio website.",
   "scripts": {
-    "test:html": "html-validate ./_site/index.html",
+    "sync": "node scripts/sync-resume.mjs",
+    "build:css": "tailwindcss -i ./src/styles.css -o ./_site/assets/css/styles.css --minify",
+    "build:pdf": "node scripts/generate-pdf.mjs",
+    "build:quality": "node scripts/generate-quality-report.mjs",
+    "build": "node scripts/build.mjs",
+    "serve": "node scripts/serve.mjs",
+    "test:sync": "node scripts/validate-sync.mjs",
+    "test:html": "node scripts/run-html-validate.mjs",
     "test:security": "npm audit --audit-level=high",
-    "cy:run": "cypress run --browser chrome"
+    "test:smoke:prod": "node scripts/prod-smoke.mjs",
+    "cy:run": "cypress run --browser chrome",
+    "cy:run:chromium": "cypress run --browser chromium"
   },
   "author": "Guilherme Vigneron de Oliveira",
   "license": "ISC",
   "devDependencies": {
-    "@axe-core/cli": "^4.9.1",
-    "cypress": "^13.13.1",
-    "cypress-axe": "^1.6.0",
-    "html-validate": "^10.13.1"
+    "axe-core": "^4.14.0",
+    "cypress": "^15.21.2",
+    "cypress-axe": "^1.7.0",
+    "html-validate": "^11.21.1",
+    "playwright-core": "^1.65.0",
+    "tailwindcss": "^3.4.19"
   },
   "overrides": {
-    "semver": "^7.5.4",
-    "lodash.set": "^4.3.2"
+    "tmp": "^0.2.7"
   }
 }

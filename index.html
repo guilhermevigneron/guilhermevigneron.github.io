@@ -16,7 +16,8 @@
     <meta property="profile:first_name" content="Guilherme">
     <meta property="profile:last_name" content="Vigneron de Oliveira">
 
-    <!-- JSON-LD Structured Data for AI Agents -->
+    <!-- JSON-LD Structured Data for AI Agents (synced from resume.json) -->
+    <!-- JSONLD_START -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -33,7 +34,19 @@
         "@type": "Organization",
         "name": "AVEVA"
       },
-      "knowsAbout": ["Selenium", "C#", "Python", "Azure DevOps", "JMeter", "SQL", "Test Automation Frameworks", "Agile & Scrum", "CI/CD", "Risk-Based Testing", "Performance Testing"],
+      "knowsAbout": [
+        "Selenium",
+        "C#",
+        "Python",
+        "Azure DevOps",
+        "JMeter",
+        "SQL",
+        "Test Automation Frameworks",
+        "Agile & Scrum",
+        "CI/CD",
+        "Risk-Based Testing",
+        "Performance Testing"
+      ],
       "alumniOf": [
         {
           "@type": "EducationalOrganization",
@@ -53,59 +66,69 @@
       "description": "Seasoned Quality Assurance Engineer with over 15 years of experience elevating software quality through innovative testing strategies and automation."
     }
     </script>
+    <!-- JSONLD_END -->
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f8fafc;
-        }
-        .sr-only {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            white-space: nowrap;
-            border-width: 0;
-        }
-    </style>
+    <script>
+      (() => {
+        try {
+          const stored = localStorage.getItem('theme');
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (stored === 'dark' || (!stored && prefersDark)) {
+            document.documentElement.classList.add('dark');
+          }
+        } catch {}
+      })();
+    </script>
+    <link rel="preload" href="/assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/assets/css/styles.css">
+    <script src="/assets/js/theme.js" defer></script>
 </head>
-<body class="text-slate-700">
+<body class="bg-slate-50 text-slate-700 dark:bg-slate-950 dark:text-slate-200">
 
     <!-- Skip to content link for keyboard/screen reader users -->
-    <a href="#about" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:bg-sky-600 focus:text-white focus:px-4 focus:py-2 focus:rounded focus:z-50">Skip to main content</a>
+    <a href="#about" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:bg-sky-700 focus:text-white focus:px-4 focus:py-2 focus:rounded focus:z-50">Skip to main content</a>
 
-    <header class="bg-slate-900 text-white p-8 md:p-12 shadow-lg">
+    <header class="bg-slate-900 text-white p-8 md:p-12 shadow-lg dark:border-b dark:border-slate-800">
         <div class="max-w-4xl mx-auto">
-            <div class="md:flex items-center justify-between">
+            <div class="md:flex items-center justify-between gap-6">
                 <div>
                     <h1 class="text-4xl md:text-5xl font-black tracking-tight">Guilherme Vigneron de Oliveira</h1>
-                    <!-- Changed text-sky-400 to text-sky-300 for better contrast -->
-                    <p class="text-xl md:text-2xl font-light text-sky-300 mt-2">Principal Technologist | QA &amp; Software Testing Expert</p>
+                    <p class="text-xl md:text-2xl font-light text-sky-300 mt-2 print-subtitle">Principal Technologist | QA &amp; Software Testing Expert</p>
+                    <p class="hidden print:block text-xs text-slate-700 mt-2 print-contact">
+                        Austin, TX &bull; guilhermevigneron@gmail.com &bull; https://guilhermevigneron.dev &bull; linkedin.com/in/guilherme-vigneron-de-oliveira &bull; github.com/guilhermevigneron
+                    </p>
                 </div>
-                <nav aria-label="Social links" class="flex space-x-4 mt-6 md:mt-0">
-                    <!-- Added rel="noopener noreferrer" and updated aria-label for new tab context -->
-                    <a href="https://www.linkedin.com/in/guilherme-vigneron-de-oliveira" target="_blank" rel="noopener noreferrer" class="text-slate-200 hover:text-sky-400 transition-colors duration-300" aria-label="LinkedIn Profile (opens in a new tab)" tabindex="0">
-                        <i class="fab fa-linkedin fa-2x" aria-hidden="true"></i>
-                        <span class="sr-only">LinkedIn</span>
-                    </a>
-                    <a href="https://github.com/guilhermevigneron" target="_blank" rel="noopener noreferrer" class="text-slate-200 hover:text-sky-400 transition-colors duration-300" aria-label="GitHub Profile (opens in a new tab)" tabindex="0">
-                        <i class="fab fa-github fa-2x" aria-hidden="true"></i>
-                        <span class="sr-only">GitHub</span>
-                    </a>
-                    <!-- Email link does not open in new tab, so no rel or special aria-label needed -->
-                    <a href="mailto:guilhermevigneron@gmail.com" class="text-slate-200 hover:text-sky-400 transition-colors duration-300" aria-label="Email" tabindex="0">
-                        <i class="fas fa-envelope fa-2x" aria-hidden="true"></i>
-                        <span class="sr-only">Email</span>
-                    </a>
-                </nav>
+                <div class="flex items-center space-x-4 mt-6 md:mt-0 no-print">
+                    <nav aria-label="Social links" class="flex items-center space-x-4">
+                        <a href="https://www.linkedin.com/in/guilherme-vigneron-de-oliveira" target="_blank" rel="noopener noreferrer" class="text-slate-200 hover:text-sky-300 transition-colors duration-300" aria-label="LinkedIn Profile (opens in a new tab)">
+                            <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/>
+                            </svg>
+                            <span class="sr-only">LinkedIn</span>
+                        </a>
+                        <a href="https://github.com/guilhermevigneron" target="_blank" rel="noopener noreferrer" class="text-slate-200 hover:text-sky-300 transition-colors duration-300" aria-label="GitHub Profile (opens in a new tab)">
+                            <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+                            </svg>
+                            <span class="sr-only">GitHub</span>
+                        </a>
+                        <a href="mailto:guilhermevigneron@gmail.com" class="text-slate-200 hover:text-sky-300 transition-colors duration-300" aria-label="Email">
+                            <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/>
+                            </svg>
+                            <span class="sr-only">Email</span>
+                        </a>
+                    </nav>
+                    <button id="theme-toggle" type="button" class="inline-flex items-center justify-center p-2 rounded-lg bg-slate-800 text-slate-100 border border-slate-700 hover:bg-slate-700 hover:text-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-400 transition-colors duration-200" aria-label="Switch to dark theme" aria-pressed="false">
+                        <svg class="w-5 h-5 hidden dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <circle cx="12" cy="12" r="4"/>
+                            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+                        </svg>
+                        <svg class="w-5 h-5 block dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
         </div>
     </header>
@@ -113,29 +136,31 @@
     <main class="max-w-4xl mx-auto p-8">
 
         <section id="about" class="mb-16">
-            <h2 class="text-3xl font-bold text-slate-800 mb-4 relative">About Me</h2>
-            <div class="w-16 h-1 bg-sky-500 mt-2 mb-8"></div>
+            <h2 class="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-4 relative">About Me</h2>
+            <div class="w-16 h-1 bg-sky-500 mt-2 mb-8 section-accent"></div>
             <p class="text-lg leading-relaxed">
                 As a seasoned Quality Assurance Engineer with over 15 years of experience, I elevate software quality through innovative testing strategies and automation. My relentless pursuit of excellence, global collaboration, and attention to detail ensure every project achieves the highest standards. I am passionate about advancing quality assurance and eager to bring my innovative strategies to a forward-thinking team.
             </p>
-            <p class="mt-8">
-                <!-- Added rel="noopener noreferrer" and updated aria-label for new tab context -->
-                <a href="https://drive.google.com/uc?export=download&id=16xF8xtRpPthAxZRMroI8hDxqE2boCbK6" target="_blank" rel="noopener noreferrer" class="inline-block bg-sky-600 text-white px-6 py-3 rounded-lg shadow-md hover:bg-sky-700 transition-colors duration-300 text-center" aria-label="Download My Resume (opens in a new tab)">
-                    Download My Resume
+            <p class="mt-8 no-print">
+                <a href="/resume.pdf" class="inline-flex items-center gap-2 bg-sky-700 text-white font-medium px-6 py-3 rounded-lg shadow-md hover:bg-sky-800 dark:bg-sky-400 dark:text-slate-950 dark:hover:bg-sky-300 dark:font-semibold text-center" aria-label="Download My Resume (PDF)">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+                    </svg>
+                    <span>Download My Resume</span>
                 </a>
             </p>
         </section>
 
         <section id="experience" class="mb-16">
-            <h2 class="text-3xl font-bold text-slate-800 mb-4 relative">Professional Experience</h2>
-            <div class="w-16 h-1 bg-sky-500 mt-2 mb-8"></div>
-            <div class="relative border-l-2 border-slate-200 pl-8 space-y-12">
+            <h2 class="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-4 relative">Professional Experience</h2>
+            <div class="w-16 h-1 bg-sky-500 mt-2 mb-8 section-accent"></div>
+            <div class="relative border-l-2 border-slate-200 dark:border-slate-700 pl-8 space-y-12 timeline-list">
 
                 <div class="relative">
-                    <div class="absolute -left-[39px] top-1.5 w-5 h-5 bg-white rounded-full border-4 border-sky-500" aria-hidden="true"></div>
-                    <h3 class="text-xl font-bold text-slate-800">Principal Software QA Engineer</h3>
-                    <p class="font-semibold text-sky-800">AVEVA</p>
-                    <p class="text-sm text-slate-500 mb-2">Nov 2023 - Present | Austin, TX</p>
+                    <div class="absolute -left-[39px] top-1.5 w-5 h-5 bg-white dark:bg-slate-950 rounded-full border-4 border-sky-500 dark:border-sky-400 timeline-dot" aria-hidden="true"></div>
+                    <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100">Principal Software QA Engineer</h3>
+                    <p class="font-semibold text-sky-800 dark:text-sky-300 print-company">AVEVA</p>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 mb-2 print-meta">Nov 2023 - Present | Austin, TX</p>
                     <ul class="list-disc list-inside space-y-2">
                         <li>Led the development and implementation of comprehensive test strategies, achieving significant increases in test coverage and reductions in defects.</li>
                         <li>Designed and implemented robust test automation frameworks using Selenium and C#, enhancing maintainability and efficiency.</li>
@@ -146,10 +171,10 @@
                 </div>
 
                 <div class="relative">
-                    <div class="absolute -left-[39px] top-1.5 w-5 h-5 bg-white rounded-full border-4 border-sky-500" aria-hidden="true"></div>
-                    <h3 class="text-xl font-bold text-slate-800">Senior QA Engineer</h3>
-                    <p class="font-semibold text-sky-800">AVEVA</p>
-                    <p class="text-sm text-slate-500 mb-2">Sep 2018 - Aug 2024 | São Paulo, Brazil</p>
+                    <div class="absolute -left-[39px] top-1.5 w-5 h-5 bg-white dark:bg-slate-950 rounded-full border-4 border-sky-500 dark:border-sky-400 timeline-dot" aria-hidden="true"></div>
+                    <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100">Senior QA Engineer</h3>
+                    <p class="font-semibold text-sky-800 dark:text-sky-300 print-company">AVEVA</p>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 mb-2 print-meta">Sep 2018 - Aug 2024 | São Paulo, Brazil</p>
                     <ul class="list-disc list-inside space-y-2">
                         <li>Headed the development of test strategies, increasing test coverage and reducing defects.</li>
                         <li>Designed a robust Page Object Model test framework using Selenium and C#.</li>
@@ -159,10 +184,10 @@
                 </div>
 
                 <div class="relative">
-                    <div class="absolute -left-[39px] top-1.5 w-5 h-5 bg-white rounded-full border-4 border-sky-500" aria-hidden="true"></div>
-                    <h3 class="text-xl font-bold text-slate-800">Quality and Test Analyst</h3>
-                    <p class="font-semibold text-sky-800">AVEVA</p>
-                    <p class="text-sm text-slate-500 mb-2">Oct 2008 - Sep 2018 | São Paulo, Brazil</p>
+                    <div class="absolute -left-[39px] top-1.5 w-5 h-5 bg-white dark:bg-slate-950 rounded-full border-4 border-sky-500 dark:border-sky-400 timeline-dot" aria-hidden="true"></div>
+                    <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100">Quality and Test Analyst</h3>
+                    <p class="font-semibold text-sky-800 dark:text-sky-300 print-company">AVEVA</p>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 mb-2 print-meta">Oct 2008 - Sep 2018 | São Paulo, Brazil</p>
                     <ul class="list-disc list-inside space-y-2">
                         <li>Led the implementation of a risk-based testing approach, prioritizing test cases based on business impact.</li>
                         <li>Pioneered the implementation of new test automation tools.</li>
@@ -174,61 +199,68 @@
         </section>
 
         <section id="skills" class="mb-16">
-            <h2 class="text-3xl font-bold text-slate-800 mb-4 relative">Core Competencies</h2>
-            <div class="w-16 h-1 bg-sky-500 mt-2 mb-8"></div>
+            <h2 class="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-4 relative">Core Competencies</h2>
+            <div class="w-16 h-1 bg-sky-500 mt-2 mb-8 section-accent"></div>
             <div class="flex flex-wrap gap-3">
-                <span class="bg-sky-100 text-sky-800 text-md font-medium px-4 py-2 rounded-full">Selenium</span>
-                <span class="bg-sky-100 text-sky-800 text-md font-medium px-4 py-2 rounded-full">C#</span>
-                <span class="bg-sky-100 text-sky-800 text-md font-medium px-4 py-2 rounded-full">Python</span>
-                <span class="bg-sky-100 text-sky-800 text-md font-medium px-4 py-2 rounded-full">Azure DevOps</span>
-                <span class="bg-sky-100 text-sky-800 text-md font-medium px-4 py-2 rounded-full">JMeter</span>
-                <span class="bg-sky-100 text-sky-800 text-md font-medium px-4 py-2 rounded-full">SQL</span>
-                <span class="bg-sky-100 text-sky-800 text-md font-medium px-4 py-2 rounded-full">Test Automation Frameworks</span>
-                <span class="bg-sky-100 text-sky-800 text-md font-medium px-4 py-2 rounded-full">Agile &amp; Scrum</span>
-                <span class="bg-sky-100 text-sky-800 text-md font-medium px-4 py-2 rounded-full">CI/CD</span>
-                <span class="bg-sky-100 text-sky-800 text-md font-medium px-4 py-2 rounded-full">Risk-Based Testing</span>
-                <span class="bg-sky-100 text-sky-800 text-md font-medium px-4 py-2 rounded-full">Performance Testing</span>
+                <span class="bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200 dark:border dark:border-sky-800 text-base font-medium px-4 py-2 rounded-full skill-badge">Selenium</span>
+                <span class="bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200 dark:border dark:border-sky-800 text-base font-medium px-4 py-2 rounded-full skill-badge">C#</span>
+                <span class="bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200 dark:border dark:border-sky-800 text-base font-medium px-4 py-2 rounded-full skill-badge">Python</span>
+                <span class="bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200 dark:border dark:border-sky-800 text-base font-medium px-4 py-2 rounded-full skill-badge">Azure DevOps</span>
+                <span class="bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200 dark:border dark:border-sky-800 text-base font-medium px-4 py-2 rounded-full skill-badge">JMeter</span>
+                <span class="bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200 dark:border dark:border-sky-800 text-base font-medium px-4 py-2 rounded-full skill-badge">SQL</span>
+                <span class="bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200 dark:border dark:border-sky-800 text-base font-medium px-4 py-2 rounded-full skill-badge">Test Automation Frameworks</span>
+                <span class="bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200 dark:border dark:border-sky-800 text-base font-medium px-4 py-2 rounded-full skill-badge">Agile &amp; Scrum</span>
+                <span class="bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200 dark:border dark:border-sky-800 text-base font-medium px-4 py-2 rounded-full skill-badge">CI/CD</span>
+                <span class="bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200 dark:border dark:border-sky-800 text-base font-medium px-4 py-2 rounded-full skill-badge">Risk-Based Testing</span>
+                <span class="bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200 dark:border dark:border-sky-800 text-base font-medium px-4 py-2 rounded-full skill-badge">Performance Testing</span>
             </div>
         </section>
 
         <section id="publications" class="mb-16">
-            <h2 class="text-3xl font-bold text-slate-800 mb-4 relative">Publications &amp; Awards</h2>
-            <div class="w-16 h-1 bg-sky-500 mt-2 mb-8"></div>
+            <h2 class="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-4 relative">Publications &amp; Awards</h2>
+            <div class="w-16 h-1 bg-sky-500 mt-2 mb-8 section-accent"></div>
             <div class="space-y-4">
-                <div class="bg-white p-4 rounded-lg shadow-sm">
-                    <h3 class="font-bold text-slate-800"><a href="https://www.stickyminds.com/article/hidden-costs-flaky-tests-deep-dive-test-reliability" target="_blank" rel="noopener noreferrer" class="text-slate-800 hover:text-sky-600 transition-colors duration-300">The Hidden Costs of Flaky Tests: A Deep Dive into Test Reliability</a></h3>
-                    <p class="text-sm">Publication</p>
+                <div class="bg-white dark:bg-slate-900 dark:border dark:border-slate-800 p-4 rounded-lg shadow-sm print-card">
+                    <h3 class="font-bold text-slate-800 dark:text-slate-100"><a href="https://www.stickyminds.com/article/hidden-costs-flaky-tests-deep-dive-test-reliability" target="_blank" rel="noopener noreferrer" class="text-slate-800 dark:text-slate-100 hover:text-sky-700 dark:hover:text-sky-300">The Hidden Costs of Flaky Tests: A Deep Dive into Test Reliability</a></h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-400">Publication</p>
                 </div>
-                <div class="bg-white p-4 rounded-lg shadow-sm">
-                    <h3 class="font-bold text-slate-800"><a href="https://www.softwaretestingmagazine.com/knowledge/the-big-picture-defining-a-successful-test-automation-strategy-for-long-term-value/" target="_blank" rel="noopener noreferrer" class="text-slate-800 hover:text-sky-600 transition-colors duration-300">The Big Picture: Defining a Successful Test Automation Strategy</a></h3>
-                    <p class="text-sm">Publication</p>
+                <div class="bg-white dark:bg-slate-900 dark:border dark:border-slate-800 p-4 rounded-lg shadow-sm print-card">
+                    <h3 class="font-bold text-slate-800 dark:text-slate-100"><a href="https://www.softwaretestingmagazine.com/knowledge/the-big-picture-defining-a-successful-test-automation-strategy-for-long-term-value/" target="_blank" rel="noopener noreferrer" class="text-slate-800 dark:text-slate-100 hover:text-sky-700 dark:hover:text-sky-300">The Big Picture: Defining a Successful Test Automation Strategy</a></h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-400">Publication</p>
                 </div>
-                <div class="bg-white p-4 rounded-lg shadow-sm">
-                    <h3 class="font-bold text-slate-800">AVEVA Innovation and Creativity Recognition Award</h3>
-                    <p class="text-sm">Award</p>
+                <div class="bg-white dark:bg-slate-900 dark:border dark:border-slate-800 p-4 rounded-lg shadow-sm print-card">
+                    <h3 class="font-bold text-slate-800 dark:text-slate-100">AVEVA Innovation and Creativity Recognition Award</h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-400">Award</p>
                 </div>
             </div>
         </section>
 
         <section id="education">
-            <h2 class="text-3xl font-bold text-slate-800 mb-4 relative">Education</h2>
-            <div class="w-16 h-1 bg-sky-500 mt-2 mb-8"></div>
+            <h2 class="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-4 relative">Education</h2>
+            <div class="w-16 h-1 bg-sky-500 mt-2 mb-8 section-accent"></div>
             <div class="space-y-4">
-                <div class="bg-white p-4 rounded-lg shadow-sm">
-                    <h3 class="font-bold text-slate-800">Post-Graduation, Software Engineering (SOA)</h3>
-                    <p class="text-sm text-slate-500">Grupo Veris Educacional - IBTA | 2010 - 2011</p>
+                <div class="bg-white dark:bg-slate-900 dark:border dark:border-slate-800 p-4 rounded-lg shadow-sm print-card">
+                    <h3 class="font-bold text-slate-800 dark:text-slate-100">Post-Graduation, Software Engineering (SOA)</h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-400">Grupo Veris Educacional - IBTA | 2010 - 2011</p>
                 </div>
-                <div class="bg-white p-4 rounded-lg shadow-sm">
-                    <h3 class="font-bold text-slate-800">B.S., Computing</h3>
-                    <p class="text-sm text-slate-500">Universidade Estadual de Campinas | 2005 - 2009</p>
+                <div class="bg-white dark:bg-slate-900 dark:border dark:border-slate-800 p-4 rounded-lg shadow-sm print-card">
+                    <h3 class="font-bold text-slate-800 dark:text-slate-100">B.S., Computing</h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-400">Universidade Estadual de Campinas | 2005 - 2009</p>
                 </div>
             </div>
         </section>
 
     </main>
 
-    <footer class="text-center p-6 bg-slate-100 mt-12">
-        <p class="text-slate-700">© 2026 Guilherme Vigneron de Oliveira. Built with Tailwind CSS.</p>
+    <footer class="text-center p-6 bg-slate-100 dark:bg-slate-900 dark:border-t dark:border-slate-800 mt-12">
+        <p class="text-slate-700 dark:text-slate-300">&copy; 2026 Guilherme Vigneron de Oliveira. Built with Tailwind CSS.</p>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mt-2">
+            <a href="/quality/" class="underline hover:text-sky-700 dark:hover:text-sky-300">Live Quality &amp; Verification Report</a>
+            &middot;
+            <a href="/resume.json" class="underline hover:text-sky-700 dark:hover:text-sky-300">JSON Resume</a>
+            &middot;
+            <a href="/llms.txt" class="underline hover:text-sky-700 dark:hover:text-sky-300">llms.txt</a>
+        </p>
     </footer>
 
 </body>

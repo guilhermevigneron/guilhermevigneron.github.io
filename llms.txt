@@ -3,9 +3,9 @@
 > This is the personal portfolio of Guilherme Vigneron de Oliveira, a Principal Software QA Engineer with 15+ years of experience.
 
 ## About
-- Principal Software QA Engineer at AVEVA (Nov 2023 – Present), Austin, TX
-- Senior QA Engineer at AVEVA (Sep 2018 – Aug 2024), São Paulo, Brazil
-- Quality and Test Analyst at AVEVA (Oct 2008 – Sep 2018), São Paulo, Brazil
+- Principal Software QA Engineer at AVEVA (Nov 2023 - Present), Austin, TX
+- Senior QA Engineer at AVEVA (Sep 2018 - Aug 2024), São Paulo, Brazil
+- Quality and Test Analyst at AVEVA (Oct 2008 - Sep 2018), São Paulo, Brazil
 
 ## Core Skills
 Selenium, C#, Python, Azure DevOps, JMeter, SQL, Test Automation Frameworks, Agile & Scrum, CI/CD, Risk-Based Testing, Performance Testing
@@ -20,6 +20,12 @@ Selenium, C#, Python, Azure DevOps, JMeter, SQL, Test Automation Frameworks, Agi
 
 ## Awards
 - AVEVA Innovation and Creativity Recognition Award
+
+## Machine-Readable & Verification Endpoints
+- Resume PDF: https://guilhermevigneron.dev/resume.pdf
+- JSON Resume: https://guilhermevigneron.dev/resume.json
+- Quality Report: https://guilhermevigneron.dev/quality/
+- Security Policy: https://guilhermevigneron.dev/.well-known/security.txt
 
 ## Contact
 - Email: guilhermevigneron@gmail.com

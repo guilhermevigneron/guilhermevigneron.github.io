@@ -5,9 +5,23 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  schedule:
+    # Weekly production smoke & external link rot check (Mondays 09:00 UTC)
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
-  test:
+  build_and_test:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
 
     steps:
@@ -18,36 +32,80 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      
+          cache: npm
+
       - name: Install dependencies
         run: npm ci
 
       - name: Security Audit
         run: npm run test:security
 
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.0'
+      - name: Build static site, Tailwind CSS & /resume.pdf
+        run: npm run build
 
-      - name: Install Jekyll
-        run: gem install jekyll bundler
-      
-      - name: Build Jekyll site for validation
-        run: jekyll build
-      
-      - name: HTML Validation
+      - name: HTML5 Validation
         run: npm run test:html
 
-      - name: Link Checker
-        uses: lycheeverse/lychee-action@v1
+      - name: Link Checker (built site)
+        id: lychee
+        uses: lycheeverse/lychee-action@v2
         with:
-          args: "./_site/**/*.html"
+          args: --root-dir ${{ github.workspace }}/_site --exclude '^https://guilhermevigneron\.dev/quality/$' --no-progress ./_site/**/*.html
 
-      - name: Run All Browser-Based Tests with Cypress
+      - name: Run Browser E2E & Accessibility Tests (Cypress)
         uses: cypress-io/github-action@v6
         with:
-          build: jekyll build
-          start: jekyll serve
-          wait-on: 'http://localhost:4000'
+          install: false
+          start: npm run serve
+          wait-on: 'http://127.0.0.1:4000'
           browser: chrome
+
+      - name: Publish CI Telemetry to /quality Report
+        env:
+          LYCHEE_STATUS: ${{ steps.lychee.outcome }}
+        run: |
+          npm run build:quality
+          npm run test:html
+
+      - name: Upload GitHub Pages artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build_and_test
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  production_smoke_tests:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Production Endpoint & Security Smoke Tests
+        run: npm run test:smoke:prod
+
+      - name: Production Link Checker (guilhermevigneron.dev)
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --no-progress https://guilhermevigneron.dev https://guilhermevigneron.dev/quality/

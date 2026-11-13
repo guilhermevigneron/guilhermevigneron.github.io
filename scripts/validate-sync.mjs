@@ -1,0 +1,156 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+
+const ROOT = process.cwd();
+const resume = JSON.parse(fs.readFileSync(path.join(ROOT, 'resume.json'), 'utf8'));
+const indexHtml = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+const llmsTxt = fs.readFileSync(path.join(ROOT, 'llms.txt'), 'utf8');
+
+function decodeHtmlEntities(text) {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+const decodedIndex = decodeHtmlEntities(indexHtml);
+const checks = [];
+
+function check(name, fn) {
+  try {
+    fn();
+    checks.push({ name, passed: true });
+  } catch (err) {
+    checks.push({ name, passed: false, error: err.message });
+    throw err;
+  }
+}
+
+check('JSON Resume schema fields exist', () => {
+  assert.ok(resume.basics?.name, 'basics.name missing');
+  assert.ok(resume.basics?.email, 'basics.email missing');
+  assert.ok(resume.basics?.url, 'basics.url missing');
+  assert.ok(Array.isArray(resume.work) && resume.work.length >= 3, 'work entries missing');
+  assert.ok(Array.isArray(resume.education) && resume.education.length >= 2, 'education entries missing');
+  assert.ok(Array.isArray(resume.skills) && resume.skills.length >= 10, 'skills entries missing');
+  assert.ok(Array.isArray(resume.publications) && resume.publications.length >= 2, 'publications missing');
+  assert.ok(Array.isArray(resume.awards) && resume.awards.length >= 1, 'awards missing');
+  assert.equal(resume.meta?.resumePdf, '/resume.pdf');
+});
+
+check('index.html JSON-LD matches resume.json', () => {
+  const match = indexHtml.match(
+    /<script type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/
+  );
+  assert.ok(match, 'JSON-LD script block missing from index.html');
+  const jsonLd = JSON.parse(match[1]);
+  assert.equal(jsonLd['@type'], 'Person');
+  assert.equal(jsonLd.name, resume.basics.name);
+  assert.equal(jsonLd.jobTitle, resume.meta.jobTitle);
+  assert.equal(jsonLd.url, resume.basics.url);
+  assert.equal(jsonLd.email, resume.basics.email);
+  assert.deepEqual(
+    jsonLd.sameAs,
+    resume.basics.profiles.map((p) => p.url)
+  );
+  assert.equal(jsonLd.worksFor?.name, resume.work[0].name);
+  assert.deepEqual(
+    jsonLd.knowsAbout,
+    resume.skills.map((s) => s.name)
+  );
+  assert.equal(jsonLd.address?.addressLocality, resume.basics.location.city);
+  assert.equal(jsonLd.address?.addressRegion, resume.basics.location.region);
+  assert.equal(jsonLd.address?.addressCountry, resume.basics.location.countryCode);
+  assert.equal(jsonLd.description, resume.meta.shortDescription);
+  for (const edu of resume.education) {
+    assert.ok(
+      jsonLd.alumniOf.some((a) => a.name === edu.institution),
+      `Missing alumniOf: ${edu.institution}`
+    );
+  }
+});
+
+check('index.html DOM content matches resume.json with zero external CDNs', () => {
+  assert.ok(decodedIndex.includes(resume.basics.name));
+  assert.ok(decodedIndex.includes(resume.basics.label));
+  assert.ok(decodedIndex.includes(resume.basics.email));
+  assert.ok(decodedIndex.includes(resume.basics.summary));
+  assert.ok(decodedIndex.includes('href="/resume.pdf"'));
+  assert.ok(decodedIndex.includes('href="/quality/"'));
+  assert.ok(!decodedIndex.includes('drive.google.com'), 'External Google Drive link still present');
+  assert.ok(!decodedIndex.includes('cdn.tailwindcss.com'), 'Tailwind CDN still present');
+  assert.ok(!decodedIndex.includes('cdnjs.cloudflare.com'), 'Font Awesome CDN still present');
+  assert.ok(!decodedIndex.includes('fonts.googleapis.com'), 'Google Fonts still present');
+
+  for (const profile of resume.basics.profiles) {
+    assert.ok(decodedIndex.includes(profile.url), `Missing profile URL: ${profile.url}`);
+  }
+  for (const job of resume.work) {
+    assert.ok(decodedIndex.includes(job.position), `Missing position: ${job.position}`);
+    assert.ok(decodedIndex.includes(job.name), `Missing company: ${job.name}`);
+    assert.ok(decodedIndex.includes(job.displayDate), `Missing displayDate: ${job.displayDate}`);
+    assert.ok(decodedIndex.includes(job.location), `Missing location: ${job.location}`);
+    for (const highlight of job.highlights) {
+      assert.ok(decodedIndex.includes(highlight), `Missing highlight: ${highlight}`);
+    }
+  }
+  for (const skill of resume.skills) {
+    assert.ok(decodedIndex.includes(skill.name), `Missing skill: ${skill.name}`);
+  }
+  for (const pub of resume.publications) {
+    assert.ok(decodedIndex.includes(pub.name), `Missing publication: ${pub.name}`);
+    assert.ok(decodedIndex.includes(pub.url), `Missing publication URL: ${pub.url}`);
+  }
+  for (const award of resume.awards) {
+    assert.ok(decodedIndex.includes(award.title), `Missing award: ${award.title}`);
+  }
+  for (const edu of resume.education) {
+    assert.ok(decodedIndex.includes(edu.institution), `Missing institution: ${edu.institution}`);
+    assert.ok(decodedIndex.includes(edu.area), `Missing area: ${edu.area}`);
+  }
+});
+
+check('llms.txt matches resume.json and links self-hosted endpoints', () => {
+  assert.ok(llmsTxt.includes(resume.basics.name));
+  assert.ok(llmsTxt.includes(resume.basics.email));
+  assert.ok(llmsTxt.includes(resume.meta.resumePdfUrl));
+  assert.ok(llmsTxt.includes(resume.meta.resumeJsonUrl));
+  assert.ok(llmsTxt.includes(resume.meta.qualityReportUrl));
+  assert.ok(!llmsTxt.includes('drive.google.com'), 'External Google Drive link in llms.txt');
+
+  for (const job of resume.work) {
+    assert.ok(llmsTxt.includes(job.position));
+    assert.ok(llmsTxt.includes(job.location));
+  }
+  for (const skill of resume.skills) {
+    assert.ok(llmsTxt.includes(skill.name));
+  }
+  for (const pub of resume.publications) {
+    assert.ok(llmsTxt.includes(pub.url));
+  }
+  for (const edu of resume.education) {
+    assert.ok(llmsTxt.includes(edu.institution));
+  }
+  for (const award of resume.awards) {
+    assert.ok(llmsTxt.includes(award.title));
+  }
+});
+
+fs.mkdirSync(path.join(ROOT, '.ci-reports'), { recursive: true });
+fs.writeFileSync(
+  path.join(ROOT, '.ci-reports', 'sync-validation.json'),
+  JSON.stringify(
+    {
+      passed: checks.every((c) => c.passed),
+      timestamp: new Date().toISOString(),
+      checks,
+    },
+    null,
+    2
+  )
+);
+
+console.log(`Sync validation passed (${checks.length}/${checks.length} checks).`);

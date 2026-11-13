@@ -2,6 +2,7 @@
 /node_modules
 
 # Build output
+/_site
 /dist
 /build
 
@@ -11,6 +12,7 @@ yarn-debug.log*
 pnpm-debug.log*
 
 # Test reports and artifacts
+/.ci-reports/
 /cypress/videos/
 /cypress/screenshots/
 
