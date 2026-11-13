@@ -26,6 +26,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://guilhermevigneron.dev/architecture/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://guilhermevigneron.dev/quality/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>

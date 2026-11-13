@@ -494,6 +494,7 @@ export function buildSitemapXml(data) {
     { loc: `${base}/resume.json`, changefreq: 'monthly', priority: '0.8' },
     { loc: `${base}/llms.txt`, changefreq: 'monthly', priority: '0.8' },
     { loc: `${base}/contact.vcf`, changefreq: 'monthly', priority: '0.6' },
+    { loc: `${base}/architecture/`, changefreq: 'monthly', priority: '0.6' },
     { loc: `${base}/quality/`, changefreq: 'weekly', priority: '0.6' },
     { loc: `${base}/quality/report.json`, changefreq: 'weekly', priority: '0.5' },
   ];

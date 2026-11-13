@@ -153,6 +153,7 @@
           ['GitHub', GH_URL.slice(8), `>${GH_URL}`, 'profile'],
           ['LinkedIn', LI_URL.slice(12), `>${LI_URL}`, 'profile'],
           ['Email', EMAIL, `mailto:${EMAIL}`],
+          ['Architecture Overview', '/architecture/', '/architecture/', 'diagram pipeline'],
           ['Live Quality Report', '/quality/', '/quality/', 'verification ci'],
           ['Quality Telemetry (JSON)', '/quality/report.json', '/quality/report.json', 'api'],
           ['JSON Resume', '/resume.json', '/resume.json', 'schema'],

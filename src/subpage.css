@@ -281,3 +281,91 @@ html.dark {
   color: var(--ink);
   text-decoration: underline;
 }
+
+.arch-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+@media (min-width: 768px) {
+  .arch-flow {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+}
+
+.arch-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 1rem;
+  background-color: var(--bg);
+}
+
+.arch-stage--source {
+  background-color: var(--wash);
+}
+
+.arch-stage--source .arch-step {
+  color: var(--body);
+}
+
+.arch-step {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--faint);
+}
+
+.arch-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.arch-desc {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--body);
+}
+
+.arch-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+}
+
+.arch-chip {
+  font-size: 0.75rem;
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0.375rem 0.5rem;
+  background-color: var(--bg);
+}
+
+.arch-chip span {
+  color: var(--faint);
+}
+
+.arch-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--faint);
+}
+
+.arch-arrow svg {
+  transform: rotate(90deg);
+}
+
+@media (min-width: 768px) {
+  .arch-arrow svg {
+    transform: none;
+  }
+}
+

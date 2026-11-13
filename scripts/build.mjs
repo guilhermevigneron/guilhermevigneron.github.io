@@ -198,4 +198,7 @@ runNodeScript('scripts/generate-og-card.mjs');
 console.log('7. Generating initial /quality/index.html & /quality/report.json...');
 runNodeScript('scripts/generate-quality-report.mjs');
 
+console.log('8. Generating /architecture/index.html...');
+runNodeScript('scripts/generate-architecture.mjs');
+
 console.log('Build complete: _site/ ready.');

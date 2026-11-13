@@ -53,7 +53,7 @@ function logAxeViolations(violations) {
 }
 
 describe('Zero Third-Party Dependencies & Local-First Assets', () => {
-  ['/', '/404.html', '/quality/'].forEach((route) => {
+  ['/', '/404.html', '/quality/', '/architecture/'].forEach((route) => {
     it(`loads ${route} with zero outgoing requests to external third-party domains`, () => {
       const externalRequests = [];
 
@@ -300,7 +300,7 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
   });
 
   it('enforces explicit dimensions and compact rendered sizes on all SVG icons', () => {
-    ['/', '/404.html', '/quality/'].forEach((route) => {
+    ['/', '/404.html', '/quality/', '/architecture/'].forEach((route) => {
       cy.visit(route, { failOnStatusCode: route !== '/404.html' });
       cy.get('link[rel="stylesheet"][href*="/assets/css/styles."]')
         .should('have.attr', 'href')
@@ -813,6 +813,10 @@ describe('WCAG 2.1 AA Accessibility Matrix (Light/Dark & Mobile/Desktop)', () =>
     { route: '/quality/', viewport: [1280, 800], theme: 'dark', label: 'quality-desktop-dark' },
     { route: '/quality/', viewport: [375, 667], theme: 'light', label: 'quality-mobile-light' },
     { route: '/quality/', viewport: [375, 667], theme: 'dark', label: 'quality-mobile-dark' },
+    { route: '/architecture/', viewport: [1280, 800], theme: 'light', label: 'architecture-desktop-light' },
+    { route: '/architecture/', viewport: [1280, 800], theme: 'dark', label: 'architecture-desktop-dark' },
+    { route: '/architecture/', viewport: [375, 667], theme: 'light', label: 'architecture-mobile-light' },
+    { route: '/architecture/', viewport: [375, 667], theme: 'dark', label: 'architecture-mobile-dark' },
   ];
 
   matrix.forEach(({ route, viewport, theme, label }) => {

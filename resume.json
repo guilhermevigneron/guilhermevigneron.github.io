@@ -115,6 +115,10 @@
       "url": "https://github.com/guilhermevigneron/guilhermevigneron.github.io",
       "links": [
         {
+          "label": "Architecture",
+          "url": "/architecture/"
+        },
+        {
           "label": "Live Quality Report",
           "url": "/quality/"
         }
