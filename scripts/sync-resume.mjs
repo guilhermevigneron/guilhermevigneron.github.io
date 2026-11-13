@@ -28,6 +28,7 @@ function buildJsonLd(data) {
     name: data.basics.name,
     jobTitle: data.meta.jobTitle,
     url: data.basics.url,
+    image: `${data.basics.url}/assets/avatar.jpg`,
     email: data.basics.email,
     sameAs: data.basics.profiles.map((p) => p.url),
     worksFor: {
@@ -47,9 +48,10 @@ function buildJsonLd(data) {
 }
 
 function buildLlmsTxt(data) {
-  const workLines = data.work.map(
-    (job) => `- ${job.position} at ${job.name} (${job.displayDate}), ${job.location}`
-  );
+  const workLines = data.work.flatMap((job) => [
+    `- ${job.position} at ${job.name} (${job.displayDate}), ${job.location}`,
+    ...(job.highlights || []).map((h) => `  - ${h}`),
+  ]);
   const skillsLine = data.skills.map((s) => s.name).join(', ');
   const educationLines = data.education.map(
     (edu) =>
@@ -68,7 +70,10 @@ function buildLlmsTxt(data) {
     '',
     `> This is the personal portfolio of ${data.basics.name}, a ${data.meta.jobTitle} with 15+ years of experience.`,
     '',
-    '## About',
+    '## Summary',
+    data.basics.summary,
+    '',
+    '## Experience',
     ...workLines,
     '',
     '## Core Skills',

@@ -2,10 +2,26 @@
 
 > This is the personal portfolio of Guilherme Vigneron de Oliveira, a Principal Software QA Engineer with 15+ years of experience.
 
-## About
+## Summary
+As a seasoned Quality Assurance Engineer with over 15 years of experience, I elevate software quality through innovative testing strategies and automation. My relentless pursuit of excellence, global collaboration, and attention to detail ensure every project achieves the highest standards. I am passionate about advancing quality assurance and eager to bring my innovative strategies to a forward-thinking team.
+
+## Experience
 - Principal Software QA Engineer at AVEVA (Nov 2023 - Present), Austin, TX
+  - Led the development and implementation of comprehensive test strategies, achieving significant increases in test coverage and reductions in defects.
+  - Designed and implemented robust test automation frameworks using Selenium and C#, enhancing maintainability and efficiency.
+  - Orchestrated automated and manual testing processes using Azure DevOps, improving deployment reliability.
+  - Conducted critical performance testing with JMeter to optimize software performance.
+  - Led cross-functional teams as a Scrum Master, fostering collaboration and driving increases in sprint velocity.
 - Senior QA Engineer at AVEVA (Sep 2018 - Aug 2024), São Paulo, Brazil
+  - Headed the development of test strategies, increasing test coverage and reducing defects.
+  - Designed a robust Page Object Model test framework using Selenium and C#.
+  - Orchestrated testing processes using Azure DevOps release pipelines.
+  - Mentored junior QA engineers, improving team productivity and knowledge sharing.
 - Quality and Test Analyst at AVEVA (Oct 2008 - Sep 2018), São Paulo, Brazil
+  - Led the implementation of a risk-based testing approach, prioritizing test cases based on business impact.
+  - Pioneered the implementation of new test automation tools.
+  - Collaborated with cross-functional teams to optimize the software development lifecycle.
+  - Developed and delivered comprehensive training programs on testing techniques for QA analysts.
 
 ## Core Skills
 Selenium, C#, Python, Azure DevOps, JMeter, SQL, Test Automation Frameworks, Agile & Scrum, CI/CD, Risk-Based Testing, Performance Testing
@@ -28,7 +44,7 @@ Selenium, C#, Python, Azure DevOps, JMeter, SQL, Test Automation Frameworks, Agi
 - Security Policy: https://guilhermevigneron.dev/.well-known/security.txt
 
 ## Contact
-- Email: guilhermevigneron@gmail.com
+- Email: email@gvo.simplelogin.com
 - LinkedIn: https://www.linkedin.com/in/guilherme-vigneron-de-oliveira
 - GitHub: https://github.com/guilhermevigneron
 - Website: https://guilhermevigneron.dev

@@ -186,7 +186,7 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
 
       cy.get('a[aria-label="Email"]')
         .should('be.visible')
-        .and('have.attr', 'href', 'mailto:guilhermevigneron@gmail.com');
+        .and('have.attr', 'href', 'mailto:email@gvo.simplelogin.com');
 
       cy.get('svg[aria-hidden="true"][focusable="false"]').should('have.length', 3);
     });
