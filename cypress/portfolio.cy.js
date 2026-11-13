@@ -43,11 +43,7 @@ function isLocalUrl(rawUrl) {
   try {
     const parsed = new URL(rawUrl);
     const baseOrigin = new URL(Cypress.config('baseUrl') || 'http://127.0.0.1:4000').origin;
-    return (
-      parsed.origin === baseOrigin ||
-      parsed.hostname === '127.0.0.1' ||
-      parsed.hostname === 'localhost'
-    );
+    return parsed.origin === baseOrigin;
   } catch {
     return false;
   }
@@ -69,11 +65,30 @@ function isBrowserInternalRequest(req) {
   }
 }
 
-function logAxeViolations(violations) {
-  violations.forEach((v) => {
-    const targets = v.nodes.map((n) => n.target.join(' ')).join('; ');
-    cy.log(`AXE [${v.impact}] ${v.id}: ${v.help} (${targets})`);
-  });
+function runAxeAndRecord(label, context = null) {
+  let recordedViolations = [];
+  return cy
+    .checkA11y(
+      context,
+      null,
+      (violations) => {
+        recordedViolations = violations;
+      },
+      true
+    )
+    .then(() => {
+      recordedViolations.forEach((v) => {
+        const targets = v.nodes.map((n) => n.target.join(' ')).join('; ');
+        cy.log(`AXE [${v.impact}] ${v.id}: ${v.help} (${targets})`);
+      });
+      if (label) {
+        cy.task('recordA11yAudit', { label, violations: recordedViolations.length });
+      }
+      expect(
+        recordedViolations.length,
+        `WCAG AA violations detected${label ? ` on ${label}` : ''}`
+      ).to.eq(0);
+    });
 }
 
 describe('Zero Third-Party Dependencies & Local-First Assets', () => {
@@ -130,14 +145,15 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
       expect(res.body.length).to.be.greaterThan(5000);
     });
 
-    cy.request({ url: '/assets/avatar-224.avif', encoding: 'binary' }).then((res) => {
-      expect(res.status).to.eq(200);
-      expect(res.headers['content-type']).to.include('image/avif');
-    });
-
-    cy.request({ url: '/assets/avatar-224.webp', encoding: 'binary' }).then((res) => {
-      expect(res.status).to.eq(200);
-      expect(res.headers['content-type']).to.include('image/webp');
+    ['168', '224', '336'].forEach((size) => {
+      cy.request({ url: `/assets/avatar-${size}.avif`, encoding: 'binary' }).then((res) => {
+        expect(res.status).to.eq(200);
+        expect(res.headers['content-type']).to.include('image/avif');
+      });
+      cy.request({ url: `/assets/avatar-${size}.webp`, encoding: 'binary' }).then((res) => {
+        expect(res.status).to.eq(200);
+        expect(res.headers['content-type']).to.include('image/webp');
+      });
     });
 
     cy.request({ url: resume.meta.ogImage, encoding: 'binary' }).then((res) => {
@@ -145,6 +161,19 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
       expect(res.headers['content-type']).to.include('image/png');
       expect(res.body.length).to.be.greaterThan(5000);
       expect(res.body.slice(1, 4)).to.eq('PNG');
+      expect(res.body.slice(12, 16), `${resume.meta.ogImage} IHDR chunk`).to.eq('IHDR');
+      const width =
+        ((res.body.charCodeAt(16) << 24) >>> 0) +
+        (res.body.charCodeAt(17) << 16) +
+        (res.body.charCodeAt(18) << 8) +
+        res.body.charCodeAt(19);
+      const height =
+        ((res.body.charCodeAt(20) << 24) >>> 0) +
+        (res.body.charCodeAt(21) << 16) +
+        (res.body.charCodeAt(22) << 8) +
+        res.body.charCodeAt(23);
+      expect(width, `${resume.meta.ogImage} width`).to.eq(1200);
+      expect(height, `${resume.meta.ogImage} height`).to.eq(630);
     });
 
     cy.request('/assets/favicon.svg').its('status').should('eq', 200);
@@ -154,6 +183,9 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
       const manifest = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;
       expect(manifest.short_name).to.eq(resume.meta.shortName);
       expect(manifest.description).to.eq(resume.meta.manifestDescription);
+      manifest.icons.forEach((icon) => {
+        cy.request({ url: icon.src, encoding: 'binary' }).its('status').should('eq', 200);
+      });
     });
 
     cy.request('/assets/css/styles.css').then((res) => {
@@ -216,12 +248,25 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
 
     cy.get('picture.avatar-picture source[type="image/avif"]').should('exist');
     cy.get('picture.avatar-picture source[type="image/webp"]').should('exist');
+    cy.get('picture.avatar-picture source').each(($source) => {
+      const srcset = $source.attr('srcset') || '';
+      const urls = srcset
+        .split(',')
+        .map((part) => part.trim().split(/\s+/)[0])
+        .filter(Boolean);
+      expect(urls.length).to.eq(3);
+      urls.forEach((assetUrl) => {
+        expect(assetUrl).to.match(/^\/assets\/avatar-(168|224|336)\.[a-f0-9]+\.(avif|webp)$/);
+        cy.request({ url: assetUrl, encoding: 'binary' }).its('status').should('eq', 200);
+      });
+    });
     cy.get('img.avatar')
       .should('be.visible')
       .and('have.attr', 'src')
       .and('match', /^\/assets\/avatar\.[a-f0-9]+\.jpg$/);
     cy.get('img.avatar').should(($img) => {
       expect($img[0].naturalWidth).to.be.greaterThan(0);
+      expect($img[0].currentSrc).to.match(/\/assets\/avatar(-\d+)?\.[a-f0-9]+\.(avif|webp|jpg)$/);
     });
 
     cy.document()
@@ -235,7 +280,7 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
     cy.get('i[class*="fa"]').should('have.length', 0);
   });
 
-  it('enforces a strict Content-Security-Policy and referrer policy with zero violations', () => {
+  it('enforces a strict Content-Security-Policy and referrer policy with zero runtime violations', () => {
     ['/', '/404.html', '/quality/', '/architecture/'].forEach((route) => {
       const violations = [];
       cy.visit(route, {
@@ -278,6 +323,13 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
         });
       });
 
+      cy.document().then((doc) => doc.fonts.ready);
+      cy.get('#theme-toggle').click();
+      cy.get('#command-trigger').click();
+      cy.get('#command-dialog').should('be.visible');
+      cy.get('#command-close').click();
+      cy.get('#command-dialog').should('not.be.visible');
+
       cy.then(() => {
         expect(violations, `CSP violations on ${route}`).to.deep.equal([]);
       });
@@ -307,6 +359,8 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
 
     cy.get('.tag-list .tag-sep').should('have.length', 0);
 
+    cy.get(`.header-actions a[href="${resume.meta.resumePdf}"]`).should('be.visible');
+
     cy.get('#projects')
       .should(ALL_PROJECTS_NO_PRINT ? 'have.class' : 'not.have.class', 'no-print')
       .within(() => {
@@ -324,6 +378,15 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
     cy.get('footer').should('contain.text', `${CURRENT_YEAR} ${resume.basics.name}`);
     cy.get('footer a[href="/architecture/"]').should('be.visible');
     cy.get('footer a[href="/quality/"]').should('be.visible');
+  });
+
+  it('provides working skip-to-main link that becomes visible on focus across routes', () => {
+    cy.get('.skip-link').focus().should('be.visible').click();
+    cy.location('hash').should('eq', '#about');
+
+    cy.visit('/architecture/');
+    cy.get('.skip-link').focus().should('be.visible').click();
+    cy.location('hash').should('eq', '#main-content');
   });
 
   it('uses accessible inline SVGs instead of Font Awesome for social navigation', () => {
@@ -382,19 +445,30 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
     cy.viewport(1280, 800);
     cy.visit('/');
     cy.get('#command-trigger').click();
-    cy.get('#command-dialog svg').each(($svg) => {
-      const rect = $svg[0].getBoundingClientRect();
-      expect(rect.width, 'command dialog svg width').to.be.greaterThan(0).and.at.most(24);
-      expect(rect.height, 'command dialog svg height').to.be.greaterThan(0).and.at.most(24);
-    });
+    cy.get('#command-dialog').should('be.visible');
+    cy.get('#command-dialog svg')
+      .should('have.length.greaterThan', 0)
+      .each(($svg) => {
+        const rect = $svg[0].getBoundingClientRect();
+        expect(rect.width, 'command dialog svg width').to.be.greaterThan(0).and.at.most(24);
+        expect(rect.height, 'command dialog svg height').to.be.greaterThan(0).and.at.most(24);
+      });
   });
 
-  it('enforces rel="noopener noreferrer" on all external target="_blank" links', () => {
-    cy.get('a[target="_blank"]').each(($link) => {
-      cy.wrap($link)
-        .should('have.attr', 'rel')
-        .and('include', 'noopener')
-        .and('include', 'noreferrer');
+  it('enforces rel="noopener noreferrer" on all external target="_blank" links across routes', () => {
+    ['/', '/404.html', '/quality/', '/architecture/'].forEach((route) => {
+      cy.visit(route, { failOnStatusCode: route !== '/404.html' });
+      cy.get('body').then(($body) => {
+        const blanks = $body.find('a[target="_blank"]');
+        if (blanks.length > 0) {
+          cy.wrap(blanks).each(($link) => {
+            cy.wrap($link)
+              .should('have.attr', 'rel')
+              .and('include', 'noopener')
+              .and('include', 'noreferrer');
+          });
+        }
+      });
     });
   });
 
@@ -415,30 +489,100 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
 });
 
 describe('Theme Toggle & Persistence', () => {
-  it('toggles dark/light mode, syncs theme-color meta, and persists choice across reload', () => {
+  it('toggles dark/light mode, syncs all theme-color tags & ARIA state, and persists across reload', () => {
     cy.visit('/', {
       onBeforeLoad(win) {
-        win.localStorage.removeItem('theme');
+        win.localStorage.setItem('theme', 'light');
       },
     });
 
-    cy.get('html').invoke('removeClass', 'dark');
-    cy.get('#theme-toggle').should('be.visible').click();
+    cy.get('html').should('not.have.class', 'dark');
+    cy.get('.theme-icon-moon').should('be.visible');
+    cy.get('.theme-icon-sun').should('not.be.visible');
+    cy.get('#theme-toggle')
+      .should('be.visible')
+      .and('have.attr', 'aria-pressed', 'false')
+      .and('have.attr', 'aria-label', 'Switch to dark theme')
+      .click();
+
     cy.get('html').should('have.class', 'dark');
-    cy.get('meta[name="theme-color"]').first().should('have.attr', 'content', '#0d0c0a');
+    cy.get('.theme-icon-sun').should('be.visible');
+    cy.get('.theme-icon-moon').should('not.be.visible');
+    cy.get('#theme-toggle')
+      .should('have.attr', 'aria-pressed', 'true')
+      .and('have.attr', 'aria-label', 'Switch to light theme');
+    cy.get('meta[name="theme-color"]').each(($meta) => {
+      expect($meta.attr('content')).to.eq('#0d0c0a');
+    });
     cy.window().its('localStorage').invoke('getItem', 'theme').should('eq', 'dark');
 
     cy.reload();
     cy.get('html').should('have.class', 'dark');
-    cy.get('meta[name="theme-color"]').first().should('have.attr', 'content', '#0d0c0a');
+    cy.get('meta[name="theme-color"]').each(($meta) => {
+      expect($meta.attr('content')).to.eq('#0d0c0a');
+    });
 
     cy.get('#theme-toggle').click();
     cy.get('html').should('not.have.class', 'dark');
-    cy.get('meta[name="theme-color"]').first().should('have.attr', 'content', '#fafaf8');
+    cy.get('meta[name="theme-color"]').each(($meta) => {
+      expect($meta.attr('content')).to.eq('#fafaf8');
+    });
     cy.window().its('localStorage').invoke('getItem', 'theme').should('eq', 'light');
   });
 
-  it('ignores non-theme localStorage values when resolving initial prefers-color-scheme', () => {
+  it('respects explicit light preference over dark system preference and handles live media change listeners', () => {
+    let mediaChangeListener = null;
+
+    cy.visit('/', {
+      onBeforeLoad(win) {
+        win.localStorage.removeItem('theme');
+        cy.stub(win, 'matchMedia').returns({
+          matches: false,
+          media: '(prefers-color-scheme: dark)',
+          addEventListener(evt, fn) {
+            if (evt === 'change') mediaChangeListener = fn;
+          },
+          removeEventListener() {},
+        });
+      },
+    });
+
+    cy.get('html')
+      .should('not.have.class', 'dark')
+      .then(() => {
+        expect(mediaChangeListener).to.be.a('function');
+        mediaChangeListener({ matches: true });
+      });
+    cy.get('html')
+      .should('have.class', 'dark')
+      .then(() => {
+        mediaChangeListener({ matches: false });
+      });
+    cy.get('html').should('not.have.class', 'dark');
+
+    // Once user stores 'light', system dark change event should not override explicit preference
+    cy.visit('/', {
+      onBeforeLoad(win) {
+        win.localStorage.setItem('theme', 'light');
+        cy.stub(win, 'matchMedia').returns({
+          matches: true,
+          media: '(prefers-color-scheme: dark)',
+          addEventListener(evt, fn) {
+            if (evt === 'change') mediaChangeListener = fn;
+          },
+          removeEventListener() {},
+        });
+      },
+    });
+    cy.get('html')
+      .should('not.have.class', 'dark')
+      .then(() => {
+        mediaChangeListener({ matches: true });
+      });
+    cy.get('html').should('not.have.class', 'dark');
+  });
+
+  it('ignores non-theme localStorage values, handles SecurityError storage blocks, and persists on subpages', () => {
     cy.visit('/', {
       onBeforeLoad(win) {
         win.localStorage.setItem('theme', 'system');
@@ -450,6 +594,26 @@ describe('Theme Toggle & Persistence', () => {
         });
       },
     });
+    cy.get('html').should('have.class', 'dark');
+
+    cy.visit('/', {
+      onBeforeLoad(win) {
+        const err = new win.DOMException('Storage blocked', 'SecurityError');
+        cy.stub(win.localStorage, 'getItem').throws(err);
+        cy.stub(win.localStorage, 'setItem').throws(err);
+      },
+    });
+    cy.get('#theme-toggle').click();
+    cy.get('html').should('have.class', 'dark');
+
+    cy.visit('/quality/', {
+      onBeforeLoad(win) {
+        win.localStorage.setItem('theme', 'light');
+      },
+    });
+    cy.get('#theme-toggle').click();
+    cy.get('html').should('have.class', 'dark');
+    cy.reload();
     cy.get('html').should('have.class', 'dark');
   });
 
@@ -470,16 +634,24 @@ describe('Theme Toggle & Persistence', () => {
 });
 
 describe('Command Menu Interaction', () => {
-  it('lazy-loads on trigger or Ctrl+J, ignores Ctrl+Shift+J, filters hints, syncs ARIA/focus, passes axe, and closes cleanly', () => {
+  it('lazy-loads on trigger or Ctrl+J, ignores Ctrl+Shift+J and Alt+Ctrl+J, enforces Tab focus trap, and restores focus', () => {
     cy.viewport(1280, 800);
     cy.visit('/');
 
     cy.get('#command-dialog').should('not.be.visible');
     cy.get('body').type('{ctrl}{shift}j');
     cy.get('#command-dialog').should('not.be.visible');
+    cy.get('body').type('{alt}{ctrl}j');
+    cy.get('#command-dialog').should('not.be.visible');
 
-    cy.get('#command-trigger').should('be.visible').click();
+    cy.get('#command-trigger')
+      .should('be.visible')
+      .and('have.attr', 'aria-expanded', 'false')
+      .click();
     cy.get('#command-dialog').should('be.visible');
+    cy.get('#command-trigger').should('have.attr', 'aria-expanded', 'true');
+    cy.get('html').should('have.css', 'overflow', 'hidden');
+    cy.get('body').should('have.css', 'overflow', 'hidden');
     cy.focused().should('have.id', 'command-input');
 
     cy.window().then((win) => {
@@ -491,8 +663,30 @@ describe('Command Menu Interaction', () => {
     });
 
     cy.injectAxe();
-    cy.checkA11y('#command-dialog');
+    runAxeAndRecord(null, '#command-dialog');
 
+    cy.get('#command-dialog .cmd-item[data-selected="true"]')
+      .should('have.length', 1)
+      .and('contain.text', 'Print / Save as PDF');
+
+    // Shift+Tab from input wraps around to last visible .cmd-item (and focusin syncs selection); Tab wraps to input
+    cy.focused().trigger('keydown', {
+      key: 'Tab',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    cy.focused().should('contain.text', 'llms.txt').and('have.attr', 'data-selected', 'true');
+    cy.focused().trigger('keydown', {
+      key: 'Tab',
+      shiftKey: false,
+      bubbles: true,
+      cancelable: true,
+    });
+    cy.focused().should('have.id', 'command-input');
+
+    // Down arrow wraps from last item back to Print / Save as PDF, then advances to Download Resume
+    cy.get('#command-input').type('{downarrow}');
     cy.get('#command-dialog .cmd-item[data-selected="true"]')
       .should('have.length', 1)
       .and('contain.text', 'Print / Save as PDF');
@@ -502,14 +696,22 @@ describe('Command Menu Interaction', () => {
       .should('have.length', 1)
       .and('contain.text', 'Download Resume (PDF)');
 
-    cy.get('#command-dialog .cmd-item').first().focus();
-    cy.focused().should('contain.text', 'Print / Save as PDF');
+    cy.get('#command-input').type('{uparrow}{uparrow}');
     cy.get('#command-dialog .cmd-item[data-selected="true"]')
       .should('have.length', 1)
-      .and('contain.text', 'Print / Save as PDF');
-    cy.document().trigger('keydown', { key: 'ArrowDown' });
+      .and('contain.text', 'llms.txt');
+
+    cy.get('#command-dialog .cmd-item').first().focus();
+    cy.focused()
+      .should('contain.text', 'Print / Save as PDF')
+      .and('have.attr', 'data-selected', 'true');
+    cy.focused().trigger('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
     cy.focused()
       .should('contain.text', 'Download Resume (PDF)')
+      .and('have.attr', 'data-selected', 'true');
+    cy.focused().trigger('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+    cy.focused()
+      .should('contain.text', 'Print / Save as PDF')
       .and('have.attr', 'data-selected', 'true');
 
     if (resume.languages?.length) {
@@ -529,21 +731,51 @@ describe('Command Menu Interaction', () => {
       cy.get('#command-empty').should('not.be.visible');
     });
 
+    // Zero-results state traps Tab strictly between input and close button
     cy.get('#command-input').clear().type('nonexistent-command-xyz');
     cy.get('#command-empty').should('be.visible').and('contain.text', 'No results found.');
+    cy.focused().trigger('keydown', {
+      key: 'Tab',
+      shiftKey: false,
+      bubbles: true,
+      cancelable: true,
+    });
+    cy.focused().should('have.id', 'command-close');
+    cy.focused().trigger('keydown', {
+      key: 'Tab',
+      shiftKey: false,
+      bubbles: true,
+      cancelable: true,
+    });
+    cy.focused().should('have.id', 'command-input');
 
     cy.get('#command-input').type('{esc}');
+    cy.get('#command-dialog').should('not.be.visible');
+    cy.get('#command-trigger').should('have.attr', 'aria-expanded', 'false').and('be.focused');
+    cy.window().then((win) => {
+      expect(win.document.documentElement.style.overflow).to.eq('');
+      expect(win.document.body.style.overflow).to.eq('');
+    });
+
+    // Ctrl+J opens and toggles closed cleanly; backdrop click closes menu
+    cy.get('body').type('{ctrl}j');
+    cy.get('#command-dialog').should('be.visible');
+    cy.get('body').type('{ctrl}j');
     cy.get('#command-dialog').should('not.be.visible');
 
     cy.get('body').type('{ctrl}j');
     cy.get('#command-dialog').should('be.visible');
-    cy.get('#command-close').click();
+    cy.get('#command-backdrop').click(10, 10, { force: true });
     cy.get('#command-dialog').should('not.be.visible');
   });
 
-  it('copies email, profile URL, and Markdown resume with accessible toast, offers vCard, and jumps to sections', () => {
+  it('executes Enter selection, :print, :toggle-theme, external links, vCard toast, clipboard fallback, and auto-dismiss', () => {
     cy.viewport(1280, 800);
-    cy.visit('/');
+    cy.visit('/', {
+      onBeforeLoad(win) {
+        win.localStorage.setItem('theme', 'light');
+      },
+    });
 
     cy.window().then((win) => {
       if (win.navigator.clipboard?.writeText) {
@@ -551,15 +783,20 @@ describe('Command Menu Interaction', () => {
           .callsFake(() => win.Promise.resolve())
           .as('clipWrite');
       }
+      cy.stub(win, 'print').as('printStub');
+      cy.stub(win, 'open').as('openStub');
     });
 
+    // Enter executes selected item directly from #command-input
     cy.get('#command-trigger').click();
-    cy.get('#command-input').type('Copy Email');
-    cy.contains('#command-dialog .cmd-item:not([hidden])', 'Copy Email Address').click();
+    cy.get('#command-dialog').should('be.visible');
+    cy.get('#command-input').type('Copy Email{enter}');
+    cy.get('#command-dialog').should('not.be.visible');
     cy.get('#cmd-toast').should('be.visible').and('contain.text', 'Email copied to clipboard');
     cy.get('@clipWrite').should('have.been.calledWith', resume.basics.email);
 
     cy.get('#command-trigger').click();
+    cy.get('#command-dialog').should('be.visible');
     cy.get('#command-input').type('Copy Profile URL');
     cy.contains('#command-dialog .cmd-item:not([hidden])', 'Copy Profile URL').click();
     cy.get('#cmd-toast')
@@ -567,12 +804,55 @@ describe('Command Menu Interaction', () => {
       .and('contain.text', 'Profile URL copied to clipboard');
     cy.get('@clipWrite').should('have.been.calledWith', SITE_URL);
 
+    // :print action closes menu and invokes window.print()
     cy.get('#command-trigger').click();
+    cy.get('#command-dialog').should('be.visible');
+    cy.contains('#command-dialog .cmd-item', 'Print / Save as PDF').click();
+    cy.get('#command-dialog').should('not.be.visible');
+    cy.get('@printStub').should('have.been.calledOnce');
+
+    // :toggle-theme action toggles theme and announces state
+    cy.get('#command-trigger').click();
+    cy.get('#command-dialog').should('be.visible');
+    cy.get('#command-input').type('Toggle Light');
+    cy.contains('#command-dialog .cmd-item:not([hidden])', 'Toggle Light / Dark Theme').click();
+    cy.get('html').should('have.class', 'dark');
+    cy.get('#cmd-toast').should('be.visible').and('contain.text', 'Switched to dark theme');
+
+    // External link action invokes window.open with noopener,noreferrer
+    if (GITHUB_PROFILE) {
+      cy.get('#command-trigger').click();
+      cy.get('#command-dialog').should('be.visible');
+      cy.get('#command-input').type('GitHub');
+      cy.contains('#command-dialog .cmd-item:not([hidden])', 'GitHub').click();
+      cy.get('@openStub').should(
+        'have.been.calledWith',
+        GITHUB_PROFILE.url,
+        '_blank',
+        'noopener,noreferrer'
+      );
+    }
+
+    // vCard item click triggers toast notification
+    cy.intercept('GET', resume.meta.contactVcf, {
+      statusCode: 200,
+      headers: {
+        'content-type': 'text/vcard; charset=utf-8',
+        'content-disposition': 'attachment; filename="guilherme-vigneron.vcf"',
+      },
+      body: 'BEGIN:VCARD\r\nVERSION:3.0\r\nEND:VCARD\r\n',
+    }).as('vcfDownload');
+    cy.get('#command-trigger').click();
+    cy.get('#command-dialog').should('be.visible');
     cy.get('#command-input').type('vCard');
     cy.contains('#command-dialog .cmd-item:not([hidden])', 'Save Contact (vCard)')
       .should('have.attr', 'data-href', resume.meta.contactVcf)
-      .and('have.attr', 'data-download', 'guilherme-vigneron.vcf');
+      .and('have.attr', 'data-download', 'guilherme-vigneron.vcf')
+      .click();
+    cy.get('#cmd-toast').should('be.visible').and('contain.text', 'Downloading contact vCard');
 
+    cy.get('#command-trigger').click();
+    cy.get('#command-dialog').should('be.visible');
     cy.get('#command-input').clear().type('Markdown');
     cy.contains('#command-dialog .cmd-item:not([hidden])', 'Copy Markdown Resume').click();
     cy.get('#cmd-toast')
@@ -581,19 +861,73 @@ describe('Command Menu Interaction', () => {
     cy.get('@clipWrite').its('lastCall.args.0').should('include', `# ${resume.basics.name}`);
 
     cy.get('#command-trigger').click();
+    cy.get('#command-dialog').should('be.visible');
     cy.get('#command-input').type('Selected Projects');
     cy.contains('#command-dialog .cmd-item:not([hidden])', 'Selected Projects').click();
     cy.get('#command-dialog').should('not.be.visible');
     cy.location('hash').should('eq', '#projects');
     cy.focused().should('have.id', 'projects');
+
+    // Clipboard fallback + failed /llms.txt fetch + toast auto-dismiss timer
+    cy.intercept('GET', '/llms.txt', { statusCode: 500, body: 'Server Error' }).as('llmsFail');
+    cy.clock();
+    cy.visit('/');
+    cy.window().then((win) => {
+      cy.stub(win.navigator.clipboard, 'writeText').rejects(new Error('Permission denied'));
+      cy.stub(win.document, 'execCommand').returns(true).as('execCopy');
+    });
+
+    cy.get('#command-trigger').click();
+    cy.get('#command-dialog').should('be.visible');
+    cy.contains('#command-dialog .cmd-item', 'Copy Email Address').click();
+    cy.get('@execCopy').should('have.been.calledWith', 'copy');
+    cy.get('#cmd-toast').should('be.visible').and('contain.text', 'Email copied to clipboard');
+    cy.tick(2500);
+    cy.get('#cmd-toast').should('not.be.visible');
+
+    cy.get('#command-trigger').click();
+    cy.get('#command-dialog').should('be.visible');
+    cy.contains('#command-dialog .cmd-item', 'Copy Markdown Resume').click();
+    cy.wait('@llmsFail');
+    cy.get('#cmd-toast')
+      .should('be.visible')
+      .and('contain.text', 'Unable to fetch Markdown resume');
   });
 
-  it('works across /quality/, /architecture/, and /404.html via desktop and mobile triggers', () => {
+  it('adapts modifier key for Mac/iOS, works across subpages, and passes axe in dark & mobile modes', () => {
+    cy.viewport(1280, 800);
+    cy.visit('/', {
+      onBeforeLoad(win) {
+        win.localStorage.setItem('theme', 'dark');
+        Object.defineProperty(win.navigator, 'platform', {
+          value: 'MacIntel',
+          configurable: true,
+        });
+      },
+    });
+    cy.get('#command-modifier').should('have.text', '\u2318');
+    cy.get('#command-trigger').click();
+    cy.get('#command-dialog').should('be.visible');
+    cy.injectAxe();
+    runAxeAndRecord(null, '#command-dialog');
+    cy.get('#command-close').click();
+    cy.get('#command-dialog').should('not.be.visible');
+
+    cy.viewport(375, 667);
+    cy.get('#command-trigger-mobile').click();
+    cy.get('#command-dialog').should('be.visible');
+    runAxeAndRecord(null, '#command-dialog');
+    cy.get('#command-close').click();
+    cy.get('#command-dialog').should('not.be.visible');
+
     ['/quality/', '/architecture/', '/404.html'].forEach((route) => {
       cy.viewport(1280, 800);
       cy.visit(route, { failOnStatusCode: route !== '/404.html' });
       cy.get('#command-trigger').click();
       cy.get('#command-dialog').should('be.visible');
+      cy.contains('#command-dialog .cmd-item', 'Architecture Overview')
+        .scrollIntoView()
+        .should('be.visible');
       cy.get('#command-input').type('Portfolio Home');
       cy.contains('#command-dialog .cmd-item:not([hidden])', 'Portfolio Home').should('be.visible');
       cy.get('#command-close').click();
@@ -605,6 +939,14 @@ describe('Command Menu Interaction', () => {
       cy.get('#command-close').click();
       cy.get('#command-dialog').should('not.be.visible');
     });
+
+    // Clicking Portfolio Home on /quality/ navigates back to /
+    cy.viewport(1280, 800);
+    cy.visit('/quality/');
+    cy.get('#command-trigger').click();
+    cy.get('#command-dialog').should('be.visible');
+    cy.contains('#command-dialog .cmd-item', 'Portfolio Home').scrollIntoView().click();
+    cy.location('pathname').should('eq', '/');
   });
 });
 
@@ -619,6 +961,7 @@ describe('Mobile Device Compatibility & Touch UX', () => {
       cy.viewport(width, height);
       ['/', '/404.html', '/quality/', '/architecture/'].forEach((route) => {
         cy.visit(route, { failOnStatusCode: route !== '/404.html' });
+        cy.document().then((doc) => doc.fonts.ready);
         cy.window().then((win) => {
           const docEl = win.document.documentElement;
           expect(docEl.scrollWidth, `horizontal overflow on ${route} at ${width}px`).to.be.at.most(
@@ -629,6 +972,7 @@ describe('Mobile Device Compatibility & Touch UX', () => {
 
       if (width === 320) {
         cy.visit('/');
+        cy.document().then((doc) => doc.fonts.ready);
         cy.get('#command-trigger-mobile').click();
         cy.get('#command-dialog').should('be.visible');
         cy.window().then((win) => {
@@ -645,33 +989,50 @@ describe('Mobile Device Compatibility & Touch UX', () => {
     });
   });
 
-  it('enforces >=44x44px touch targets without overlapping header avatar on mobile (375x667)', () => {
-    cy.viewport(375, 667);
-    cy.visit('/');
+  it('enforces >=44x44px touch targets without overlapping header avatar on mobile (320px & 375px) across routes', () => {
+    [320, 375].forEach((width) => {
+      cy.viewport(width, 667);
+      cy.visit('/');
 
-    cy.get('img.avatar').then(($avatar) => {
-      const avatarRect = $avatar[0].getBoundingClientRect();
-      cy.get('.header-actions .icon-btn:visible')
-        .should('have.length', 6)
-        .each(($btn) => {
-          const rect = $btn[0].getBoundingClientRect();
-          expect(rect.width, 'mobile icon-btn width').to.be.at.least(44);
-          expect(rect.height, 'mobile icon-btn height').to.be.at.least(44);
-          const overlapsAvatar =
-            rect.left < avatarRect.right &&
-            rect.right > avatarRect.left &&
-            rect.top < avatarRect.bottom &&
-            rect.bottom > avatarRect.top;
-          expect(overlapsAvatar, 'icon-btn must not overlap avatar').to.eq(false);
-        });
+      cy.get('img.avatar').then(($avatar) => {
+        const avatarRect = $avatar[0].getBoundingClientRect();
+        cy.get('.header-actions .icon-btn:visible')
+          .should('have.length', 6)
+          .each(($btn) => {
+            const rect = $btn[0].getBoundingClientRect();
+            expect(rect.width, `mobile ${width}px icon-btn width`).to.be.at.least(44);
+            expect(rect.height, `mobile ${width}px icon-btn height`).to.be.at.least(44);
+            const overlapsAvatar =
+              rect.left < avatarRect.right &&
+              rect.right > avatarRect.left &&
+              rect.top < avatarRect.bottom &&
+              rect.bottom > avatarRect.top;
+            expect(overlapsAvatar, `icon-btn must not overlap avatar at ${width}px`).to.eq(false);
+          });
+      });
     });
 
+    cy.viewport(375, 667);
+    cy.visit('/');
     cy.get('.cv-footer-links a').each(($link) => {
       const rect = $link[0].getBoundingClientRect();
       expect(rect.height, 'mobile footer link tap height').to.be.at.least(44);
     });
 
-    cy.visit('/404.html');
+    ['/quality/', '/architecture/'].forEach((subpage) => {
+      cy.visit(subpage);
+      cy.get('.subpage-nav-actions a:visible, .subpage-nav-actions button:visible').each(($el) => {
+        const rect = $el[0].getBoundingClientRect();
+        expect(rect.width, `${subpage} nav target width`).to.be.at.least(44);
+        expect(rect.height, `${subpage} nav target height`).to.be.at.least(44);
+      });
+      cy.get('.cv-footer-links a').each(($link) => {
+        const rect = $link[0].getBoundingClientRect();
+        expect(rect.height, `${subpage} footer link tap height`).to.be.at.least(44);
+      });
+    });
+
+    cy.visit('/404.html', { failOnStatusCode: false });
     cy.get('.error-actions a').each(($link) => {
       const rect = $link[0].getBoundingClientRect();
       expect(rect.height, 'mobile 404 action tap height').to.be.at.least(44);
@@ -690,8 +1051,8 @@ describe('Mobile Device Compatibility & Touch UX', () => {
       .and('have.attr', 'aria-expanded', 'false')
       .click();
 
-    cy.get('#command-trigger-mobile').should('have.attr', 'aria-expanded', 'true');
     cy.get('#command-dialog').should('be.visible');
+    cy.get('#command-trigger-mobile').should('have.attr', 'aria-expanded', 'true');
 
     cy.get('#command-input')
       .should('be.focused')
@@ -793,10 +1154,9 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
         .should('exist')
         .then(($script) => {
           const jsonLd = JSON.parse($script.text());
-          const person = Array.isArray(jsonLd['@graph'])
-            ? jsonLd['@graph'].find((n) => n['@type'] === 'Person')
-            : jsonLd;
-          expect(person['@type']).to.eq('Person');
+          expect(jsonLd['@graph']).to.be.an('array');
+          const person = jsonLd['@graph'].find((n) => n['@type'] === 'Person');
+          expect(person).to.be.an('object');
           expect(person.name).to.eq(liveResume.basics.name);
           expect(person.jobTitle).to.eq(liveResume.meta.jobTitle);
           expect(person.email).to.eq(liveResume.basics.email);
@@ -865,7 +1225,7 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
     });
   });
 
-  it('serves branded 404.html, redirects directory routes without trailing slash (301), and handles malformed URLs cleanly', () => {
+  it('serves branded 404 page across nested unknown routes, redirects (301), and handles malformed URLs cleanly', () => {
     cy.request({ url: '/nonexistent-route-check', failOnStatusCode: false }).then((res) => {
       expect(res.status).to.eq(404);
       expect(res.body).to.include('Page Not Found');
@@ -885,20 +1245,50 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
       expect(res.status).to.eq(400);
     });
 
-    cy.visit('/404.html');
+    cy.visit('/nonexistent/deep/route', {
+      failOnStatusCode: false,
+      onBeforeLoad(win) {
+        win.localStorage.setItem('theme', 'light');
+      },
+    });
+    cy.contains('h1', 'Page Not Found').should('be.visible');
+    cy.contains('a', 'Back to Portfolio').should('have.attr', 'href', '/');
+    cy.get('#theme-toggle').should('be.visible').click();
+    cy.get('html').should('have.class', 'dark');
+
+    cy.visit('/404.html', { failOnStatusCode: false });
     cy.contains('h1', 'Page Not Found').should('be.visible');
     cy.contains('a', 'Back to Portfolio').should('have.attr', 'href', '/');
   });
 
-  it('serves /quality/ verification report, /quality/report.json, /architecture/, and /sitemap.xml', () => {
+  it('serves /quality/ verification report, /architecture/ page, /quality/report.json, /robots.txt, and /sitemap.xml', () => {
+    cy.visit('/architecture/');
+    cy.contains('h1', 'Architecture Overview').should('be.visible');
+    cy.contains('1. Edit Once, Sync Everywhere').should('be.visible');
+    cy.contains('2. Zero Third-Party Dependencies').should('be.visible');
+    cy.contains('3. Automated PDF & Social Previews').should('be.visible');
+    cy.contains('4. Built-In Quality Gates').should('be.visible');
+    cy.get('header a[href="/quality/"]').should('be.visible');
+    cy.get('a[href="/quality/"]').should('exist');
+    cy.get(`a[href="${resume.meta.resumePdf}"]`).should('exist');
+    cy.get('a[href="/resume.json"]').should('exist');
+
     cy.visit('/quality/');
     cy.contains('h1', 'Quality & Verification Report').should('be.visible');
-    cy.contains('Zero Third-Party Network Requests').should('be.visible');
-    cy.contains('Web Vitals & Asset Payload Budgets').should('be.visible');
-    cy.contains('Mobile Compatibility & Touch Ergonomics').should('be.visible');
-    cy.contains('WCAG 2.1 AA Accessibility').should('be.visible');
-    cy.contains('Static Lint, Unit Tests & Dependency Audit').should('be.visible');
-    cy.contains('Print PDF & Social Card Pipeline').should('be.visible');
+    [
+      'Zero Third-Party Network Requests',
+      'Web Vitals & Asset Payload Budgets',
+      'Mobile Compatibility & Touch Ergonomics',
+      'HTML5 Standards Validation',
+      'WCAG 2.1 AA Accessibility (cypress-axe)',
+      'E2E Verification Suite (Cypress)',
+      'Static Lint, Unit Tests & Dependency Audit',
+      'Print PDF & Social Card Pipeline',
+      'Link Integrity (Lychee)',
+      'Single Source of Truth & Security Policy',
+    ].forEach((title) => {
+      cy.contains(title).should('be.visible');
+    });
     cy.get('header a[href="/architecture/"]').should('be.visible');
     cy.get('a[href="/quality/report.json"]').should('be.visible');
 
@@ -906,17 +1296,20 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
       expect(res.status).to.eq(200);
       const report = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;
       expect(report.schemaVersion).to.eq(1);
+      expect(report.gates).to.have.length(10);
       expect(report.artifacts.resumePdfPages).to.eq(MAX_PDF_PAGES);
       expect(report.artifacts.ogCardBytes).to.be.greaterThan(5000);
       expect(report.artifacts.contactVcfBytes).to.be.greaterThan(100);
       expect(report.endpoints).to.include('/architecture/');
+      expect(report.endpoints).to.include('/robots.txt');
       const failing = report.gates.filter((g) => g.status === 'fail');
       expect(failing).to.deep.equal([]);
     });
 
-    cy.visit('/architecture/');
-    cy.contains('h1', 'Architecture Overview').should('be.visible');
-    cy.get('header a[href="/quality/"]').should('be.visible');
+    cy.request('/robots.txt').then((res) => {
+      expect(res.status).to.eq(200);
+      expect(res.body).to.include(`Sitemap: ${SITE_URL}/sitemap.xml`);
+    });
 
     cy.request('/sitemap.xml').then((res) => {
       expect(res.status).to.eq(200);
@@ -974,26 +1367,14 @@ describe('WCAG 2.1 AA Accessibility Matrix (Light/Dark & Mobile/Desktop)', () =>
     it(`passes cy.checkA11y() for ${label}`, () => {
       cy.viewport(viewport[0], viewport[1]);
       cy.visit(route, {
+        failOnStatusCode: route !== '/404.html',
         onBeforeLoad(win) {
           win.localStorage.setItem('theme', theme);
         },
       });
       cy.get('html').should(theme === 'dark' ? 'have.class' : 'not.have.class', 'dark');
       cy.injectAxe();
-
-      let count = 0;
-      cy.checkA11y(
-        null,
-        null,
-        (violations) => {
-          count = violations.length;
-          logAxeViolations(violations);
-        },
-        true
-      ).then(() => {
-        cy.task('recordA11yAudit', { label, violations: count });
-        expect(count, `WCAG AA violations detected on ${label}`).to.eq(0);
-      });
+      runAxeAndRecord(label);
     });
   });
 });

@@ -36,6 +36,7 @@ function persistMetrics(extra = {}) {
 module.exports = defineConfig({
   video: false,
   allowCypressEnv: false,
+  downloadsFolder: '.ci-reports/cypress-downloads',
   e2e: {
     baseUrl: process.env.CYPRESS_BASE_URL || 'http://127.0.0.1:4000',
     specPattern: 'cypress/**/*.cy.js',

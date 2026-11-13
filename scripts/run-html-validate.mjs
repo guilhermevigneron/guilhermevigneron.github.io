@@ -1,11 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { HtmlValidate } from 'html-validate';
 
 const ROOT = process.cwd();
 const siteDir = path.join(ROOT, '_site');
 
-function collectHtmlFiles(dir) {
+export function collectHtmlFiles(dir) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   const files = [];
   for (const entry of entries) {
@@ -19,14 +20,19 @@ function collectHtmlFiles(dir) {
   return files.sort();
 }
 
-async function main() {
-  if (!fs.existsSync(siteDir)) {
-    throw new Error('_site directory does not exist. Run "npm run build" first.');
+export async function validateHtmlFiles(
+  targetDir = siteDir,
+  reportsOutputDir = path.join(ROOT, '.ci-reports')
+) {
+  if (!fs.existsSync(targetDir)) {
+    throw new Error(
+      `${path.basename(targetDir)} directory does not exist. Run "npm run build" first.`
+    );
   }
 
-  const htmlFiles = collectHtmlFiles(siteDir);
+  const htmlFiles = collectHtmlFiles(targetDir);
   if (htmlFiles.length === 0) {
-    throw new Error('No HTML files found in _site/');
+    throw new Error(`No HTML files found in ${targetDir}`);
   }
 
   const htmlvalidate = new HtmlValidate({
@@ -39,7 +45,7 @@ async function main() {
   let allValid = true;
 
   for (const filePath of htmlFiles) {
-    const relPath = path.relative(siteDir, filePath).replace(/\\/g, '/');
+    const relPath = path.relative(targetDir, filePath).replace(/\\/g, '/');
     const report = await htmlvalidate.validateFile(filePath);
     totalErrors += report.errorCount;
     totalWarnings += report.warningCount;
@@ -77,29 +83,39 @@ async function main() {
     }
   }
 
-  fs.mkdirSync(path.join(ROOT, '.ci-reports'), { recursive: true });
-  fs.writeFileSync(
-    path.join(ROOT, '.ci-reports', 'html-validate.json'),
-    JSON.stringify(
-      {
-        valid: allValid,
-        fileCount: htmlFiles.length,
-        errorCount: totalErrors,
-        warningCount: totalWarnings,
-        files: fileReports,
-        timestamp: new Date().toISOString(),
-      },
-      null,
-      2
-    )
-  );
+  const summary = {
+    valid: allValid,
+    fileCount: htmlFiles.length,
+    errorCount: totalErrors,
+    warningCount: totalWarnings,
+    files: fileReports,
+    timestamp: new Date().toISOString(),
+  };
 
-  if (!allValid) {
-    process.exit(1);
+  if (reportsOutputDir) {
+    fs.mkdirSync(reportsOutputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(reportsOutputDir, 'html-validate.json'),
+      JSON.stringify(summary, null, 2)
+    );
   }
+
+  return summary;
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const isEntrypoint =
+  Boolean(process.argv[1]) &&
+  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
+
+if (isEntrypoint) {
+  validateHtmlFiles()
+    .then((summary) => {
+      if (!summary.valid) {
+        process.exit(1);
+      }
+    })
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+}
