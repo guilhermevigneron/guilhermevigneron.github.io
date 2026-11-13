@@ -27,14 +27,18 @@ export function minifyHtml(html) {
   out = out.replace(/[ \t]{2,}/g, ' ');
 
   const blockTags =
-    'html|head|meta|link|title|body|main|header|section|footer|div|ul|ol|li|article|nav|h[1-6]|p|picture|source|script|svg|path|circle|rect';
-  const openBlockRe = new RegExp(`>\\s+<(${blockTags})\\b`, 'gi');
-  const closeBlockRe = new RegExp(`</(${blockTags})>\\s+<`, 'gi');
+    'html|head|meta|link|title|body|main|header|section|footer|div|ul|ol|li|article|nav|h[1-6]|p|picture|source|img|button|script|svg|path|circle|rect';
+  const openBlockRe = new RegExp(`>\\s+(?=<(?:${blockTags})\\b)`, 'gi');
+  const openContainerRe = new RegExp(`(<(?:${blockTags})\\b[^>]*>)\\s+(?=<)`, 'gi');
+  const closeBlockRe = new RegExp(`</(${blockTags})>\\s+(?=<)`, 'gi');
+  const beforeCloseBlockRe = new RegExp(`>\\s+(?=</(?:${blockTags})\\b)`, 'gi');
 
-  out = out.replace(openBlockRe, '><$1');
-  out = out.replace(closeBlockRe, '</$1><');
+  out = out.replace(openBlockRe, '>');
+  out = out.replace(openContainerRe, '$1');
+  out = out.replace(closeBlockRe, '</$1>');
+  out = out.replace(beforeCloseBlockRe, '>');
   out = out.replace(/>\s+(__HTML_MINIFY_PRESERVE_\d+__)/g, '>$1');
-  out = out.replace(/(__HTML_MINIFY_PRESERVE_\d+__)\s+</g, '$1<');
+  out = out.replace(/(__HTML_MINIFY_PRESERVE_\d+__)\s+(?=<|__HTML_MINIFY_PRESERVE_)/g, '$1');
 
   preserved.forEach((chunk, index) => {
     out = out.replace(`${tokenPrefix}${index}__`, () => chunk);

@@ -1,12 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { launchHeadlessBrowser } from './lib/browser.mjs';
+import {
+  closeBrowserSafely,
+  launchHeadlessBrowser,
+  registerCleanupSignals,
+  startStaticServer,
+  stopStaticServer,
+} from './lib/browser.mjs';
+import { atomicWriteFileSync } from './lib/chrome.mjs';
 import { countPdfPages } from './lib/pdf.mjs';
-import { createStaticServer } from './serve.mjs';
 
 const ROOT = process.cwd();
 const siteDir = path.join(ROOT, '_site');
 const pdfOutPath = path.join(siteDir, 'resume.pdf');
+const pdfTempPath = `${pdfOutPath}.tmp`;
 
 async function generatePdf() {
   if (!fs.existsSync(path.join(siteDir, 'index.html'))) {
@@ -19,27 +26,46 @@ async function generatePdf() {
   const expectProjectsHiddenInPrint =
     projects.length > 0 && projects.every((project) => project.showInPrint === false);
 
-  const server = createStaticServer(siteDir);
+  fs.rmSync(pdfTempPath, { force: true });
 
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const address = server.address();
-  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const { server, baseUrl } = await startStaticServer(siteDir);
 
   let browser;
   let executablePath;
   const blockedExternalRequests = [];
+  const pageErrors = [];
+  const localFailures = [];
+
+  const unregisterSignals = registerCleanupSignals(async () => {
+    fs.rmSync(pdfTempPath, { force: true });
+    await closeBrowserSafely(browser);
+    await stopStaticServer(server);
+  });
 
   try {
-    ({ browser, executablePath } = await launchHeadlessBrowser());
+    ({ browser, executablePath } = await launchHeadlessBrowser(30_000));
 
     const context = await browser.newContext({
       colorScheme: 'light',
       viewport: { width: 1280, height: 900 },
     });
+    context.setDefaultTimeout(30_000);
+    context.setDefaultNavigationTimeout(30_000);
 
     const page = await context.newPage();
+    page.on('pageerror', (err) => pageErrors.push(`pageerror: ${err.message}`));
+    page.on('crash', () => pageErrors.push('page crashed while rendering PDF'));
 
     const baseOrigin = new URL(baseUrl).origin;
+    page.on('response', (res) => {
+      try {
+        if (new URL(res.url()).origin === baseOrigin && res.status() >= 400) {
+          localFailures.push(`${res.status()} ${new URL(res.url()).pathname}`);
+        }
+      } catch {
+        // Ignore non-URL responses
+      }
+    });
 
     // Enforce zero external network requests while rendering PDF
     await page.route('**/*', (route) => {
@@ -59,18 +85,33 @@ async function generatePdf() {
     });
 
     await page.emulateMedia({ media: 'print', colorScheme: 'light' });
-    await page.goto(`${baseUrl}/`, { waitUntil: 'load' });
+    const navRes = await page.goto(`${baseUrl}/`, { waitUntil: 'load', timeout: 30_000 });
+    if (!navRes || navRes.status() >= 400) {
+      throw new Error(
+        `Unexpected status navigating to /: ${navRes ? navRes.status() : 'no response'}`
+      );
+    }
+
     const printAudit = await page.evaluate(async (expectedName) => {
       document.documentElement.classList.remove('dark');
-      await document.fonts.ready;
+      await Promise.race([
+        document.fonts.ready,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('fonts.ready timed out')), 10_000)
+        ),
+      ]);
       const avatar = document.querySelector('img.avatar');
       const avatarWrap = avatar?.closest('picture') || avatar;
       const avatarVisible = Boolean(
         avatarWrap && getComputedStyle(avatarWrap).display !== 'none'
       );
-      const text = document.body.textContent || '';
+      const nameEl = document.querySelector('#resume-name') || document.querySelector('h1');
+      const hasName = Boolean(
+        nameEl?.textContent?.includes(expectedName) &&
+          getComputedStyle(nameEl).display !== 'none'
+      );
       return {
-        hasName: text.includes(expectedName),
+        hasName,
         avatarVisible,
         avatarReady: Boolean(avatar?.complete && avatar.naturalWidth > 0),
         projectsVisibleInPrint: Boolean(
@@ -80,6 +121,12 @@ async function generatePdf() {
       };
     }, resume.basics.name);
 
+    if (pageErrors.length > 0) {
+      throw new Error(`Page errors during PDF render: ${pageErrors.join('; ')}`);
+    }
+    if (localFailures.length > 0) {
+      throw new Error(`Local asset errors during PDF render: ${localFailures.join(', ')}`);
+    }
     if (!printAudit.hasName) {
       throw new Error('Print layout missing candidate name in rendered DOM');
     }
@@ -91,7 +138,7 @@ async function generatePdf() {
     }
 
     await page.pdf({
-      path: pdfOutPath,
+      path: pdfTempPath,
       format: 'A4',
       printBackground: true,
       preferCSSPageSize: true,
@@ -105,7 +152,7 @@ async function generatePdf() {
       );
     }
 
-    const pdfBytes = fs.readFileSync(pdfOutPath);
+    const pdfBytes = fs.readFileSync(pdfTempPath);
     if (!pdfBytes.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
       throw new Error('Generated resume.pdf does not start with %PDF- magic header');
     }
@@ -120,13 +167,19 @@ async function generatePdf() {
     const pageCount = countPdfPages(pdfBytes);
 
     if (!isTagged) {
-      throw new Error('Generated resume.pdf is missing /StructTreeRoot (tagged PDF required for ATS/a11y)');
+      throw new Error(
+        'Generated resume.pdf is missing /StructTreeRoot (tagged PDF required for ATS/a11y)'
+      );
     }
     if (hasType3Fonts) {
-      throw new Error('Generated resume.pdf contains Type 3 fonts; use static TrueType/OpenType fonts in print CSS');
+      throw new Error(
+        'Generated resume.pdf contains Type 3 fonts; use static TrueType/OpenType fonts in print CSS'
+      );
     }
     if (hasEmbeddedImages) {
-      throw new Error('Generated resume.pdf contains embedded raster images; hide imagery in print CSS for ATS');
+      throw new Error(
+        'Generated resume.pdf contains embedded raster images; hide imagery in print CSS for ATS'
+      );
     }
     if (pageCount < 1 || pageCount > maxPdfPages) {
       throw new Error(
@@ -134,8 +187,10 @@ async function generatePdf() {
       );
     }
 
+    fs.renameSync(pdfTempPath, pdfOutPath);
+
     fs.mkdirSync(path.join(ROOT, '.ci-reports'), { recursive: true });
-    fs.writeFileSync(
+    atomicWriteFileSync(
       path.join(ROOT, '.ci-reports', 'pdf-report.json'),
       JSON.stringify(
         {
@@ -153,16 +208,18 @@ async function generatePdf() {
         },
         null,
         2
-      )
+      ),
+      'utf8'
     );
 
     console.log(
       `Generated _site/resume.pdf (${pageCount} page${pageCount === 1 ? '' : 's'}, ${(pdfBytes.length / 1024).toFixed(1)} KB, tagged=${isTagged}, type3=${hasType3Fonts}, images=${hasEmbeddedImages}) via ${executablePath}`
     );
   } finally {
-    if (browser) await browser.close();
-    server.closeAllConnections?.();
-    await new Promise((resolve) => server.close(resolve));
+    unregisterSignals();
+    fs.rmSync(pdfTempPath, { force: true });
+    await closeBrowserSafely(browser);
+    await stopStaticServer(server);
   }
 }
 

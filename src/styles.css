@@ -8,7 +8,7 @@
 
 @font-face {
   font-family: "Geist Mono Fallback";
-  src: local("SFMono-Regular"), local("Menlo"), local("Consolas"), local("Liberation Mono"), local("Courier New");
+  src: local("SFMono-Regular"), local("Menlo"), local("Consolas"), local("Liberation Mono"), local("Roboto Mono"), local("DejaVu Sans Mono"), local("Courier New");
   ascent-override: 100.5%;
   descent-override: 29.5%;
   line-gap-override: 0%;
@@ -25,7 +25,7 @@
 
 @font-face {
   font-family: "Geist Pixel Fallback";
-  src: local("SFMono-Regular"), local("Menlo"), local("Consolas"), local("Liberation Mono"), local("Courier New");
+  src: local("SFMono-Regular"), local("Menlo"), local("Consolas"), local("Liberation Mono"), local("Roboto Mono"), local("DejaVu Sans Mono"), local("Courier New");
   ascent-override: 100.5%;
   descent-override: 29.5%;
   line-gap-override: 0%;
@@ -49,7 +49,7 @@
   --wash: oklch(95.6% 0.004 85);
 
   --radius: 0.5rem;
-  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
   --font-pixel: "Geist Pixel Square", "Geist Pixel Fallback", var(--font-mono);
   color-scheme: light;
 }
@@ -71,6 +71,19 @@ html.dark {
   --wash: oklch(20% 0.004 70);
 
   color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --bg: #0d0c0a;
+    --ink: #ecebe8;
+    --body: #b2b1ae;
+    --faint: #81807d;
+    --rule: #282624;
+    --wash: #171614;
+    --backdrop: #0d0c0acc;
+    color-scheme: dark;
+  }
 }
 
 *,
@@ -659,6 +672,12 @@ html.dark .theme-icon-moon {
   .command-bar {
     display: block;
   }
+}
+
+html:not(.js) #theme-toggle,
+html:not(.js) #command-trigger-mobile,
+html:not(.js) .command-bar {
+  display: none;
 }
 
 .command-trigger {

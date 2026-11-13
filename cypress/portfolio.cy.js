@@ -358,6 +358,9 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
         cy.get('link[rel="stylesheet"][href*="/assets/css/subpage."]')
           .should('have.attr', 'href')
           .and('match', /^\/assets\/css\/subpage\.[a-f0-9]+\.css$/);
+        cy.get('link[rel="stylesheet"][media="print"][href*="/assets/css/print."]')
+          .should('have.attr', 'href')
+          .and('match', /^\/assets\/css\/print\.[a-f0-9]+\.css$/);
       }
 
       cy.get('svg')
@@ -442,6 +445,21 @@ describe('Theme Toggle & Persistence', () => {
       },
     });
     cy.get('html').should('have.class', 'dark');
+  });
+
+  it('degrades gracefully without throwing when localStorage and matchMedia are blocked', () => {
+    cy.visit('/', {
+      onBeforeLoad(win) {
+        cy.stub(win.localStorage, 'getItem').throws(new Error('SecurityError'));
+        cy.stub(win.localStorage, 'setItem').throws(new Error('SecurityError'));
+        cy.stub(win, 'matchMedia').throws(new Error('matchMedia blocked'));
+      },
+    });
+    cy.get('html').should('have.class', 'js').and('have.class', 'light');
+    cy.get('#theme-toggle').should('be.visible').click();
+    cy.get('html').should('have.class', 'dark').and('not.have.class', 'light');
+    cy.get('#theme-toggle').click();
+    cy.get('html').should('have.class', 'light').and('not.have.class', 'dark');
   });
 });
 

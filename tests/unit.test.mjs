@@ -4,6 +4,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
+import vm from 'node:vm';
 import { rewriteAssetRefs } from '../scripts/lib/chrome.mjs';
 import { countPdfPages } from '../scripts/lib/pdf.mjs';
 import { minifyHtml } from '../scripts/minify-html.mjs';
@@ -200,15 +201,26 @@ describe('minifyHtml', () => {
     const output = minifyHtml(input);
     assert.ok(output.includes('<pre>  line 1\n    line 2  </pre>'));
   });
+
+  it('collapses container boundaries while preserving inline link spacing', () => {
+    const input = '<ul><li>\n  <a href="/a">A</a> <a href="/b">B</a>\n</li></ul>';
+    const output = minifyHtml(input);
+    assert.equal(output, '<ul><li><a href="/a">A</a> <a href="/b">B</a></li></ul>\n');
+  });
 });
 
 describe('static server routing and security guards', () => {
-  it('handles 200, 301 trailing-slash redirect, 400, 403 traversal, 404, and HEAD', async () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'site-srv-test-'));
+  it('handles 200, 301 trailing-slash redirect, 400, 403 traversal/symlink, 404, 405, and HEAD', async () => {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'site-srv-test-'));
+    const tmpDir = path.join(tmpRoot, '_site');
+    const outsideFile = path.join(tmpRoot, 'secret.txt');
+    fs.mkdirSync(tmpDir, { recursive: true });
     fs.writeFileSync(path.join(tmpDir, 'index.html'), '<h1>Home</h1>', 'utf8');
     fs.writeFileSync(path.join(tmpDir, '404.html'), '<h1>Missing</h1>', 'utf8');
     fs.mkdirSync(path.join(tmpDir, 'quality'), { recursive: true });
     fs.writeFileSync(path.join(tmpDir, 'quality', 'index.html'), '<h1>Quality</h1>', 'utf8');
+    fs.writeFileSync(outsideFile, 'top-secret', 'utf8');
+    fs.symlinkSync(outsideFile, path.join(tmpDir, 'leak.txt'));
 
     const server = createStaticServer(tmpDir);
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -228,14 +240,24 @@ describe('static server routing and security guards', () => {
       assert.equal(head.status, 200);
       assert.equal(head.body, '');
 
+      const post = await httpRequest(port, '/', 'POST');
+      assert.equal(post.status, 405);
+      assert.equal(post.headers.allow, 'GET, HEAD');
+
       const traversal = await httpRequest(port, '/%2e%2e/etc/passwd');
       assert.equal(traversal.status, 403);
+
+      const symlinkLeak = await httpRequest(port, '/leak.txt');
+      assert.equal(symlinkLeak.status, 403);
 
       const doubleSlash = await httpRequest(port, '//evil.test/foo');
       assert.equal(doubleSlash.status, 400);
 
       const nullByte = await httpRequest(port, '/foo%00bar');
       assert.equal(nullByte.status, 400);
+
+      const crlf = await httpRequest(port, '/foo%0d%0abar');
+      assert.equal(crlf.status, 400);
 
       const malformed = await httpRequest(port, '/%E0%A4%A');
       assert.equal(malformed.status, 400);
@@ -246,8 +268,69 @@ describe('static server routing and security guards', () => {
     } finally {
       server.closeAllConnections?.();
       await new Promise((resolve) => server.close(resolve));
-      fs.rmSync(tmpDir, { recursive: true, force: true });
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
     }
+  });
+});
+
+describe('theme-init graceful degradation', () => {
+  it('falls back cleanly when localStorage and matchMedia throw', () => {
+    const code = fs.readFileSync(path.join(ROOT, 'assets/js/theme-init.js'), 'utf8');
+    const runInit = ({ storedThrows = false, storedValue = null, mqThrows = false, dark = false }) => {
+      const classes = new Set();
+      const metas = [
+        { content: '#fafaf8', setAttribute(_k, v) { this.content = v; } },
+        { content: '#0d0c0a', setAttribute(_k, v) { this.content = v; } },
+      ];
+      const sandbox = {
+        document: {
+          documentElement: {
+            classList: {
+              add: (...tokens) => {
+                for (const t of tokens) classes.add(t);
+              },
+              toggle: (token, force) => {
+                if (force) classes.add(token);
+                else classes.delete(token);
+              },
+            },
+          },
+          querySelectorAll: () => metas,
+        },
+        localStorage: {
+          getItem() {
+            if (storedThrows) throw new Error('SecurityError');
+            return storedValue;
+          },
+        },
+        window: {
+          matchMedia() {
+            if (mqThrows) throw new Error('matchMedia disabled');
+            return { matches: dark };
+          },
+        },
+      };
+      vm.runInNewContext(code, sandbox);
+      return { classes, metas };
+    };
+
+    const restricted = runInit({ storedThrows: true, mqThrows: true });
+    assert.ok(restricted.classes.has('js'));
+    assert.ok(restricted.classes.has('light'));
+    assert.ok(!restricted.classes.has('dark'));
+    assert.deepEqual(
+      restricted.metas.map((m) => m.content),
+      ['#fafaf8', '#fafaf8']
+    );
+
+    const darkFallback = runInit({ storedThrows: true, dark: true });
+    assert.ok(darkFallback.classes.has('js'));
+    assert.ok(darkFallback.classes.has('dark'));
+    assert.ok(!darkFallback.classes.has('light'));
+    assert.deepEqual(
+      darkFallback.metas.map((m) => m.content),
+      ['#0d0c0a', '#0d0c0a']
+    );
   });
 });
 
