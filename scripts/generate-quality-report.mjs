@@ -21,6 +21,18 @@ function getFileSizeKb(filePath) {
   return `${(fs.statSync(filePath).size / 1024).toFixed(1)} KB`;
 }
 
+function getCombinedFontsSizeKb(paths) {
+  let totalBytes = 0;
+  let foundAny = false;
+  for (const filePath of paths) {
+    if (fs.existsSync(filePath)) {
+      totalBytes += fs.statSync(filePath).size;
+      foundAny = true;
+    }
+  }
+  return foundAny ? `${(totalBytes / 1024).toFixed(1)} KB` : null;
+}
+
 function getSecurityExpiryDays() {
   const secPath = path.join(siteDir, '.well-known', 'security.txt');
   if (!fs.existsSync(secPath)) return null;
@@ -42,12 +54,12 @@ function escapeHtml(value) {
 
 function statusBadge(status) {
   if (status === 'pass') {
-    return '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200 dark:border dark:border-emerald-800">PASS</span>';
+    return '<span class="status-badge status-badge--pass">PASS</span>';
   }
   if (status === 'fail') {
-    return '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-200 dark:border dark:border-rose-800">FAIL</span>';
+    return '<span class="status-badge status-badge--fail">FAIL</span>';
   }
-  return '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 dark:border dark:border-amber-800">PENDING</span>';
+  return '<span class="status-badge status-badge--pending">PENDING</span>';
 }
 
 function buildQualityPage() {
@@ -58,7 +70,11 @@ function buildQualityPage() {
   const lycheeExit = process.env.LYCHEE_STATUS;
 
   const cssSize = getFileSizeKb(path.join(siteDir, 'assets', 'css', 'styles.css')) || 'N/A';
-  const fontSize = getFileSizeKb(path.join(siteDir, 'assets', 'fonts', 'inter-latin.woff2')) || 'N/A';
+  const fontSize =
+    getCombinedFontsSizeKb([
+      path.join(siteDir, 'assets', 'fonts', 'GeistMono-Variable.woff2'),
+      path.join(siteDir, 'assets', 'fonts', 'GeistPixel-Square.woff2'),
+    ]) || 'N/A';
   const pdfSize = getFileSizeKb(path.join(siteDir, 'resume.pdf')) || 'N/A';
   const indexSize = getFileSizeKb(path.join(siteDir, 'index.html')) || 'N/A';
   const expiryDays = getSecurityExpiryDays();
@@ -105,7 +121,7 @@ function buildQualityPage() {
       title: 'Zero Third-Party Network Requests',
       status: zeroNetStatus,
       summary:
-        'All CSS, fonts, icons, and theme scripts are locally bundled. Runtime network interception asserts 0 external third-party calls on page load and PDF rendering.',
+        'All CSS, fonts, images, icons, and scripts are locally bundled. Runtime network interception asserts 0 external third-party calls on page load and PDF rendering.',
       metric: cypressReport?.network
         ? `${cypressReport.network.externalRequests} external calls detected (${cypressReport.network.pagesChecked} routes checked)`
         : 'PDF renderer: 0 external calls (run Cypress for runtime route verification)',
@@ -132,7 +148,7 @@ function buildQualityPage() {
       title: 'E2E Verification Suite (Cypress)',
       status: cypressStatus,
       summary:
-        'Full browser verification covering content, navigation, theme persistence, resume.pdf binary payload, security.txt expiry, 404 routing, and endpoint parity.',
+        'Full browser verification covering content, command menu, navigation, theme persistence, resume.pdf binary payload, security.txt expiry, 404 routing, and endpoint parity.',
       metric: cypressReport
         ? `${cypressReport.totalPassed}/${cypressReport.totalTests} tests passed (${cypressReport.totalFailed} failed)`
         : 'Pending Cypress execution',
@@ -165,6 +181,8 @@ function buildQualityPage() {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quality &amp; Verification Report - Guilherme Vigneron de Oliveira</title>
     <meta name="description" content="Automated CI/CD quality, accessibility, performance, and security verification report for guilhermevigneron.dev.">
+    <meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0d0c0a" media="(prefers-color-scheme: dark)">
     <link rel="canonical" href="https://guilhermevigneron.dev/quality/">
     <script>
       (() => {
@@ -177,105 +195,114 @@ function buildQualityPage() {
         } catch {}
       })();
     </script>
-    <link rel="preload" href="/assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/fonts/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/fonts/GeistPixel-Square.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/assets/css/styles.css">
     <script src="/assets/js/theme.js" defer></script>
 </head>
-<body class="min-h-screen flex flex-col bg-slate-50 text-slate-700 dark:bg-slate-950 dark:text-slate-200">
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:bg-sky-700 focus:text-white focus:px-4 focus:py-2 focus:rounded focus:z-50">Skip to main content</a>
+<body class="subpage-body">
+    <a href="#main-content" class="sr-only skip-link">Skip to main content</a>
 
-    <header class="bg-slate-900 text-white p-6 md:p-8 shadow-lg dark:border-b dark:border-slate-800">
-        <div class="max-w-4xl mx-auto flex items-center justify-between gap-4">
-            <div>
-                <a href="/" class="text-xl md:text-2xl font-black tracking-tight text-white hover:text-sky-300 transition-colors duration-200">Guilherme Vigneron de Oliveira</a>
-                <p class="text-sm text-sky-300 mt-1">Self-Verifying Engineering Showcase &amp; Quality Report</p>
-            </div>
-            <div class="flex items-center gap-3">
-                <a href="/" class="text-sm font-medium text-slate-200 hover:text-sky-300 px-3 py-2 rounded-lg border border-slate-700 hover:border-sky-400 transition-colors duration-200">Portfolio</a>
-                <button id="theme-toggle" type="button" class="inline-flex items-center justify-center p-2 rounded-lg bg-slate-800 text-slate-100 border border-slate-700 hover:bg-slate-700 hover:text-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-400 transition-colors duration-200" aria-label="Switch to dark theme" aria-pressed="false">
-                    <svg class="w-5 h-5 hidden dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                        <circle cx="12" cy="12" r="4"/>
-                        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
-                    </svg>
-                    <svg class="w-5 h-5 block dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                    </svg>
-                </button>
-            </div>
-        </div>
-    </header>
+    <main id="main-content" class="subpage-main">
+        <div class="cv-shell">
+            <header class="subpage-nav">
+                <div>
+                    <a href="/" class="subpage-brand">Guilherme Vigneron de Oliveira</a>
+                    <p class="entry-sub">Self-Verifying Engineering Showcase &amp; Quality Report</p>
+                </div>
+                <div class="subpage-nav-actions">
+                    <a href="/" class="ghost-link">Portfolio</a>
+                    <button id="theme-toggle" type="button" class="icon-btn" aria-label="Switch to dark theme" aria-pressed="false" title="Switch to dark theme">
+                        <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <circle cx="12" cy="12" r="4"></circle>
+                            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+                        </svg>
+                        <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </header>
 
-    <main id="main-content" class="flex-1 max-w-4xl w-full mx-auto p-8 space-y-12">
-        <section>
-            <h1 class="text-3xl md:text-4xl font-black text-slate-900 dark:text-slate-100">Quality &amp; Verification Report</h1>
-            <div class="w-16 h-1 bg-sky-500 mt-3 mb-6"></div>
-            <p class="text-lg text-slate-700 dark:text-slate-300 leading-relaxed">
-                Every build of <strong class="text-slate-900 dark:text-slate-100">guilhermevigneron.dev</strong> runs through an automated zero-third-party verification pipeline before deployment. Below is the build telemetry generated from this deployment artifact.
-            </p>
-            <div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400">Compiled CSS</p>
-                    <p class="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">${escapeHtml(cssSize)}</p>
-                </div>
-                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400">Self-Hosted Font</p>
-                    <p class="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">${escapeHtml(fontSize)}</p>
-                </div>
-                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400">Generated PDF</p>
-                    <p class="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">${escapeHtml(pdfSize)}</p>
-                </div>
-                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400">HTML Payload</p>
-                    <p class="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">${escapeHtml(indexSize)}</p>
-                </div>
-            </div>
-        </section>
-
-        <section>
-            <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-6">Verification Gates</h2>
-            <div class="grid gap-4 md:grid-cols-2">
-                ${cards
-                  .map(
-                    (card) => `<article class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5 shadow-sm flex flex-col justify-between gap-3">
-                    <div>
-                        <div class="flex items-start justify-between gap-3">
-                            <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100">${escapeHtml(card.title)}</h3>
-                            ${statusBadge(card.status)}
-                        </div>
-                        <p class="text-sm text-slate-700 dark:text-slate-300 mt-2 leading-relaxed">${escapeHtml(card.summary)}</p>
+            <section class="cv-section">
+                <h1 class="cv-name">Quality &amp; Verification Report</h1>
+                <p class="summary-copy">
+                    Every build of <strong>guilhermevigneron.dev</strong> runs through an automated zero-third-party verification pipeline before deployment. Below is the telemetry generated from this deployment artifact.
+                </p>
+                <div class="metric-grid">
+                    <div class="panel-card">
+                        <p class="metric-label">compiled css</p>
+                        <p class="metric-value">${escapeHtml(cssSize)}</p>
                     </div>
-                    <p class="text-xs font-medium text-sky-800 dark:text-sky-300 pt-2 border-t border-slate-100 dark:border-slate-800">${escapeHtml(card.metric)}</p>
-                </article>`
-                  )
-                  .join('\n                ')}
-            </div>
-        </section>
+                    <div class="panel-card">
+                        <p class="metric-label">self-hosted fonts</p>
+                        <p class="metric-value">${escapeHtml(fontSize)}</p>
+                    </div>
+                    <div class="panel-card">
+                        <p class="metric-label">generated pdf</p>
+                        <p class="metric-value">${escapeHtml(pdfSize)}</p>
+                    </div>
+                    <div class="panel-card">
+                        <p class="metric-label">html payload</p>
+                        <p class="metric-value">${escapeHtml(indexSize)}</p>
+                    </div>
+                </div>
+            </section>
 
-        <section>
-            <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">Published Machine-Readable Endpoints</h2>
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-6 shadow-sm">
-                <ul class="space-y-3 text-sm">
-                    <li><a href="/resume.pdf" class="font-semibold text-sky-800 dark:text-sky-300 underline hover:text-sky-950 dark:hover:text-sky-200">/resume.pdf</a> &mdash; Automated headless Chromium PDF build (${escapeHtml(pdfStatus.toUpperCase())})</li>
-                    <li><a href="/resume.json" class="font-semibold text-sky-800 dark:text-sky-300 underline hover:text-sky-950 dark:hover:text-sky-200">/resume.json</a> &mdash; Standardized JSON Resume source of truth</li>
-                    <li><a href="/llms.txt" class="font-semibold text-sky-800 dark:text-sky-300 underline hover:text-sky-950 dark:hover:text-sky-200">/llms.txt</a> &mdash; LLM-friendly markdown profile generated from resume.json</li>
-                    <li><a href="/.well-known/security.txt" class="font-semibold text-sky-800 dark:text-sky-300 underline hover:text-sky-950 dark:hover:text-sky-200">/.well-known/security.txt</a> &mdash; RFC 9116 vulnerability disclosure policy</li>
-                    <li><a href="/sitemap.xml" class="font-semibold text-sky-800 dark:text-sky-300 underline hover:text-sky-950 dark:hover:text-sky-200">/sitemap.xml</a> &amp; <a href="/robots.txt" class="font-semibold text-sky-800 dark:text-sky-300 underline hover:text-sky-950 dark:hover:text-sky-200">/robots.txt</a> &mdash; Search crawler directives</li>
-                </ul>
-            </div>
-        </section>
+            <section class="cv-section">
+                <h2 class="section-title">verification gates</h2>
+                <div class="gate-grid">
+                    ${cards
+                      .map(
+                        (card) => `<article class="gate-card">
+                        <div>
+                            <div class="gate-head">
+                                <h3 class="gate-title">${escapeHtml(card.title)}</h3>
+                                ${statusBadge(card.status)}
+                            </div>
+                            <p class="gate-summary">${escapeHtml(card.summary)}</p>
+                        </div>
+                        <p class="gate-metric">${escapeHtml(card.metric)}</p>
+                    </article>`
+                      )
+                      .join('\n                    ')}
+                </div>
+            </section>
 
-        <section>
-            <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">Build Provenance</h2>
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-6 shadow-sm text-sm space-y-1">
-                <p><strong class="text-slate-900 dark:text-slate-100">Generated:</strong> ${escapeHtml(generatedAt)}</p>
-                <p><strong class="text-slate-900 dark:text-slate-100">Ref / Commit:</strong> ${escapeHtml(branchRef)} (${escapeHtml(commitSha)})</p>${runUrl ? `\n                <p><strong class="text-slate-900 dark:text-slate-100">CI Run:</strong> <a href="${escapeHtml(runUrl)}" target="_blank" rel="noopener noreferrer" class="underline text-sky-800 dark:text-sky-300">GitHub Actions Execution Log</a></p>` : ''}
-            </div>
-        </section>
+            <section class="cv-section">
+                <h2 class="section-title">published machine-readable endpoints</h2>
+                <div class="panel-card">
+                    <ul class="endpoint-list">
+                        <li><a href="/resume.pdf">/resume.pdf</a> &mdash; Automated headless Chromium PDF build (${escapeHtml(pdfStatus.toUpperCase())})</li>
+                        <li><a href="/resume.json">/resume.json</a> &mdash; Standardized JSON Resume source of truth</li>
+                        <li><a href="/llms.txt">/llms.txt</a> &mdash; LLM-friendly markdown profile generated from resume.json</li>
+                        <li><a href="/.well-known/security.txt">/.well-known/security.txt</a> &mdash; RFC 9116 vulnerability disclosure policy</li>
+                        <li><a href="/sitemap.xml">/sitemap.xml</a> &amp; <a href="/robots.txt">/robots.txt</a> &mdash; Search crawler directives</li>
+                    </ul>
+                </div>
+            </section>
+
+            <section class="cv-section">
+                <h2 class="section-title">build provenance</h2>
+                <div class="panel-card endpoint-list">
+                    <p><strong>Generated:</strong> ${escapeHtml(generatedAt)}</p>
+                    <p><strong>Ref / Commit:</strong> ${escapeHtml(branchRef)} (${escapeHtml(commitSha)})</p>${runUrl ? `\n                    <p><strong>CI Run:</strong> <a href="${escapeHtml(runUrl)}" target="_blank" rel="noopener noreferrer">GitHub Actions Execution Log</a></p>` : ''}
+                </div>
+            </section>
+        </div>
     </main>
 
-    <footer class="text-center p-6 bg-slate-100 dark:bg-slate-900 dark:border-t dark:border-slate-800 mt-12">
-        <p class="text-slate-700 dark:text-slate-300">&copy; 2026 Guilherme Vigneron de Oliveira. <a href="/" class="underline hover:text-sky-700 dark:hover:text-sky-300">Return to Portfolio</a></p>
+    <footer class="cv-footer-wrap">
+        <div class="cv-footer-inner">
+            <span>&copy; 2026 Guilherme Vigneron de Oliveira</span>
+            <div class="cv-footer-links">
+                <a href="/">Return to Portfolio</a>
+                <span aria-hidden="true">&middot;</span>
+                <a href="/resume.json">JSON Resume</a>
+                <span aria-hidden="true">&middot;</span>
+                <a href="/llms.txt">llms.txt</a>
+            </div>
+        </div>
     </footer>
 </body>
 </html>

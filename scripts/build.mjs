@@ -50,6 +50,7 @@ for (const file of rootFiles) {
   copyFile(file);
 }
 copyFile('.well-known/security.txt');
+copyFile('assets/avatar.jpg');
 copyDir('assets/fonts');
 copyDir('assets/js');
 

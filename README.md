@@ -9,10 +9,11 @@ This repository contains the source code for my personal portfolio and resume we
 ## Architecture & Key Capabilities
 
 ### 1. Zero Third-Party Runtime Dependencies
+- **Minimalist CV Aesthetic:** Monochrome warm off-white light mode (`#fafaf8`) and automatic/toggleable dark mode (`#0d0c0a`), print-first A4 typography, and keyboard-navigable command palette (`Ctrl+J` / `⌘+J`).
 - **Build-Time Tailwind CSS:** Compiled and minified via `tailwindcss` from [src/styles.css](src/styles.css) into `/assets/css/styles.css` — no runtime CDN scripts.
-- **Self-Hosted Subsetted Typography:** Latin-subsetted variable `Inter` font hosted locally at `/assets/fonts/inter-latin.woff2` with `@font-face` and `font-display: swap`.
+- **Self-Hosted Typography & Avatar:** Local `Geist Mono` (`/assets/fonts/GeistMono-Variable.woff2`), `Geist Pixel Square` (`/assets/fonts/GeistPixel-Square.woff2`), and profile portrait (`/assets/avatar.jpg`) — zero external requests.
 - **Inline Accessible SVGs:** All social and UI icons are clean inline `<svg>` elements (`aria-hidden="true"`, `focusable="false"`), eliminating Font Awesome CDN requests.
-- **Light/Dark Theme & Print Layout:** Zero-dependency toggle respecting `prefers-color-scheme` with `localStorage` persistence (`assets/js/theme.js`), paired with `@media print` rules for clean ATS-friendly printing.
+- **Light/Dark Theme & Print Layout:** Zero-dependency toggle respecting `prefers-color-scheme` with `localStorage` persistence (`assets/js/theme.js`), paired with `@media print` rules for clean single-page A4 printing.
 
 ### 2. Single Source of Truth & Machine-Readable Endpoints
 - **`/resume.json`:** Standardized JSON Resume file driving automated synchronization (`scripts/sync-resume.mjs`) for Schema.org `Person` JSON-LD in `index.html` and `/llms.txt`, verified against DOM content by `scripts/validate-sync.mjs`.

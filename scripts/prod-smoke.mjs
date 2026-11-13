@@ -36,10 +36,12 @@ async function main() {
   }
   console.log('PASS / (200, zero third-party references)');
 
-  // 2. Self-hosted CSS & font
+  // 2. Self-hosted CSS, fonts & avatar
   await checkEndpoint('/assets/css/styles.css', 200);
-  await checkEndpoint('/assets/fonts/inter-latin.woff2', 200);
-  console.log('PASS /assets/css/styles.css & /assets/fonts/inter-latin.woff2');
+  await checkEndpoint('/assets/fonts/GeistMono-Variable.woff2', 200);
+  await checkEndpoint('/assets/fonts/GeistPixel-Square.woff2', 200);
+  await checkEndpoint('/assets/avatar.jpg', 200);
+  console.log('PASS /assets/css/styles.css, Geist fonts & /assets/avatar.jpg');
 
   // 3. Resume PDF
   const pdfRes = await checkEndpoint('/resume.pdf', 200);

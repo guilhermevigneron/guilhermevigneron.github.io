@@ -81,26 +81,46 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
     });
   });
 
-  it('serves self-hosted Inter variable font and compiled Tailwind CSS with zero CDN references', () => {
-    cy.request('/assets/fonts/inter-latin.woff2').then((res) => {
+  it('serves self-hosted Geist fonts, avatar image, and compiled CSS with zero CDN references', () => {
+    cy.request('/assets/fonts/GeistMono-Variable.woff2').then((res) => {
       expect(res.status).to.eq(200);
       expect(res.headers['content-type']).to.include('font/woff2');
       expect(res.body.length).to.be.greaterThan(10000);
+    });
+
+    cy.request('/assets/fonts/GeistPixel-Square.woff2').then((res) => {
+      expect(res.status).to.eq(200);
+      expect(res.headers['content-type']).to.include('font/woff2');
+      expect(res.body.length).to.be.greaterThan(10000);
+    });
+
+    cy.request({ url: '/assets/avatar.jpg', encoding: 'binary' }).then((res) => {
+      expect(res.status).to.eq(200);
+      expect(res.headers['content-type']).to.include('image/jpeg');
+      expect(res.body.length).to.be.greaterThan(5000);
     });
 
     cy.request('/assets/css/styles.css').then((res) => {
       expect(res.status).to.eq(200);
       expect(res.headers['content-type']).to.include('text/css');
       expect(res.body).to.include('@font-face');
-      expect(res.body).to.include('inter-latin.woff2');
+      expect(res.body).to.include('GeistMono-Variable.woff2');
+      expect(res.body).to.include('GeistPixel-Square.woff2');
       expect(res.body).to.include('@media print');
     });
 
     cy.visit('/');
     cy.document().then(async (doc) => {
       await doc.fonts.ready;
-      expect(doc.fonts.check('400 16px Inter')).to.eq(true);
+      expect(doc.fonts.check('400 16px "Geist Mono"')).to.eq(true);
+      expect(doc.fonts.check('500 24px "Geist Pixel Square"')).to.eq(true);
     });
+
+    cy.get('img[src="/assets/avatar.jpg"]')
+      .should('be.visible')
+      .and(($img) => {
+        expect($img[0].naturalWidth).to.be.greaterThan(0);
+      });
 
     cy.document().its('documentElement.outerHTML').then((html) => {
       THIRD_PARTY_DOMAINS.forEach((domain) => {
@@ -188,6 +208,32 @@ describe('Theme Toggle & Persistence', () => {
     cy.get('#theme-toggle').click();
     cy.get('html').should('not.have.class', 'dark');
     cy.window().its('localStorage').invoke('getItem', 'theme').should('eq', 'light');
+  });
+});
+
+describe('Command Menu Interaction', () => {
+  it('opens via trigger or Ctrl+J, filters items, toggles theme, and closes cleanly', () => {
+    cy.viewport(1280, 800);
+    cy.visit('/');
+
+    cy.get('#command-dialog').should('not.be.visible');
+    cy.get('#command-trigger').should('be.visible').click();
+    cy.get('#command-dialog').should('be.visible');
+
+    cy.get('#command-input').type('Quality');
+    cy.contains('#command-dialog .cmd-item:not([hidden])', 'Live Quality Report').should('be.visible');
+    cy.get('#command-empty').should('not.be.visible');
+
+    cy.get('#command-input').clear().type('nonexistent-command-xyz');
+    cy.get('#command-empty').should('be.visible').and('contain.text', 'No results found.');
+
+    cy.get('#command-input').type('{esc}');
+    cy.get('#command-dialog').should('not.be.visible');
+
+    cy.get('body').type('{ctrl}j');
+    cy.get('#command-dialog').should('be.visible');
+    cy.get('#command-close').click();
+    cy.get('#command-dialog').should('not.be.visible');
   });
 });
 

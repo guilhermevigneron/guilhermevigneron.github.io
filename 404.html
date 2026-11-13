@@ -6,6 +6,8 @@
     <title>Page Not Found (404) - Guilherme Vigneron de Oliveira</title>
     <meta name="description" content="The requested page could not be found on guilhermevigneron.dev.">
     <meta name="robots" content="noindex">
+    <meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0d0c0a" media="(prefers-color-scheme: dark)">
     <script>
       (() => {
         try {
@@ -17,55 +19,60 @@
         } catch {}
       })();
     </script>
-    <link rel="preload" href="/assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/fonts/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/fonts/GeistPixel-Square.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/assets/css/styles.css">
     <script src="/assets/js/theme.js" defer></script>
 </head>
-<body class="min-h-screen flex flex-col bg-slate-50 text-slate-700 dark:bg-slate-950 dark:text-slate-200">
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:bg-sky-700 focus:text-white focus:px-4 focus:py-2 focus:rounded focus:z-50">Skip to main content</a>
+<body class="subpage-body">
+    <a href="#main-content" class="sr-only skip-link">Skip to main content</a>
 
-    <header class="bg-slate-900 text-white p-6 md:p-8 shadow-lg dark:border-b dark:border-slate-800">
-        <div class="max-w-4xl mx-auto flex items-center justify-between gap-4">
-            <div>
-                <a href="/" class="text-xl md:text-2xl font-black tracking-tight text-white hover:text-sky-300 transition-colors duration-200">Guilherme Vigneron de Oliveira</a>
-                <p class="text-sm text-sky-300 mt-1">Principal Technologist | QA &amp; Software Testing Expert</p>
-            </div>
-            <button id="theme-toggle" type="button" class="inline-flex items-center justify-center p-2 rounded-lg bg-slate-800 text-slate-100 border border-slate-700 hover:bg-slate-700 hover:text-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-400 transition-colors duration-200" aria-label="Switch to dark theme" aria-pressed="false">
-                <svg class="w-5 h-5 hidden dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                    <circle cx="12" cy="12" r="4"/>
-                    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
-                </svg>
-                <svg class="w-5 h-5 block dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                </svg>
-            </button>
-        </div>
-    </header>
+    <main id="main-content" class="subpage-main">
+        <div class="cv-shell">
+            <header class="subpage-nav">
+                <div>
+                    <a href="/" class="subpage-brand">Guilherme Vigneron de Oliveira</a>
+                    <p class="entry-sub">Principal Technologist | QA &amp; Software Testing Expert</p>
+                </div>
+                <div class="subpage-nav-actions">
+                    <button id="theme-toggle" type="button" class="icon-btn" aria-label="Switch to dark theme" aria-pressed="false" title="Switch to dark theme">
+                        <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <circle cx="12" cy="12" r="4"></circle>
+                            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+                        </svg>
+                        <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </header>
 
-    <main id="main-content" class="flex-1 max-w-4xl w-full mx-auto px-8 py-16 flex flex-col justify-center">
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-8 md:p-12">
-            <p class="text-sm font-bold uppercase tracking-wider text-sky-800 dark:text-sky-300">Error 404</p>
-            <h1 class="text-4xl md:text-5xl font-black text-slate-900 dark:text-slate-100 mt-2">Page Not Found</h1>
-            <div class="w-16 h-1 bg-sky-500 mt-4 mb-6"></div>
-            <p class="text-lg text-slate-700 dark:text-slate-300 leading-relaxed max-w-2xl">
-                The page or resource you requested does not exist or may have moved. You can return to the main portfolio, download the latest resume PDF, or inspect the live CI quality report.
-            </p>
-            <div class="mt-8 flex flex-wrap gap-4">
-                <a href="/" class="inline-flex items-center gap-2 bg-sky-700 text-white font-medium px-6 py-3 rounded-lg shadow-md hover:bg-sky-800 dark:bg-sky-400 dark:text-slate-950 dark:hover:bg-sky-300 dark:font-semibold transition-colors duration-200">
-                    Back to Portfolio
-                </a>
-                <a href="/resume.pdf" class="inline-flex items-center gap-2 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-medium px-6 py-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-200">
-                    Download Resume (PDF)
-                </a>
-                <a href="/quality/" class="inline-flex items-center gap-2 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-medium px-6 py-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-200">
-                    Quality Report
-                </a>
-            </div>
+            <section class="panel-card panel-card--spacious">
+                <p class="section-title">error 404</p>
+                <h1 class="cv-name mt-2">Page Not Found</h1>
+                <p class="summary-copy mt-4">
+                    The page or resource you requested does not exist or may have moved. You can return to the main portfolio, download the latest resume PDF, or inspect the live CI quality report.
+                </p>
+                <div class="mt-6 flex flex-wrap gap-3">
+                    <a href="/" class="primary-link">Back to Portfolio</a>
+                    <a href="/resume.pdf" class="ghost-link">Download Resume (PDF)</a>
+                    <a href="/quality/" class="ghost-link">Quality Report</a>
+                </div>
+            </section>
         </div>
     </main>
 
-    <footer class="text-center p-6 bg-slate-100 dark:bg-slate-900 dark:border-t dark:border-slate-800">
-        <p class="text-slate-700 dark:text-slate-300">&copy; 2026 Guilherme Vigneron de Oliveira.</p>
+    <footer class="cv-footer-wrap">
+        <div class="cv-footer-inner">
+            <span>&copy; 2026 Guilherme Vigneron de Oliveira</span>
+            <div class="cv-footer-links">
+                <a href="/">Portfolio</a>
+                <span aria-hidden="true">&middot;</span>
+                <a href="/quality/">Quality Report</a>
+                <span aria-hidden="true">&middot;</span>
+                <a href="/resume.json">JSON Resume</a>
+            </div>
+        </div>
     </footer>
 </body>
 </html>
