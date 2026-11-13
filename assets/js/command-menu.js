@@ -119,10 +119,10 @@
   function getGroups(isHome) {
     const nav = isHome
       ? [
-          ['About Me', 'Section', '#about', 'jump'],
+          ['Summary', 'Section', '#about', 'jump about me'],
           ['Professional Experience', 'Section', '#experience', 'jump work'],
           ['Selected Projects', 'Section', '#projects', 'jump open source'],
-          ['Core Competencies', 'Section', '#skills', 'jump skills'],
+          ['Skills', 'Section', '#skills', 'jump core competencies'],
           ['Publications & Awards', 'Section', '#publications', 'jump'],
           ['Education', 'Section', '#education', 'jump'],
         ]
@@ -130,7 +130,7 @@
           ['Portfolio Home', '/', '/', 'main cv'],
           ['Professional Experience', '/#experience', '/#experience', 'jump portfolio'],
           ['Selected Projects', '/#projects', '/#projects', 'jump portfolio'],
-          ['Core Competencies', '/#skills', '/#skills', 'jump portfolio skills'],
+          ['Skills', '/#skills', '/#skills', 'jump portfolio core competencies'],
         ];
 
     return [

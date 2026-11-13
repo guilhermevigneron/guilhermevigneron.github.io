@@ -217,6 +217,7 @@ button {
 .avatar-picture,
 .avatar,
 .date-range,
+.entry-location,
 .cmd-input-row,
 .cmd-search-icon,
 .cmd-close {
@@ -507,7 +508,8 @@ html.dark .theme-icon-moon {
   color: var(--faint);
 }
 
-.date-range {
+.date-range,
+.entry-location {
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
   color: var(--faint);

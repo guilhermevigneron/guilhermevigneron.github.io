@@ -217,13 +217,16 @@ export function buildCvContentHtml(data) {
         .map((h) => `                            <li>${escapeHtml(h)}</li>`)
         .join('\n');
       const tags = job.keywords?.length ? `\n${renderTagList(job.keywords, 'tag-list--spaced')}` : '';
+      const roleRow = job.location
+        ? `<div class="entry-top">\n                                <h4 class="entry-role">${escapeHtml(job.position)}</h4>\n                                <span class="entry-location">${escapeHtml(job.location)}</span>\n                            </div>`
+        : `<h4 class="entry-role">${escapeHtml(job.position)}</h4>`;
       return `                    <article>
                         <div class="entry-header">
                             <div class="entry-top">
                                 <h3 class="entry-heading">${escapeHtml(job.name)}</h3>
                                 <div class="date-range" title="Employment period: ${escapeHtml(job.displayDate)}">${escapeHtml(job.displayDate)}</div>
                             </div>
-                            <h4 class="entry-role">${escapeHtml(job.position)}</h4>
+                            ${roleRow}
                         </div>
                         <ul class="work-highlights">
 ${highlights}
@@ -397,7 +400,7 @@ ${highlights}
             </header>
 
             <section id="about" aria-labelledby="about-heading" class="cv-section animate-fade-in delay-1">
-                <h2 id="about-heading" class="section-title">About Me</h2>
+                <h2 id="about-heading" class="section-title">Summary</h2>
                 <p class="summary-copy">
                     ${escapeHtml(data.basics.summary)}
                 </p>
@@ -422,7 +425,7 @@ ${projectsHtml}
             </section>
 
             <section id="skills" aria-labelledby="skills-heading" class="cv-section animate-fade-in delay-4">
-                <h2 id="skills-heading" class="section-title">Core Competencies</h2>
+                <h2 id="skills-heading" class="section-title">Skills</h2>
                 <ul class="tag-list tag-list--skills">
 ${skillsItems}
                 </ul>

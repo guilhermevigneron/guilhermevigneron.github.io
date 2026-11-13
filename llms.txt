@@ -13,7 +13,7 @@ Principal Technologist with 18+ years of experience advancing software quality, 
   - Led comprehensive test strategies and robust Selenium/C# automation frameworks, increasing test coverage and reducing defects.
   - Conducted critical performance testing to optimize software scalability and reliability.
   - Led cross-functional teams as a Scrum Master, fostering collaboration and driving sustained sprint delivery.
-- Senior QA Engineer at AVEVA (Sep 2018 - Aug 2024), São Paulo, Brazil
+- Senior QA Engineer at AVEVA (Sep 2018 - Nov 2023), São Paulo, Brazil
   - Headed the development of test strategies, increasing test coverage and reducing defects.
   - Designed a robust Page Object Model test framework using Selenium and C#.
   - Orchestrated testing processes using Azure DevOps release pipelines.

@@ -98,9 +98,14 @@ async function generatePdf() {
       document.documentElement.classList.remove('dark');
       await document.fonts.ready;
       const avatar = document.querySelector('img.avatar');
+      const avatarWrap = avatar?.closest('picture') || avatar;
+      const avatarVisible = Boolean(
+        avatarWrap && getComputedStyle(avatarWrap).display !== 'none'
+      );
       const text = document.body.innerText || '';
       return {
         hasName: text.includes(expectedName),
+        avatarVisible,
         avatarReady: Boolean(avatar && avatar.complete && avatar.naturalWidth > 0),
         projectsVisibleInPrint: Boolean(
           document.querySelector('#projects') &&
@@ -112,8 +117,11 @@ async function generatePdf() {
     if (!printAudit.hasName) {
       throw new Error('Print layout missing candidate name in rendered DOM');
     }
-    if (!printAudit.avatarReady) {
+    if (printAudit.avatarVisible && !printAudit.avatarReady) {
       throw new Error('Print layout avatar image failed to load');
+    }
+    if (printAudit.projectsVisibleInPrint) {
+      throw new Error('Selected Projects section should stay hidden in print PDF layout');
     }
 
     await page.pdf({
@@ -121,6 +129,8 @@ async function generatePdf() {
       format: 'A4',
       printBackground: true,
       preferCSSPageSize: true,
+      tagged: true,
+      outline: true,
       margin: {
         top: '0.45in',
         right: '0.5in',
@@ -143,7 +153,21 @@ async function generatePdf() {
       throw new Error(`Generated resume.pdf unexpectedly small (${pdfBytes.length} bytes)`);
     }
 
+    const pdfLatin1 = pdfBytes.toString('latin1');
+    const isTagged = /\/StructTreeRoot\b/.test(pdfLatin1);
+    const hasType3Fonts = /\/Subtype\s*\/Type3\b/.test(pdfLatin1);
+    const hasEmbeddedImages = /\/Subtype\s*\/Image\b/.test(pdfLatin1);
     const pageCount = countPdfPages(pdfBytes);
+
+    if (!isTagged) {
+      throw new Error('Generated resume.pdf is missing /StructTreeRoot (tagged PDF required for ATS/a11y)');
+    }
+    if (hasType3Fonts) {
+      throw new Error('Generated resume.pdf contains Type 3 fonts; use static TrueType/OpenType fonts in print CSS');
+    }
+    if (hasEmbeddedImages) {
+      throw new Error('Generated resume.pdf contains embedded raster images; hide imagery in print CSS for ATS');
+    }
     if (pageCount < 1 || pageCount > maxPdfPages) {
       throw new Error(
         `Generated resume.pdf page count ${pageCount} violates maxPdfPages=${maxPdfPages}`
@@ -160,6 +184,9 @@ async function generatePdf() {
           bytes: pdfBytes.length,
           pages: pageCount,
           maxPages: maxPdfPages,
+          tagged: isTagged,
+          type3Fonts: hasType3Fonts,
+          embeddedImages: hasEmbeddedImages,
           executablePath,
           blockedExternalRequests: blockedExternalRequests.length,
           timestamp: new Date().toISOString(),
@@ -170,7 +197,7 @@ async function generatePdf() {
     );
 
     console.log(
-      `Generated _site/resume.pdf (${pageCount} page${pageCount === 1 ? '' : 's'}, ${(pdfBytes.length / 1024).toFixed(1)} KB) via ${executablePath}`
+      `Generated _site/resume.pdf (${pageCount} page${pageCount === 1 ? '' : 's'}, ${(pdfBytes.length / 1024).toFixed(1)} KB, tagged=${isTagged}, type3=${hasType3Fonts}, images=${hasEmbeddedImages}) via ${executablePath}`
     );
   } finally {
     if (browser) await browser.close();

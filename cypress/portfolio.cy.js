@@ -262,10 +262,10 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
     cy.contains('h1', 'Guilherme Vigneron de Oliveira').should('be.visible');
     cy.contains('Principal Technologist | Quality, DevOps & Developer Experience').should('be.visible');
 
-    cy.contains('h2', 'About Me').should('be.visible');
+    cy.contains('h2', 'Summary').should('be.visible');
     cy.contains('h2', 'Professional Experience').should('be.visible');
     cy.contains('h2', 'Selected Projects').should('be.visible');
-    cy.contains('h2', 'Core Competencies').should('be.visible');
+    cy.contains('h2', 'Skills').should('be.visible');
     cy.contains('h2', 'Publications & Awards').should('be.visible');
     cy.contains('h2', 'Education').should('be.visible');
 
@@ -650,6 +650,9 @@ describe('Automated Resume PDF Pipeline', () => {
       expect(res.headers['content-type']).to.include('application/pdf');
       expect(res.body.length).to.be.greaterThan(5000);
       expect(res.body.slice(0, 5)).to.eq('%PDF-');
+      expect(res.body, '/resume.pdf tagged structure tree').to.include('/StructTreeRoot');
+      expect(res.body, '/resume.pdf no Type 3 fonts').to.not.match(/\/Subtype\s*\/Type3\b/);
+      expect(res.body, '/resume.pdf no embedded images').to.not.match(/\/Subtype\s*\/Image\b/);
       const pagesMatch = res.body.match(/\/Type\s*\/Pages[\s\S]{0,160}?\/Count\s+(\d+)/);
       expect(pagesMatch, '/resume.pdf page count header').to.not.be.null;
       expect(Number(pagesMatch[1]), '/resume.pdf page count').to.eq(1);
@@ -681,6 +684,7 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
         resume.work.forEach((job) => {
           cy.contains(job.position).should('be.visible');
           cy.contains(job.displayDate).should('be.visible');
+          cy.contains(job.location).should('be.visible');
         });
         resume.skills.forEach((skill) => {
           cy.get('#skills').should('contain.text', skill.name);
