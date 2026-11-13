@@ -1,0 +1,42 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
+  "files": {
+    "includes": [
+      "**",
+      "!_site",
+      "!.ci-reports",
+      "!node_modules",
+      "!cypress/videos",
+      "!cypress/screenshots",
+      "!package-lock.json"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "suspicious": {
+        "noDuplicateCustomProperties": "off",
+        "noDuplicateProperties": "off",
+        "useIterableCallbackReturn": "off"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "trailingCommas": "es5"
+    }
+  },
+  "css": {
+    "linter": {
+      "enabled": true
+    }
+  }
+}

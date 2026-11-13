@@ -121,6 +121,9 @@ const themeJsUrl = fingerprintAsset('assets/js/theme.js');
 const commandMenuJsUrl = fingerprintAsset('assets/js/command-menu.js');
 const faviconSvgUrl = fingerprintAsset('assets/favicon.svg');
 const appleTouchIconUrl = fingerprintAsset('assets/apple-touch-icon.png');
+const icon192Url = fingerprintAsset('assets/icon-192.png');
+const icon512Url = fingerprintAsset('assets/icon-512.png');
+const icon512MaskableUrl = fingerprintAsset('assets/icon-512-maskable.png');
 
 const avatarAssets = [
   'assets/avatar-168.avif',
@@ -153,6 +156,9 @@ rewriteTextFile('404.html', assetReplacements);
 rewriteTextFile('site.webmanifest', {
   '/assets/favicon.svg': faviconSvgUrl,
   '/assets/apple-touch-icon.png': appleTouchIconUrl,
+  '/assets/icon-192.png': icon192Url,
+  '/assets/icon-512.png': icon512Url,
+  '/assets/icon-512-maskable.png': icon512MaskableUrl,
 });
 
 console.log('4c. Minifying built HTML documents...');

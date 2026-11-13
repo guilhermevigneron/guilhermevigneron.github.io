@@ -340,7 +340,7 @@ ${highlights}
                 <picture class="avatar-picture">
                     <source type="image/avif" srcset="/assets/avatar-168.avif 168w, /assets/avatar-224.avif 224w, /assets/avatar-336.avif 336w" sizes="(min-width: 640px) 112px, (min-width: 380px) 84px, 72px">
                     <source type="image/webp" srcset="/assets/avatar-168.webp 168w, /assets/avatar-224.webp 224w, /assets/avatar-336.webp 336w" sizes="(min-width: 640px) 112px, (min-width: 380px) 84px, 72px">
-                    <img class="avatar" src="/assets/avatar.jpg" alt="${escapeHtml(data.basics.name)}'s profile picture" width="112" height="112" decoding="async" fetchpriority="high">
+                    <img class="avatar" src="/assets/avatar.jpg" alt="${escapeHtml(data.basics.name)}" width="112" height="112" decoding="async" fetchpriority="high">
                 </picture>
                 <div class="header-actions no-print">
                     <nav aria-label="Social links">

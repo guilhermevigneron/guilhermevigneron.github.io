@@ -44,13 +44,15 @@ Requires Node.js 22+ and a local Chrome/Chromium installation (used by `playwrig
 
 ```bash
 npm ci
-npm run verify         # Security audit, build, HTML validation, Cypress+axe E2E, Playwright perf, quality report
+npm run verify         # Lint, unit tests, security audit, build, HTML validation, Cypress+axe E2E, Playwright perf, quality report
 ```
 
 Individual tasks:
 
 ```bash
-npm run test:security  # Run npm audit (--audit-level=high)
+npm run lint           # Run Biome linter across JS, CSS, JSON, and SVG/HTML
+npm run test:unit      # Run Node built-in unit tests (tests/unit.test.mjs)
+npm run test:security  # Run npm audit (--audit-level=moderate)
 npm run sync           # Synchronize resume.json -> index.html, 404.html, llms.txt, manifest, sitemap
 npm run build          # Sync, validate, minify & fingerprint assets, build PDF, OG card & quality report
 npm run test:html      # Validate built HTML5 documents
