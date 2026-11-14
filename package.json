@@ -34,7 +34,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.6.7",
     "axe-core": "^4.14.0",
-    "cypress": "^15.21.2",
+    "cypress": "^16.2.1",
     "cypress-axe": "^1.7.0",
     "esbuild": "^0.28.2",
     "html-validate": "^11.21.1",
