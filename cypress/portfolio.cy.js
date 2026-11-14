@@ -400,10 +400,15 @@ describe('Portfolio Content, Inline SVGs & Navigation', () => {
   it('includes complete SEO metadata, OG image card, and Schema.org JSON-LD', () => {
     cy.get('meta[name="description"]').should('have.attr', 'content').and('not.be.empty');
     cy.get('meta[property="og:type"]').should('have.attr', 'content', 'profile');
-    cy.get('meta[property="og:url"]').should('have.attr', 'content', SITE_URL);
-    cy.get('meta[property="og:image"]').should('have.attr', 'content', resume.meta.ogImageUrl);
-    cy.get('meta[name="twitter:image"]').should('have.attr', 'content', resume.meta.ogImageUrl);
-    cy.get('link[rel="canonical"]').should('have.attr', 'href', SITE_URL);
+    cy.get('meta[property="og:url"]').should('have.attr', 'content', `${SITE_URL}/`);
+    cy.get('meta[property="og:image"]')
+      .should('have.attr', 'content')
+      .and('match', /^https:\/\/guilhermevigneron\.dev\/assets\/og-card(?:\.[a-f0-9]+)?\.png$/);
+    cy.get('meta[name="twitter:image"]')
+      .should('have.attr', 'content')
+      .and('match', /^https:\/\/guilhermevigneron\.dev\/assets\/og-card(?:\.[a-f0-9]+)?\.png$/);
+    cy.get('meta[name="twitter:image:alt"]').should('have.attr', 'content').and('not.be.empty');
+    cy.get('link[rel="canonical"]').should('have.attr', 'href', `${SITE_URL}/`);
     cy.get('a[href="#about"]').should('exist');
   });
 });
@@ -909,9 +914,10 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
       expect(res.status).to.eq(200);
       expect(res.body).to.include(`${SITE_URL}/`);
       expect(res.body).to.include(`${SITE_URL}${resume.meta.resumePdf}`);
-      expect(res.body).to.include(`${SITE_URL}${resume.meta.contactVcf}`);
       expect(res.body).to.include(`${SITE_URL}/architecture/`);
-      expect(res.body).to.include(`${SITE_URL}/quality/report.json`);
+      expect(res.body).to.include(`${SITE_URL}/quality/`);
+      expect(res.body).to.not.include(`${SITE_URL}${resume.meta.contactVcf}`);
+      expect(res.body).to.not.include(`${SITE_URL}/quality/report.json`);
     });
   });
 });

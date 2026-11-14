@@ -159,7 +159,7 @@ function buildCardHtml(resume) {
     </div>
     <div class="footer">
       <span>Zero-Third-Party &middot; WCAG 2.1 AA &middot; Strict CSP</span>
-      <span class="endpoints">/resume.pdf &middot; /resume.json &middot; /quality/</span>
+      <span class="endpoints">${escapeHtml(resume.meta?.resumePdf || '/resume.pdf')} &middot; /resume.json &middot; ${escapeHtml(new URL(resume.meta?.qualityReportUrl || 'https://guilhermevigneron.dev/quality/').pathname)}</span>
     </div>
   </div>
 </body>

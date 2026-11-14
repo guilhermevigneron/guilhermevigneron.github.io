@@ -26,6 +26,12 @@ export function computeYearsOfExperience(data, currentYear = new Date().getUTCFu
 }
 
 export function buildJsonLd(data) {
+  const baseUrl = String(data.basics.url || '').replace(/\/$/, '');
+  const canonicalUrl = `${baseUrl}/`;
+  const personId = `${canonicalUrl}#person`;
+  const websiteId = `${canonicalUrl}#website`;
+  const profilePageId = `${canonicalUrl}#profilepage`;
+
   const uniqueSchools = [];
   const seenSchools = new Set();
   for (const edu of [...data.education].reverse()) {
@@ -39,14 +45,21 @@ export function buildJsonLd(data) {
   }
 
   const currentEmployer = (data.work || []).find((job) => !job.endDate);
+  const knowsAbout = Array.from(
+    new Set([
+      ...(data.skills || []).map((s) => s.name),
+      ...(data.projects || []).flatMap((p) => p.keywords || []),
+    ])
+  );
+  const awards = (data.awards || []).map((a) => a.title).filter(Boolean);
 
-  return {
-    '@context': 'https://schema.org',
+  const personNode = {
     '@type': 'Person',
+    '@id': personId,
     name: data.basics.name,
     jobTitle: data.meta.jobTitle,
-    url: data.basics.url,
-    image: `${data.basics.url}/assets/avatar.jpg`,
+    url: canonicalUrl,
+    image: `${baseUrl}/assets/avatar.jpg`,
     email: data.basics.email,
     sameAs: data.basics.profiles.map((p) => p.url),
     ...(currentEmployer
@@ -57,11 +70,12 @@ export function buildJsonLd(data) {
           },
         }
       : {}),
-    knowsAbout: data.skills.map((s) => s.name),
+    knowsAbout,
     ...(data.languages?.length
       ? { knowsLanguage: data.languages.map((l) => l.language) }
       : {}),
     alumniOf: uniqueSchools,
+    ...(awards.length ? { award: awards } : {}),
     address: {
       '@type': 'PostalAddress',
       addressLocality: data.basics.location.city,
@@ -69,6 +83,47 @@ export function buildJsonLd(data) {
       addressCountry: data.basics.location.countryCode,
     },
     description: data.meta.shortDescription,
+  };
+
+  const websiteNode = {
+    '@type': 'WebSite',
+    '@id': websiteId,
+    url: canonicalUrl,
+    name: data.meta.pageTitle || data.basics.name,
+    description: data.meta.shortDescription,
+    inLanguage: 'en',
+    publisher: { '@id': personId },
+  };
+
+  const profilePageNode = {
+    '@type': 'ProfilePage',
+    '@id': profilePageId,
+    url: canonicalUrl,
+    name: data.meta.pageTitle || data.basics.name,
+    description: data.meta.metaDescription || data.meta.shortDescription,
+    inLanguage: 'en',
+    isPartOf: { '@id': websiteId },
+    mainEntity: { '@id': personId },
+  };
+
+  const publicationNodes = (data.publications || []).map((pub) => ({
+    '@type': 'Article',
+    headline: pub.name,
+    url: pub.url,
+    author: { '@id': personId },
+    ...(pub.publisher
+      ? {
+          publisher: {
+            '@type': 'Organization',
+            name: pub.publisher,
+          },
+        }
+      : {}),
+  }));
+
+  return {
+    '@context': 'https://schema.org',
+    '@graph': [websiteNode, profilePageNode, personNode, ...publicationNodes],
   };
 }
 
@@ -98,16 +153,19 @@ export function buildVCard(data) {
 }
 
 export function buildLlmsTxt(data) {
+  const baseUrl = String(data.basics.url || '').replace(/\/$/, '');
   const years = computeYearsOfExperience(data);
   const yearsLabel = years ? `${years}+ years` : 'extensive';
   const workLines = data.work.flatMap((job) => [
     `- ${job.position} at ${job.name} (${job.displayDate}), ${job.location}`,
     ...(job.highlights || []).map((h) => `  - ${h}`),
+    ...(job.keywords?.length ? [`  - Keywords: ${job.keywords.join(', ')}`] : []),
   ]);
   const projectLines = (data.projects || []).flatMap((proj) => [
-    `- ${proj.name} — ${proj.subtitle} (${proj.url})`,
+    `- [${proj.name} — ${proj.subtitle}](${proj.url})`,
     `  - ${proj.description}`,
     ...(proj.highlights || []).map((h) => `  - ${h}`),
+    ...(proj.keywords?.length ? [`  - Technologies: ${proj.keywords.join(', ')}`] : []),
   ]);
   const skillsLine = data.skills.map((s) => s.name).join(', ');
   const educationLines = data.education.map(
@@ -115,7 +173,7 @@ export function buildLlmsTxt(data) {
       `- ${edu.studyType}, ${edu.area} — ${edu.institution} (${edu.startDate}-${edu.endDate})`
   );
   const publicationLines = data.publications.map(
-    (pub) => `- "${pub.name}" — ${pub.publisher} (${pub.url})`
+    (pub) => `- [${pub.name}](${pub.url}) — ${pub.publisher}`
   );
   const awardLines = data.awards.flatMap((award) => {
     const meta = [award.awarder, award.date].filter(Boolean).join(', ');
@@ -126,7 +184,7 @@ export function buildLlmsTxt(data) {
     (lang) => `- ${lang.language} (${lang.fluency})`
   );
   const profileLines = data.basics.profiles.map(
-    (profile) => `- ${profile.network}: ${profile.url}`
+    (profile) => `- [${profile.network}](${profile.url})`
   );
 
   return [
@@ -157,18 +215,18 @@ export function buildLlmsTxt(data) {
     ...awardLines,
     '',
     '## Machine-Readable & Verification Endpoints',
-    `- Resume PDF: ${data.meta.resumePdfUrl}`,
-    `- JSON Resume: ${data.meta.resumeJsonUrl}`,
-    `- Contact vCard: ${data.meta.contactVcfUrl}`,
-    `- Architecture Overview: ${data.basics.url}/architecture/`,
-    `- Quality Report: ${data.meta.qualityReportUrl}`,
-    `- Quality Telemetry JSON: ${data.meta.qualityReportJsonUrl}`,
-    `- Security Policy: ${data.meta.securityTxtUrl}`,
+    `- [Resume PDF](${data.meta.resumePdfUrl}): Single-page A4 resume`,
+    `- [JSON Resume](${data.meta.resumeJsonUrl}): Canonical structured profile data`,
+    `- [Contact vCard](${data.meta.contactVcfUrl}): Downloadable vCard 3.0 contact`,
+    `- [Architecture Overview](${baseUrl}/architecture/): Build and verification pipeline overview`,
+    `- [Quality Report](${data.meta.qualityReportUrl}): Live CI quality, accessibility, and Web Vitals report`,
+    `- [Quality Telemetry JSON](${data.meta.qualityReportJsonUrl}): Machine-readable CI telemetry`,
+    `- [Security Policy](${data.meta.securityTxtUrl}): RFC 9116 vulnerability disclosure policy`,
     '',
     '## Contact',
     `- Email: ${data.basics.email}`,
     ...profileLines,
-    `- Website: ${data.basics.url}`,
+    `- [Website](${baseUrl}/)`,
     '',
   ].join('\n');
 }
@@ -184,7 +242,9 @@ export function buildIndexMeta(data) {
   const metaDesc = escapeHtml(data.meta.metaDescription || data.basics.summary);
   const ogDesc = escapeHtml(data.meta.ogDescription || data.meta.shortDescription);
   const ogImageUrl = escapeHtml(data.meta.ogImageUrl || `${data.basics.url}/assets/og-card.png`);
-  const canonical = escapeHtml(data.meta.canonical || data.basics.url);
+  const ogImageAlt = escapeHtml(data.meta.ogImageAlt || data.meta.pageTitle || data.basics.name);
+  const rawCanonical = data.meta.canonical || `${String(data.basics.url || '').replace(/\/$/, '')}/`;
+  const canonical = escapeHtml(rawCanonical);
   const nameParts = String(data.basics.name || '')
     .trim()
     .split(/\s+/);
@@ -202,9 +262,10 @@ export function buildIndexMeta(data) {
     '<meta property="og:type" content="profile">',
     `<meta property="og:url" content="${canonical}">`,
     `<meta property="og:image" content="${ogImageUrl}">`,
+    '<meta property="og:image:type" content="image/png">',
     '<meta property="og:image:width" content="1200">',
     '<meta property="og:image:height" content="630">',
-    `<meta property="og:image:alt" content="${title}">`,
+    `<meta property="og:image:alt" content="${ogImageAlt}">`,
     '<meta property="og:locale" content="en_US">',
     `<meta property="profile:first_name" content="${firstName}">`,
     `<meta property="profile:last_name" content="${lastName}">`,
@@ -212,6 +273,7 @@ export function buildIndexMeta(data) {
     `<meta name="twitter:title" content="${title}">`,
     `<meta name="twitter:description" content="${ogDesc}">`,
     `<meta name="twitter:image" content="${ogImageUrl}">`,
+    `<meta name="twitter:image:alt" content="${ogImageAlt}">`,
   ]
     .map((line, index) => (index === 0 || !line ? line : `    ${line}`))
     .join('\n');
@@ -579,12 +641,8 @@ export function buildSitemapXml(data) {
   const entries = [
     { loc: `${base}/`, changefreq: 'monthly', priority: '1.0' },
     { loc: `${base}/resume.pdf`, changefreq: 'monthly', priority: '0.8' },
-    { loc: `${base}/resume.json`, changefreq: 'monthly', priority: '0.8' },
-    { loc: `${base}/llms.txt`, changefreq: 'monthly', priority: '0.8' },
-    { loc: `${base}/contact.vcf`, changefreq: 'monthly', priority: '0.6' },
     { loc: `${base}/architecture/`, changefreq: 'monthly', priority: '0.6' },
     { loc: `${base}/quality/`, changefreq: 'weekly', priority: '0.6' },
-    { loc: `${base}/quality/report.json`, changefreq: 'weekly', priority: '0.5' },
   ];
   const urls = entries
     .map(

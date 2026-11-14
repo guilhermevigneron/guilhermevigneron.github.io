@@ -143,6 +143,8 @@ function buildArchitecturePage() {
     title: `Architecture Overview - ${ownerName}`,
     description: `High-level visual architecture of ${domain}: how a single resume.json source builds and verifies the site, PDF, and quality report.`,
     canonicalUrl: `${siteUrl}/architecture/`,
+    ogImageUrl: `${siteUrl}${assetUrls.ogCardUrl}`,
+    ogImageAlt: resume?.meta?.ogImageAlt || `Architecture Overview - ${ownerName}`,
     ownerName,
     subtitleHtml: `<p class="entry-sub">How ${escapeHtml(domain)} Works</p>`,
     navLinks: [

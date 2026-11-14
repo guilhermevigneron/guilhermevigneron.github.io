@@ -416,6 +416,8 @@ function buildQualityPage() {
     title: `Quality & Verification Report - ${ownerName}`,
     description: `Automated CI/CD quality, accessibility, performance, and security verification report for ${domain}.`,
     canonicalUrl: `${siteUrl}/quality/`,
+    ogImageUrl: `${siteUrl}${assetUrls.ogCardUrl}`,
+    ogImageAlt: resume?.meta?.ogImageAlt || `Quality & Verification Report - ${ownerName}`,
     alternateLinks: [
       {
         type: 'application/json',

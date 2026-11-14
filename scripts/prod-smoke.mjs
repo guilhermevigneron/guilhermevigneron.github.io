@@ -527,16 +527,16 @@ async function main() {
     const sitemapText = sitemapBuf.toString('utf8');
     assert.ok(sitemapText.includes(`${canonicalUrl}/`), 'sitemap.xml missing homepage');
     assert.ok(
-      sitemapText.includes(`${canonicalUrl}/contact.vcf`),
-      'sitemap.xml missing /contact.vcf'
+      sitemapText.includes(`${canonicalUrl}/resume.pdf`),
+      'sitemap.xml missing /resume.pdf'
     );
     assert.ok(
       sitemapText.includes(`${canonicalUrl}/architecture/`),
       'sitemap.xml missing /architecture/'
     );
     assert.ok(
-      sitemapText.includes(`${canonicalUrl}/quality/report.json`),
-      'sitemap.xml missing /quality/report.json'
+      sitemapText.includes(`${canonicalUrl}/quality/`),
+      'sitemap.xml missing /quality/'
     );
   });
 

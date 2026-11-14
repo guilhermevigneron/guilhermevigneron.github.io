@@ -188,7 +188,7 @@
     }
   ],
   "meta": {
-    "canonical": "https://guilhermevigneron.dev",
+    "canonical": "https://guilhermevigneron.dev/",
     "shortName": "G. Vigneron",
     "pageTitle": "Guilherme Vigneron de Oliveira - Principal Technologist",
     "jobTitle": "Principal Technologist | Quality, DevOps & Developer Experience",
@@ -198,6 +198,7 @@
     "manifestDescription": "Principal Technologist | Quality, DevOps & Developer Experience — Portfolio & Resume",
     "ogImage": "/assets/og-card.png",
     "ogImageUrl": "https://guilhermevigneron.dev/assets/og-card.png",
+    "ogImageAlt": "Social preview card for Guilherme Vigneron de Oliveira, Principal Technologist with 18+ years of experience in Austin, TX",
     "resumePdf": "/resume.pdf",
     "resumePdfUrl": "https://guilhermevigneron.dev/resume.pdf",
     "resumeJsonUrl": "https://guilhermevigneron.dev/resume.json",

@@ -240,32 +240,44 @@ export async function buildSite() {
     fs.writeFileSync(full, minifyHtml(fs.readFileSync(full, 'utf8')), 'utf8');
   }
 
+  const assetManifest = {
+    cssUrl,
+    subpageCssUrl,
+    printCssUrl,
+    monoFontUrl,
+    pixelFontUrl,
+    themeInitJsUrl,
+    themeJsUrl,
+    commandMenuJsUrl,
+    commandMenuPanelJsUrl,
+    faviconSvgUrl,
+    appleTouchIconUrl,
+    avatarReplacements,
+  };
+
   fs.mkdirSync(reportsDir, { recursive: true });
   atomicWriteFileSync(
     path.join(reportsDir, 'asset-manifest.json'),
-    JSON.stringify(
-      {
-        cssUrl,
-        subpageCssUrl,
-        printCssUrl,
-        monoFontUrl,
-        pixelFontUrl,
-        themeInitJsUrl,
-        themeJsUrl,
-        commandMenuJsUrl,
-        commandMenuPanelJsUrl,
-        faviconSvgUrl,
-        appleTouchIconUrl,
-        avatarReplacements,
-      },
-      null,
-      2
-    ),
+    JSON.stringify(assetManifest, null, 2),
     'utf8'
   );
 
   console.log('5. Generating /resume.pdf and /assets/og-card.png (1200x630) in parallel...');
   await runParallelGeneration();
+
+  console.log('5b. Fingerprinting generated /assets/og-card.png for social cache busting...');
+  const ogCardUrl = fingerprintAsset('assets/og-card.png');
+  const baseUrl = String(resume.basics.url || '').replace(/\/$/, '');
+  const rawOgUrl = resume.meta?.ogImageUrl || `${baseUrl}/assets/og-card.png`;
+  const hashedOgUrl = `${baseUrl}${ogCardUrl}`;
+  rewriteTextFile('index.html', { [rawOgUrl]: hashedOgUrl });
+
+  assetManifest.ogCardUrl = ogCardUrl;
+  atomicWriteFileSync(
+    path.join(reportsDir, 'asset-manifest.json'),
+    JSON.stringify(assetManifest, null, 2),
+    'utf8'
+  );
 
   console.log('6. Generating initial /quality/index.html & /quality/report.json...');
   runNodeScript('scripts/generate-quality-report.mjs');

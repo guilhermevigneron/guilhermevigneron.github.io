@@ -13,22 +13,26 @@ Principal Technologist with 18+ years of experience advancing software quality, 
   - Led comprehensive test strategies and robust Selenium/C# automation frameworks, increasing test coverage and reducing defects.
   - Conducted critical performance testing to optimize software scalability and reliability.
   - Led cross-functional teams as a Scrum Master, fostering collaboration and driving sustained sprint delivery.
+  - Keywords: DX Snapshots, DevOps, Development, AI / LLMs, Azure DevOps, C#, Selenium, Scrum
 - Senior QA Engineer at AVEVA (Sep 2018 - Nov 2023), Austin, TX
   - Headed the development of test strategies, increasing test coverage and reducing defects.
   - Designed a robust Page Object Model test framework using Selenium and C#.
   - Orchestrated testing processes using Azure DevOps release pipelines.
   - Mentored junior QA engineers, improving team productivity and knowledge sharing.
+  - Keywords: Selenium, C#, Page Object Model, Azure DevOps, Mentorship
 - Quality and Test Analyst at AVEVA (Oct 2008 - Sep 2018), São Paulo, Brazil
   - Led the implementation of a risk-based testing approach, prioritizing test cases based on business impact.
   - Pioneered the implementation of new test automation tools.
   - Collaborated with cross-functional teams to optimize the software development lifecycle.
   - Developed and delivered comprehensive training programs on testing techniques for QA analysts.
+  - Keywords: Risk-Based Testing, Test Automation, SDLC, QA Training
 
 ## Selected Projects
-- guilhermevigneron.dev — Self-Verifying Portfolio & Resume Pipeline (https://github.com/guilhermevigneron/guilhermevigneron.github.io)
+- [guilhermevigneron.dev — Self-Verifying Portfolio & Resume Pipeline](https://github.com/guilhermevigneron/guilhermevigneron.github.io)
   - Zero-third-party static showcase driven by a single resume.json source of truth. Compiles fingerprinted bundles, Schema.org JSON-LD, llms.txt, vCard, Open Graph card, and A4 /resume.pdf, gated by HTML5 validation, Playwright mobile Web Vitals budgets, and 16-audit WCAG 2.1 AA Cypress + axe checks.
   - Enforces strict default-src 'self' CSP with SHA-256 asset fingerprinting, subsetted Geist fonts, and responsive AVIF/WebP imagery.
   - Publishes live CI telemetry to /quality/ and /quality/report.json alongside weekly production smoke and link-rot checks.
+  - Technologies: Node.js, Playwright, Cypress, axe-core, esbuild, GitHub Actions, CSP
 
 ## Core Skills
 Developer Experience (DX), DevOps, Software Development, AI / LLM Workflows, CI/CD, Azure DevOps, C#, Python, Selenium, Test Automation Frameworks, Performance Testing, Risk-Based Testing, Agile & Scrum
@@ -42,24 +46,24 @@ Developer Experience (DX), DevOps, Software Development, AI / LLM Workflows, CI/
 - English (Fluent)
 
 ## Publications
-- "The Hidden Costs of Flaky Tests: A Deep Dive into Test Reliability" — StickyMinds (https://www.stickyminds.com/article/hidden-costs-flaky-tests-deep-dive-test-reliability-0)
-- "The Big Picture: Defining a Successful Test Automation Strategy" — Software Testing Magazine (https://www.softwaretestingmagazine.com/knowledge/the-big-picture-defining-a-successful-test-automation-strategy-for-long-term-value/)
+- [The Hidden Costs of Flaky Tests: A Deep Dive into Test Reliability](https://www.stickyminds.com/article/hidden-costs-flaky-tests-deep-dive-test-reliability-0) — StickyMinds
+- [The Big Picture: Defining a Successful Test Automation Strategy](https://www.softwaretestingmagazine.com/knowledge/the-big-picture-defining-a-successful-test-automation-strategy-for-long-term-value/) — Software Testing Magazine
 
 ## Awards
 - AVEVA Innovation and Creativity Recognition Award (AVEVA, 2025-07-01)
   - Built a working prototype at CanAms Hackathon 2025 (4th of ~41 ideas).
 
 ## Machine-Readable & Verification Endpoints
-- Resume PDF: https://guilhermevigneron.dev/resume.pdf
-- JSON Resume: https://guilhermevigneron.dev/resume.json
-- Contact vCard: https://guilhermevigneron.dev/contact.vcf
-- Architecture Overview: https://guilhermevigneron.dev/architecture/
-- Quality Report: https://guilhermevigneron.dev/quality/
-- Quality Telemetry JSON: https://guilhermevigneron.dev/quality/report.json
-- Security Policy: https://guilhermevigneron.dev/.well-known/security.txt
+- [Resume PDF](https://guilhermevigneron.dev/resume.pdf): Single-page A4 resume
+- [JSON Resume](https://guilhermevigneron.dev/resume.json): Canonical structured profile data
+- [Contact vCard](https://guilhermevigneron.dev/contact.vcf): Downloadable vCard 3.0 contact
+- [Architecture Overview](https://guilhermevigneron.dev/architecture/): Build and verification pipeline overview
+- [Quality Report](https://guilhermevigneron.dev/quality/): Live CI quality, accessibility, and Web Vitals report
+- [Quality Telemetry JSON](https://guilhermevigneron.dev/quality/report.json): Machine-readable CI telemetry
+- [Security Policy](https://guilhermevigneron.dev/.well-known/security.txt): RFC 9116 vulnerability disclosure policy
 
 ## Contact
 - Email: email@gvo.simplelogin.com
-- LinkedIn: https://www.linkedin.com/in/guilherme-vigneron-de-oliveira
-- GitHub: https://github.com/guilhermevigneron
-- Website: https://guilhermevigneron.dev
+- [LinkedIn](https://www.linkedin.com/in/guilherme-vigneron-de-oliveira)
+- [GitHub](https://github.com/guilhermevigneron)
+- [Website](https://guilhermevigneron.dev/)

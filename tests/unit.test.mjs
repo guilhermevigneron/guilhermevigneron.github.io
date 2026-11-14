@@ -88,20 +88,27 @@ describe('sync-resume helpers', () => {
     assert.ok(customVcf.includes('NOTE:Mathematician\\, Pioneer\\nLead\r\n'));
   });
 
-  it('builds Schema.org Person JSON-LD with deduplicated alumniOf and active worksFor', () => {
+  it('builds Schema.org @graph JSON-LD with WebSite, ProfilePage, Person, and Articles', () => {
     const ld = buildJsonLd(resume);
     assert.equal(ld['@context'], 'https://schema.org');
-    assert.equal(ld['@type'], 'Person');
-    assert.equal(ld.name, resume.basics.name);
-    assert.equal(ld.worksFor.name, resume.work[0].name);
-    const schoolNames = ld.alumniOf.map((s) => s.name);
+    assert.ok(Array.isArray(ld['@graph']));
+    const website = ld['@graph'].find((n) => n['@type'] === 'WebSite');
+    const profilePage = ld['@graph'].find((n) => n['@type'] === 'ProfilePage');
+    const person = ld['@graph'].find((n) => n['@type'] === 'Person');
+    assert.ok(website && profilePage && person);
+    assert.equal(profilePage.mainEntity['@id'], person['@id']);
+    assert.equal(person.name, resume.basics.name);
+    assert.equal(person.worksFor.name, resume.work[0].name);
+    const schoolNames = person.alumniOf.map((s) => s.name);
     assert.equal(new Set(schoolNames).size, schoolNames.length);
+    assert.ok(person.award.includes(resume.awards[0].title));
 
     const noCurrentJob = buildJsonLd({
       ...resume,
       work: [{ name: 'Past Corp', startDate: '2020-01', endDate: '2022-01' }],
     });
-    assert.equal(noCurrentJob.worksFor, undefined);
+    const noJobPerson = noCurrentJob['@graph'].find((n) => n['@type'] === 'Person');
+    assert.equal(noJobPerson.worksFor, undefined);
   });
 
   it('builds llms.txt, robots.txt, sitemap.xml, security.txt, and command-menu metadata', () => {
@@ -119,8 +126,11 @@ describe('sync-resume helpers', () => {
 
     const sitemap = buildSitemapXml({ basics: { url: 'https://example.dev/' } });
     assert.ok(sitemap.includes('<loc>https://example.dev/</loc>'));
+    assert.ok(sitemap.includes('<loc>https://example.dev/resume.pdf</loc>'));
     assert.ok(sitemap.includes('<loc>https://example.dev/architecture/</loc>'));
-    assert.ok(sitemap.includes('<loc>https://example.dev/quality/report.json</loc>'));
+    assert.ok(sitemap.includes('<loc>https://example.dev/quality/</loc>'));
+    assert.ok(!sitemap.includes('/contact.vcf'));
+    assert.ok(!sitemap.includes('/quality/report.json'));
 
     const secOut = syncSecurityTxt(
       'Contact: mailto:old@example.com\nExpires: 2027-01-01T00:00:00.000Z\nCanonical: https://old.example/.well-known/security.txt\n',

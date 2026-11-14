@@ -93,36 +93,56 @@ try {
     );
     assert.ok(match, 'JSON-LD script block missing from index.html');
     const jsonLd = JSON.parse(match[1]);
-    assert.equal(jsonLd['@type'], 'Person');
-    assert.equal(jsonLd.name, resume.basics.name);
-    assert.equal(jsonLd.jobTitle, resume.meta.jobTitle);
-    assert.equal(jsonLd.url, resume.basics.url);
-    assert.equal(jsonLd.email, resume.basics.email);
+    assert.ok(Array.isArray(jsonLd['@graph']), 'JSON-LD missing @graph array');
+    const website = jsonLd['@graph'].find((n) => n['@type'] === 'WebSite');
+    const profilePage = jsonLd['@graph'].find((n) => n['@type'] === 'ProfilePage');
+    const person = jsonLd['@graph'].find((n) => n['@type'] === 'Person');
+    assert.ok(website, 'JSON-LD @graph missing WebSite');
+    assert.ok(profilePage, 'JSON-LD @graph missing ProfilePage');
+    assert.ok(person, 'JSON-LD @graph missing Person');
+    assert.equal(profilePage.mainEntity?.['@id'], person['@id']);
+    assert.equal(person.name, resume.basics.name);
+    assert.equal(person.jobTitle, resume.meta.jobTitle);
+    assert.equal(person.url, `${resume.basics.url.replace(/\/$/, '')}/`);
+    assert.equal(person.email, resume.basics.email);
     assert.deepEqual(
-      jsonLd.sameAs,
+      person.sameAs,
       resume.basics.profiles.map((p) => p.url)
     );
     const activeJob = resume.work.find((j) => !j.endDate);
     if (activeJob) {
-      assert.equal(jsonLd.worksFor?.name, activeJob.name);
+      assert.equal(person.worksFor?.name, activeJob.name);
     } else {
-      assert.equal(jsonLd.worksFor, undefined);
+      assert.equal(person.worksFor, undefined);
     }
-    assert.deepEqual(
-      jsonLd.knowsAbout,
-      resume.skills.map((s) => s.name)
+    const expectedKnowsAbout = Array.from(
+      new Set([
+        ...resume.skills.map((s) => s.name),
+        ...(resume.projects || []).flatMap((p) => p.keywords || []),
+      ])
     );
-    assert.equal(jsonLd.address?.addressLocality, resume.basics.location.city);
-    assert.equal(jsonLd.address?.addressRegion, resume.basics.location.region);
-    assert.equal(jsonLd.address?.addressCountry, resume.basics.location.countryCode);
-    assert.equal(jsonLd.description, resume.meta.shortDescription);
+    assert.deepEqual(person.knowsAbout, expectedKnowsAbout);
+    assert.equal(person.address?.addressLocality, resume.basics.location.city);
+    assert.equal(person.address?.addressRegion, resume.basics.location.region);
+    assert.equal(person.address?.addressCountry, resume.basics.location.countryCode);
+    assert.equal(person.description, resume.meta.shortDescription);
     for (const edu of resume.education) {
       assert.ok(
-        jsonLd.alumniOf.some((a) => a.name === edu.institution),
+        person.alumniOf.some((a) => a.name === edu.institution),
         `Missing alumniOf: ${edu.institution}`
       );
     }
-    const canonical = resume.meta.canonical || resume.basics.url;
+    for (const award of resume.awards || []) {
+      assert.ok(person.award?.includes(award.title), `Missing award in JSON-LD: ${award.title}`);
+    }
+    const articles = jsonLd['@graph'].filter((n) => n['@type'] === 'Article');
+    for (const pub of resume.publications || []) {
+      assert.ok(
+        articles.some((a) => a.url === pub.url && a.headline === pub.name),
+        `Missing Article node in JSON-LD: ${pub.name}`
+      );
+    }
+    const canonical = resume.meta.canonical || `${resume.basics.url.replace(/\/$/, '')}/`;
     assert.ok(
       indexHtml.includes(`<link rel="canonical" href="${canonical}">`),
       'canonical link missing or mismatched in index.html'
@@ -244,14 +264,21 @@ try {
       for (const url of [
         `${baseUrl}/`,
         resume.meta.resumePdfUrl,
+        `${baseUrl}/architecture/`,
+        resume.meta.qualityReportUrl,
+      ]) {
+        assert.ok(sitemapXml.includes(`<loc>${url}</loc>`), `sitemap.xml missing ${url}`);
+      }
+      for (const nonDocUrl of [
         resume.meta.resumeJsonUrl,
         `${baseUrl}/llms.txt`,
         resume.meta.contactVcfUrl,
-        `${baseUrl}/architecture/`,
-        resume.meta.qualityReportUrl,
         resume.meta.qualityReportJsonUrl,
       ]) {
-        assert.ok(sitemapXml.includes(`<loc>${url}</loc>`), `sitemap.xml missing ${url}`);
+        assert.ok(
+          !sitemapXml.includes(`<loc>${nonDocUrl}</loc>`),
+          `sitemap.xml should not include non-document endpoint ${nonDocUrl}`
+        );
       }
 
       assert.ok(

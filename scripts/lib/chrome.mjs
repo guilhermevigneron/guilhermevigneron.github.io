@@ -49,6 +49,7 @@ export function getAssetUrls(reportsDir, useManifest = true) {
     commandMenuJsUrl: assetManifest?.commandMenuJsUrl || '/assets/js/command-menu.js',
     faviconSvgUrl: assetManifest?.faviconSvgUrl || '/assets/favicon.svg',
     appleTouchIconUrl: assetManifest?.appleTouchIconUrl || '/assets/apple-touch-icon.png',
+    ogCardUrl: assetManifest?.ogCardUrl || '/assets/og-card.png',
   };
 }
 
@@ -57,6 +58,8 @@ export function renderSubpageDocument({
   description,
   canonicalUrl = null,
   robots = null,
+  ogImageUrl = null,
+  ogImageAlt = null,
   alternateLinks = [],
   ownerName,
   subtitleHtml,
@@ -81,6 +84,27 @@ export function renderSubpageDocument({
     )
     .join('\n');
 
+  let socialMetaHtml = '';
+  if (canonicalUrl && robots !== 'noindex' && ogImageUrl) {
+    const altText = ogImageAlt || title;
+    socialMetaHtml = `
+    <meta property="og:title" content="${escapeHtml(title)}">
+    <meta property="og:description" content="${escapeHtml(description)}">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="${escapeHtml(canonicalUrl)}">
+    <meta property="og:image" content="${escapeHtml(ogImageUrl)}">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="${escapeHtml(altText)}">
+    <meta property="og:locale" content="en_US">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="${escapeHtml(title)}">
+    <meta name="twitter:description" content="${escapeHtml(description)}">
+    <meta name="twitter:image" content="${escapeHtml(ogImageUrl)}">
+    <meta name="twitter:image:alt" content="${escapeHtml(altText)}">`;
+  }
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -95,7 +119,7 @@ export function renderSubpageDocument({
     <link rel="icon" type="image/svg+xml" href="${escapeHtml(assetUrls.faviconSvgUrl)}">
     <link rel="icon" href="/favicon.ico" sizes="32x32">
     <link rel="apple-touch-icon" href="${escapeHtml(assetUrls.appleTouchIconUrl)}">
-    <link rel="manifest" href="/site.webmanifest">${canonicalUrl ? `\n    <link rel="canonical" href="${escapeHtml(canonicalUrl)}">` : ''}${alternatesHtml ? `\n${alternatesHtml}` : ''}
+    <link rel="manifest" href="/site.webmanifest">${canonicalUrl ? `\n    <link rel="canonical" href="${escapeHtml(canonicalUrl)}">` : ''}${socialMetaHtml}${alternatesHtml ? `\n${alternatesHtml}` : ''}
     <script src="${escapeHtml(assetUrls.themeInitJsUrl)}"></script>
     <link rel="stylesheet" href="${escapeHtml(assetUrls.cssUrl)}">
     <link rel="stylesheet" href="${escapeHtml(assetUrls.subpageCssUrl)}">
