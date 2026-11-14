@@ -104,6 +104,142 @@ export function getRepoUrl(data) {
   return githubProfile?.url || endpoints.baseUrl;
 }
 
+function shortenRole(position) {
+  return String(position || '')
+    .replace(/^Principal Software /, 'Principal ')
+    .replace(/^Quality and Test /, 'QA ')
+    .trim();
+}
+
+function compactExtraKeywords(title, cite, rawExtra) {
+  const seen = new Set(
+    `${title} ${cite}`
+      .toLowerCase()
+      .split(/[^a-z0-9+#]+/)
+      .filter(Boolean)
+  );
+  const out = [];
+  for (const tok of String(rawExtra || '')
+    .toLowerCase()
+    .split(/[^a-z0-9+#]+/)) {
+    if (tok.length >= 2 && !seen.has(tok)) {
+      seen.add(tok);
+      out.push(tok);
+    }
+  }
+  return out.join(' ');
+}
+
+export function buildResumeEvidence(data) {
+  const evidence = [];
+  const loc = data?.basics?.location;
+  const locStr = [loc?.city, loc?.region].filter(Boolean).join(', ');
+
+  if (data?.basics?.summary) {
+    evidence.push({
+      title: `${data.basics.label || data.basics.name}${locStr ? ` (${locStr})` : ''}`,
+      cite: locStr ? `Summary · ${locStr}` : 'Summary',
+      section: 'about',
+      keywords: compactExtraKeywords(
+        data.basics.label || '',
+        locStr,
+        `${data.basics.summary} ${loc?.countryCode || ''} 18+ years`
+      ),
+    });
+  }
+
+  for (const job of data?.work || []) {
+    const cite = [job.name, shortenRole(job.position)].filter(Boolean).join(' · ');
+    const jobKw = compactExtraKeywords(
+      '',
+      cite,
+      [job.position, job.displayDate, job.location, ...(job.keywords || [])]
+        .filter(Boolean)
+        .join(' ')
+    );
+    for (const highlight of job.highlights || []) {
+      evidence.push({
+        title: highlight,
+        cite,
+        section: 'experience',
+        keywords: jobKw,
+      });
+    }
+  }
+
+  for (const proj of data?.projects || []) {
+    const cite = `Project · ${proj.name}`;
+    const title = `${proj.name}${proj.subtitle ? ` — ${proj.subtitle}` : ''}`;
+    const projKw = compactExtraKeywords(
+      title,
+      cite,
+      [proj.description, ...(proj.keywords || []), ...(proj.highlights || [])]
+        .filter(Boolean)
+        .join(' ')
+    );
+    evidence.push({
+      title,
+      cite,
+      section: 'projects',
+      keywords: projKw,
+    });
+  }
+
+  const skillNames = (data?.skills || []).map((s) => s?.name).filter(Boolean);
+  for (let i = 0; i < skillNames.length; i += 5) {
+    const chunk = skillNames.slice(i, i + 5);
+    evidence.push({
+      title: `Skills: ${chunk.join(', ')}`,
+      cite: 'Core Skills',
+      section: 'skills',
+      keywords: 'competency stack',
+    });
+  }
+
+  for (const pub of data?.publications || []) {
+    if (!pub?.name) continue;
+    evidence.push({
+      title: pub.name,
+      cite: `Article · ${pub.publisher || 'Publication'}`,
+      section: 'publications',
+      keywords: 'publication article author',
+    });
+  }
+
+  for (const award of data?.awards || []) {
+    if (!award?.title) continue;
+    evidence.push({
+      title: `${award.title}${award.summary ? ` — ${award.summary}` : ''}`,
+      cite: `Award · ${award.awarder || 'Honor'}`,
+      section: 'publications',
+      keywords: `award recognition hackathon ${award.date || ''}`.trim(),
+    });
+  }
+
+  for (const edu of data?.education || []) {
+    if (!edu?.institution) continue;
+    evidence.push({
+      title: `${edu.studyType} in ${edu.area} — ${edu.institution}`,
+      cite: `Education · ${edu.startDate}–${edu.endDate}`,
+      section: 'education',
+      keywords: 'degree university college',
+    });
+  }
+
+  if (data?.languages?.length) {
+    evidence.push({
+      title: `Languages: ${data.languages
+        .map((l) => (l.fluency ? `${l.language} (${l.fluency})` : l.language))
+        .join(', ')}`,
+      cite: 'Languages',
+      section: 'languages',
+      keywords: 'bilingual spoken',
+    });
+  }
+
+  return evidence;
+}
+
 export function buildCommandMenuConfig(data) {
   const endpoints = getSiteEndpoints(data);
   const sections = [];
@@ -152,5 +288,6 @@ export function buildCommandMenuConfig(data) {
       llmsTxt: endpoints.llmsTxtPath,
     },
     sections,
+    evidence: buildResumeEvidence(data),
   };
 }

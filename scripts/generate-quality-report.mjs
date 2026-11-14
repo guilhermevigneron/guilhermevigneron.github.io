@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { evaluateAiReadiness } from './lib/ai-evals.mjs';
 import { escapeHtml, renderSubpageLayout, UNHASHED_ASSET_URLS } from './lib/html.mjs';
 import {
   getCombinedSizeBytes,
@@ -346,6 +347,15 @@ export function buildQualityPage({
       ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
       : null;
 
+  const siteLlmsPath = toSiteFilePath(resolvedSiteDir, endpoints.llmsTxtPath, '/llms.txt');
+  const rootLlmsPath = path.join(rootDir, 'llms.txt');
+  const llmsTxt = fs.existsSync(siteLlmsPath)
+    ? fs.readFileSync(siteLlmsPath, 'utf8')
+    : fs.existsSync(rootLlmsPath)
+      ? fs.readFileSync(rootLlmsPath, 'utf8')
+      : '';
+  const aiEvaluation = syncReport?.aiEvaluation || evaluateAiReadiness({ resume, llmsTxt });
+
   const reportPayload = {
     schemaVersion: 1,
     generatedAt,
@@ -368,6 +378,7 @@ export function buildQualityPage({
       ogCardBytes,
       contactVcfBytes,
     },
+    aiEvaluation,
     gates: cards,
     endpoints: [
       endpoints.resumePdfPath,
@@ -431,6 +442,31 @@ export function buildQualityPage({
                     </article>`
                       )
                       .join('\n                    ')}
+                </div>
+            </section>
+
+            <section class="cv-section">
+                <h2 class="section-title">ai &amp; retrieval evaluation benchmark</h2>
+                <p class="summary-copy">
+                    Deterministic build-time evaluation verifying that <strong>${escapeHtml(endpoints.llmsTxtPath)}</strong> and the client-side <strong>&ldquo;Resume Matches&rdquo;</strong> command-menu retriever resolve golden recruiter &amp; hiring-manager queries with 100% citation groundedness against <strong>${escapeHtml(endpoints.resumeJsonPath)}</strong> and zero runtime LLM calls.
+                </p>
+                <div class="metric-grid">
+                    <div class="panel-card">
+                        <p class="metric-label">retrieval pass@1</p>
+                        <p class="metric-value">${aiEvaluation.passAt1Count}/${aiEvaluation.totalQueries} (${Math.round(aiEvaluation.passAt1Rate * 100)}%)</p>
+                    </div>
+                    <div class="panel-card">
+                        <p class="metric-label">retrieval hit@3</p>
+                        <p class="metric-value">${aiEvaluation.hitAt3Count}/${aiEvaluation.totalQueries} (${Math.round(aiEvaluation.hitAt3Rate * 100)}%)</p>
+                    </div>
+                    <div class="panel-card">
+                        <p class="metric-label">citation groundedness</p>
+                        <p class="metric-value">${aiEvaluation.groundedCount}/${aiEvaluation.evidenceCount} (${Math.round(aiEvaluation.groundednessRate * 100)}%)</p>
+                    </div>
+                    <div class="panel-card">
+                        <p class="metric-label">llms.txt token budget</p>
+                        <p class="metric-value">~${aiEvaluation.estimatedTokens}/${aiEvaluation.maxTokenBudget}</p>
+                    </div>
                 </div>
             </section>
 

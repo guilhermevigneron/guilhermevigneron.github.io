@@ -91,8 +91,9 @@
     });
 
     D.addEventListener('keydown', (event) => {
+      const k = event.key?.toLowerCase();
       if (
-        event.key?.toLowerCase() === 'j' &&
+        (k === 'j' || k === 'k') &&
         (event.metaKey || event.ctrlKey) &&
         !event.altKey &&
         !event.shiftKey

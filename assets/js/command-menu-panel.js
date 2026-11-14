@@ -1,6 +1,11 @@
 import SITE_CFG from 'site-config';
+import { matchResumeEvidence, parseLlmsEvidence } from '../../src/js/resume-search.mjs';
 
 const COPIED = ' copied to clipboard';
+const ARIA_SEL = 'aria-selected';
+const DATA_SEL = 'data-selected';
+const ARIA_EXP = 'aria-expanded';
+const NO_SCROLL = { preventScroll: true };
 
 const { email, host, siteUrl, toggleEvent, profiles, sections, ep } = SITE_CFG;
 const [pdfPath, jsonPath, vcfPath, vcfDl, archPath, qualPath, qJsonPath, llmsPath] = ep;
@@ -23,11 +28,10 @@ export function initCommandMenuPanel() {
     if (text != null) node.textContent = text;
     return attrs ? sa(node, attrs) : node;
   };
-
-  function iconSvg(cls, size, pathD) {
+  const iconSvg = (cls, size, d) => {
     const ns = 'http://www.w3.org/2000/svg';
     const svg = sa(D.createElementNS(ns, 'svg'), {
-      class: cls || null,
+      class: cls,
       width: size,
       height: size,
       viewBox: '0 0 24 24',
@@ -39,32 +43,24 @@ export function initCommandMenuPanel() {
       'aria-hidden': 'true',
       focusable: 'false',
     });
-    svg.appendChild(sa(D.createElementNS(ns, 'path'), { d: pathD }));
+    svg.appendChild(sa(D.createElementNS(ns, 'path'), { d }));
     return svg;
-  }
+  };
 
   function ensureDom() {
-    let backdrop = byId('command-backdrop');
-    if (!backdrop) {
-      backdrop = el('div', 'cmd-backdrop', null, { id: 'command-backdrop' });
-      backdrop.hidden = true;
-      D.body.appendChild(backdrop);
-    }
+    const ensureRoot = (id, cls, attrs) => {
+      let n = byId(id);
+      if (!n) {
+        n = el('div', cls, null, { id, ...attrs });
+        n.hidden = true;
+        D.body.appendChild(n);
+      }
+      return n;
+    };
+    const backdrop = ensureRoot('command-backdrop', 'cmd-backdrop');
+    const dialog = ensureRoot('command-dialog', 'cmd-dialog');
 
-    let dialog = byId('command-dialog');
-    if (!dialog) {
-      dialog = el('div', 'cmd-dialog', null, { id: 'command-dialog' });
-      dialog.hidden = true;
-      D.body.appendChild(dialog);
-    }
-
-    let input = byId('command-input');
-    let closeBtn = byId('command-close');
-    let list = byId('command-list');
-    let emptyState = byId('command-empty');
-    let statusEl = byId('command-status');
-
-    if (!input) {
+    if (!byId('command-input')) {
       sa(dialog, {
         role: 'dialog',
         'aria-modal': 'true',
@@ -72,66 +68,59 @@ export function initCommandMenuPanel() {
       });
       dialog.textContent = '';
 
-      const title = el('h2', 'sr-only', 'Command menu', { id: 'command-dialog-title' });
       const row = el('div', 'cmd-input-row');
-      row.appendChild(
-        iconSvg('cmd-search-icon', 18, 'M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm10 18-4.3-4.3')
-      );
-
-      input = el('input', 'cmd-input', null, {
-        id: 'command-input',
-        type: 'text',
-        placeholder: 'Type a command or search...',
-        'aria-label': 'Search commands and links',
-        autocomplete: 'off',
-        role: 'combobox',
-        'aria-autocomplete': 'list',
-        'aria-expanded': 'false',
-        'aria-controls': 'command-list',
-      });
-      row.appendChild(input);
-
-      closeBtn = el('button', 'cmd-close', null, {
+      const closeBtn = el('button', 'cmd-close', null, {
         type: 'button',
         id: 'command-close',
         'aria-label': 'Close command menu',
       });
-      closeBtn.appendChild(iconSvg('', 16, 'M18 6 6 18M6 6l12 12'));
-      row.appendChild(closeBtn);
+      closeBtn.appendChild(iconSvg(null, 16, 'M18 6 6 18M6 6l12 12'));
+      row.append(
+        iconSvg('cmd-search-icon', 18, 'M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm10 18-4.3-4.3'),
+        el('input', 'cmd-input', null, {
+          id: 'command-input',
+          type: 'text',
+          placeholder: 'Search commands, skills, or experience...',
+          'aria-label': 'Search commands and links',
+          autocomplete: 'off',
+          role: 'combobox',
+          'aria-autocomplete': 'list',
+          [ARIA_EXP]: 'false',
+          'aria-controls': 'command-list',
+        }),
+        closeBtn
+      );
 
-      list = el('div', 'cmd-list', null, {
-        id: 'command-list',
-        role: 'listbox',
-        'aria-label': 'Commands and links',
-      });
-
-      emptyState = el('p', 'cmd-empty', 'No results found.', {
+      const emptyState = el('p', 'cmd-empty', 'No results found.', {
         id: 'command-empty',
         role: 'status',
       });
       emptyState.hidden = true;
-
-      statusEl = el('div', 'sr-only', '', {
-        id: 'command-status',
-        role: 'status',
-        'aria-live': 'polite',
-      });
-
-      dialog.append(title, row, list, emptyState, statusEl);
+      dialog.append(
+        el('h2', 'sr-only', 'Command menu', { id: 'command-dialog-title' }),
+        row,
+        el('div', 'cmd-list', null, {
+          id: 'command-list',
+          role: 'listbox',
+          'aria-label': 'Commands and links',
+        }),
+        emptyState,
+        el('div', 'sr-only', '', {
+          id: 'command-status',
+          role: 'status',
+          'aria-live': 'polite',
+        })
+      );
     }
 
-    let toast = byId('cmd-toast');
-    if (!toast) {
-      toast = el('div', 'cmd-toast', null, {
-        id: 'cmd-toast',
-        role: 'status',
-        'aria-live': 'polite',
-      });
-      toast.hidden = true;
-      D.body.appendChild(toast);
-    }
-
-    return { backdrop, dialog, toast, closeBtn, input, list, emptyState, statusEl };
+    return [
+      backdrop,
+      dialog,
+      ensureRoot('cmd-toast', 'cmd-toast', { role: 'status', 'aria-live': 'polite' }),
+      ...['command-close', 'command-input', 'command-list', 'command-empty', 'command-status'].map(
+        byId
+      ),
+    ];
   }
 
   function getGroups(isHome) {
@@ -172,9 +161,9 @@ export function initCommandMenuPanel() {
     ];
   }
 
-  const dom = ensureDom();
-  const { backdrop, dialog, toast, closeBtn, input, list, emptyState, statusEl } = dom;
+  const [backdrop, dialog, toast, closeBtn, input, list, emptyState, statusEl] = ensureDom();
   const triggers = qa(D, '#command-trigger,#command-trigger-mobile');
+  const isHome = Boolean(byId('about'));
 
   qa(list, '.cmd-group').forEach((g) => {
     g.remove();
@@ -182,55 +171,70 @@ export function initCommandMenuPanel() {
 
   const itemActions = new WeakMap();
   let itemCounter = 0;
-  getGroups(Boolean(byId('about'))).forEach(([heading, rows], groupIdx) => {
-    const headingId = `cmd-group-${groupIdx}`;
-    const group = el('div', 'cmd-group', null, {
-      role: 'group',
-      'aria-labelledby': headingId,
+
+  const createBtn = (title, hint, target, extras, dl, isEvidence = false) => {
+    const isAct = target[0] === ':';
+    const external = target[0] === '>';
+    const href = isAct ? null : external ? target.slice(1) : target;
+    const btn = el('button', isEvidence ? 'cmd-item cmd-item--match' : 'cmd-item', null, {
+      id: `cmd-item-${itemCounter++}`,
+      type: 'button',
+      role: 'option',
+      [ARIA_SEL]: 'false',
+      [DATA_SEL]: 'false',
+      'data-href': href,
+      'data-download': dl || null,
     });
-    group.appendChild(
-      el('div', 'cmd-group-heading', heading, { id: headingId, role: 'presentation' })
-    );
+    itemActions.set(btn, [
+      isAct ? target.slice(1) : null,
+      href,
+      external,
+      dl || null,
+      `${title} ${hint} ${extras || ''}`.toLowerCase(),
+    ]);
+    btn.append(el('span', '', title), el('span', 'cmd-item-hint', hint));
+    return btn;
+  };
+
+  const makeGroup = (heading, idx) => {
+    const id = `cmd-group-${idx}`;
+    const g = el('div', 'cmd-group', null, { role: 'group', 'aria-labelledby': id });
+    g.appendChild(el('div', 'cmd-group-heading', heading, { id, role: 'presentation' }));
+    list.appendChild(g);
+    return g;
+  };
+
+  const staticGroups = getGroups(isHome).map(([heading, rows], idx) => {
+    const group = makeGroup(heading, idx);
     rows.forEach(([title, hint, target, extras, dl]) => {
-      const itemId = `cmd-item-${itemCounter}`;
-      itemCounter += 1;
-      const meta = {
-        action: target[0] === ':' ? target.slice(1) : null,
-        href: target[0] === ':' ? null : target[0] === '>' ? target.slice(1) : target,
-        external: target[0] === '>',
-        dl: dl || null,
-      };
-      const attrs = {
-        id: itemId,
-        type: 'button',
-        role: 'option',
-        'aria-selected': 'false',
-        'data-selected': 'false',
-        'data-label': `${title} ${hint} ${extras || ''}`.trim(),
-        'data-download': meta.dl,
-      };
-      if (meta.action) {
-        attrs['data-action'] = meta.action;
-      } else {
-        attrs['data-href'] = meta.href;
-        attrs['data-external'] = String(meta.external);
-      }
-      const btn = el('button', 'cmd-item', null, attrs);
-      itemActions.set(btn, meta);
-      btn.append(el('span', '', title), el('span', 'cmd-item-hint', hint));
-      group.appendChild(btn);
+      group.appendChild(createBtn(title, hint, target, extras, dl));
     });
-    list.appendChild(group);
+    return group;
   });
 
-  const items = qa(dialog, '.cmd-item');
-  const groups = qa(dialog, '.cmd-group');
+  const evidenceGroup = makeGroup('Resume Matches', staticGroups.length);
+  evidenceGroup.hidden = true;
+
+  let evidenceItems = [];
+  const evidenceBtns = [];
   let lastFocused = null;
   let activeIndex = -1;
   let toastTimer = null;
   let statusTimer = null;
   let cachedLlms = '';
   let llmsPromise = null;
+
+  const hydrateEvidence = (txt) => {
+    if (evidenceItems.length || !txt) return;
+    evidenceItems = parseLlmsEvidence(txt);
+    evidenceItems.forEach(([title, cite, sec]) => {
+      const btn = createBtn(title, cite, isHome ? `#${sec}` : `/#${sec}`, '', null, true);
+      btn.hidden = true;
+      evidenceBtns.push(btn);
+      evidenceGroup.appendChild(btn);
+    });
+    if (isOpen() && input.value.trim()) filterItems(input.value, true);
+  };
 
   const showToast = (msg) => {
     if (!toast) return;
@@ -246,21 +250,18 @@ export function initCommandMenuPanel() {
   const fetchLlms = () => {
     if (cachedLlms) return Promise.resolve(cachedLlms);
     if (llmsPromise) return llmsPromise;
-    if (typeof W.fetch !== 'function') return Promise.reject(new Error('Fetch unavailable'));
-    const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
-    const timer = ctrl ? W.setTimeout(() => ctrl.abort(), 5000) : null;
-    llmsPromise = W.fetch(llmsPath, ctrl ? { signal: ctrl.signal } : undefined)
+    llmsPromise = W.fetch(llmsPath)
       .then((r) => {
-        if (!r.ok) throw new Error(r.status);
+        if (!r.ok) throw new Error();
         return r.text();
       })
       .then((txt) => {
-        if (!txt) throw new Error('Empty');
+        if (!txt) throw new Error();
         cachedLlms = txt;
+        hydrateEvidence(txt);
         return txt;
       })
       .finally(() => {
-        if (timer) W.clearTimeout(timer);
         llmsPromise = null;
       });
     return llmsPromise;
@@ -275,23 +276,18 @@ export function initCommandMenuPanel() {
     let ok = false;
     try {
       ok = D.execCommand('copy');
-    } catch {
-      ok = false;
-    }
+    } catch {}
     a.remove();
     return ok;
   };
 
   const copyText = (text, label, failMsg = 'Copy unavailable in this browser') => {
-    const msg = `${label}${COPIED}`;
-    const finish = (ok) => showToast(ok ? msg : failMsg);
+    const finish = (ok) => showToast(ok ? `${label}${COPIED}` : failMsg);
     let res = null;
     try {
-      res = navigator.clipboard?.writeText ? navigator.clipboard.writeText(text) : null;
-    } catch {
-      res = null;
-    }
-    if (res && typeof res.then === 'function') {
+      res = navigator.clipboard?.writeText?.(text);
+    } catch {}
+    if (res?.then) {
       res.then(
         () => finish(true),
         () => finish(copyFallback(text))
@@ -302,61 +298,61 @@ export function initCommandMenuPanel() {
   };
 
   const isOpen = () => !dialog.hidden;
-  const setExpanded = (v) => {
-    input.setAttribute('aria-expanded', String(v));
-    triggers.forEach((b) => {
-      b.setAttribute('aria-expanded', String(v));
-    });
-  };
-  const getVisible = () => items.filter((item) => !item.hidden);
+  const getAllItems = () => qa(list, '.cmd-item');
+  const getVisible = () => getAllItems().filter((item) => !item.hidden);
   const getFocusables = () => [
     input,
     ...(closeBtn && !closeBtn.hidden ? [closeBtn] : []),
     ...getVisible(),
   ];
 
+  const markItem = (item, v) => {
+    item.setAttribute(DATA_SEL, v);
+    item.setAttribute(ARIA_SEL, v);
+  };
+
   const setSelected = (index, scroll) => {
     const visible = getVisible();
-    items.forEach((item) => {
-      item.setAttribute('data-selected', 'false');
-      item.setAttribute('aria-selected', 'false');
+    getAllItems().forEach((item) => {
+      markItem(item, 'false');
     });
     if (!visible.length) {
       activeIndex = -1;
       input.removeAttribute('aria-activedescendant');
       return;
     }
-    const clamped = ((index % visible.length) + visible.length) % visible.length;
-    activeIndex = clamped;
-    const activeItem = visible[clamped];
-    activeItem.setAttribute('data-selected', 'true');
-    activeItem.setAttribute('aria-selected', 'true');
+    activeIndex = ((index % visible.length) + visible.length) % visible.length;
+    const activeItem = visible[activeIndex];
+    markItem(activeItem, 'true');
     input.setAttribute('aria-activedescendant', activeItem.id);
     if (scroll) activeItem.scrollIntoView({ block: 'nearest' });
   };
 
-  const setBackgroundInert = (inertState) => {
-    [...D.body.children].forEach((child) => {
-      if (child === backdrop || child === dialog || child === toast) return;
-      if (inertState) {
-        child.setAttribute('inert', '');
-        child.setAttribute('aria-hidden', 'true');
-      } else {
-        child.removeAttribute('inert');
-        child.removeAttribute('aria-hidden');
+  const setModalState = (open) => {
+    [...D.body.children].forEach((c) => {
+      if (c !== backdrop && c !== dialog && c !== toast) {
+        c.toggleAttribute('inert', open);
+        if (open) c.setAttribute('aria-hidden', 'true');
+        else c.removeAttribute('aria-hidden');
       }
     });
+    backdrop.hidden = !open;
+    dialog.hidden = !open;
+    [input, ...triggers].forEach((b) => {
+      b.setAttribute(ARIA_EXP, String(open));
+    });
+    const ov = open ? 'hidden' : '';
+    D.documentElement.style.overflow = ov;
+    D.body.style.overflow = ov;
   };
 
   const filterItems = (query, announce = false) => {
     const q = query.trim().toLowerCase();
     let total = 0;
-    groups.forEach((group) => {
+    staticGroups.forEach((group) => {
       let count = 0;
       qa(group, '.cmd-item').forEach((item) => {
-        const text =
-          `${item.getAttribute('data-label') || ''} ${item.textContent || ''}`.toLowerCase();
-        const match = !q || text.includes(q);
+        const match = !q || itemActions.get(item)[4].includes(q);
         item.hidden = !match;
         if (match) {
           count += 1;
@@ -365,6 +361,21 @@ export function initCommandMenuPanel() {
       });
       group.hidden = count === 0;
     });
+
+    evidenceBtns.forEach((btn) => {
+      btn.hidden = true;
+    });
+    const matches = q && evidenceItems.length ? matchResumeEvidence(evidenceItems, q, 6) : [];
+    matches.forEach(({ index }) => {
+      const btn = evidenceBtns[index];
+      if (btn) {
+        btn.hidden = false;
+        evidenceGroup.appendChild(btn);
+        total += 1;
+      }
+    });
+    evidenceGroup.hidden = matches.length === 0;
+
     const any = total > 0;
     list.hidden = !any;
     emptyState.hidden = any;
@@ -385,17 +396,12 @@ export function initCommandMenuPanel() {
   };
 
   const openMenu = (triggerEl = D.activeElement) => {
-    lastFocused = triggerEl instanceof HTMLElement ? triggerEl : D.activeElement;
+    lastFocused = triggerEl?.focus ? triggerEl : D.activeElement;
     input.value = '';
     filterItems('', false);
     list.scrollTop = 0;
-    setBackgroundInert(true);
-    backdrop.hidden = false;
-    dialog.hidden = false;
-    setExpanded(true);
-    D.documentElement.style.overflow = 'hidden';
-    D.body.style.overflow = 'hidden';
-    input.focus({ preventScroll: true });
+    setModalState(true);
+    input.focus(NO_SCROLL);
     fetchLlms().catch(() => {});
   };
 
@@ -405,31 +411,26 @@ export function initCommandMenuPanel() {
       W.clearTimeout(statusTimer);
       statusTimer = null;
     }
-    setBackgroundInert(false);
-    backdrop.hidden = true;
-    dialog.hidden = true;
-    setExpanded(false);
+    setModalState(false);
     input.removeAttribute('aria-activedescendant');
-    D.documentElement.style.overflow = '';
-    D.body.style.overflow = '';
-    if (restore && lastFocused instanceof HTMLElement && lastFocused.isConnected) {
-      lastFocused.focus({ preventScroll: true });
+    if (restore && lastFocused?.isConnected) {
+      lastFocused.focus(NO_SCROLL);
     }
   };
 
   const runItem = (item) => {
     const meta = item ? itemActions.get(item) : null;
     if (!meta) return;
-    const { action, href, dl, external } = meta;
+    const [action, href, external, dl] = meta;
 
     if (action === 'print') {
       const target = lastFocused;
       closeMenu(false);
-      if (target instanceof HTMLElement && target.isConnected) {
+      if (target?.isConnected) {
         W.addEventListener(
           'afterprint',
           () => {
-            if (target.isConnected) target.focus({ preventScroll: true });
+            if (target.isConnected) target.focus(NO_SCROLL);
           },
           { once: true }
         );
@@ -440,10 +441,27 @@ export function initCommandMenuPanel() {
       return;
     }
 
+    if (href?.[0] === '#') {
+      closeMenu(false);
+      const target = byId(href.slice(1));
+      if (target) {
+        let reduced = false;
+        try {
+          reduced = Boolean(W.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
+        } catch {}
+        target.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+        if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+        target.focus(NO_SCROLL);
+        W.history?.replaceState?.(null, '', href);
+      }
+      return;
+    }
+
+    const wasDark = D.documentElement.classList.contains('dark');
+    if (action === 'toggle-theme') D.dispatchEvent(new CustomEvent(toggleEvent));
+    closeMenu(true);
+
     if (action === 'toggle-theme') {
-      const wasDark = D.documentElement.classList.contains('dark');
-      D.dispatchEvent(new CustomEvent(toggleEvent));
-      closeMenu(true);
       const isDark = D.documentElement.classList.contains('dark');
       showToast(
         isDark === wasDark
@@ -451,13 +469,10 @@ export function initCommandMenuPanel() {
           : `Switched to ${isDark ? 'dark' : 'light'} theme`
       );
     } else if (action === 'copy-email') {
-      closeMenu(true);
       copyText(email, 'Email');
     } else if (action === 'copy-url') {
-      closeMenu(true);
       copyText(siteUrl, 'Profile URL');
     } else if (action === 'copy-llms') {
-      closeMenu(true);
       if (cachedLlms) {
         copyText(cachedLlms, 'Markdown resume');
       } else {
@@ -467,44 +482,24 @@ export function initCommandMenuPanel() {
           )
           .catch(() => showToast('Unable to fetch Markdown resume'));
       }
+    } else if (dl && href?.startsWith('/')) {
+      const link = el('a', '', null, { href, download: dl });
+      D.body.appendChild(link);
+      link.click();
+      link.remove();
+      showToast('Downloading contact vCard');
     } else if (href) {
-      if (href[0] === '#') {
-        closeMenu(false);
-        const target = byId(href.slice(1));
-        if (target) {
-          let reduced = false;
-          try {
-            reduced = Boolean(W.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
-          } catch {
-            reduced = false;
-          }
-          target.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
-          if (!target.hasAttribute('tabindex')) {
-            target.setAttribute('tabindex', '-1');
-          }
-          target.focus({ preventScroll: true });
-          W.history?.replaceState?.(null, '', href);
-        }
-      } else if (dl && href.startsWith('/')) {
-        closeMenu(true);
-        const link = el('a', '', null, { href, download: dl });
-        D.body.appendChild(link);
-        link.click();
-        link.remove();
-        showToast('Downloading contact vCard');
-      } else {
-        closeMenu(true);
-        if (external && /^https?:\/\//i.test(href)) {
-          if (!W.open(href, '_blank', 'noopener,noreferrer')) showToast('Pop-up blocked');
-        } else if (href.startsWith('/') || href.startsWith('mailto:')) {
-          W.location.assign(href);
-        }
+      if (external && /^https?:\/\//i.test(href)) {
+        if (!W.open(href, '_blank', 'noopener,noreferrer')) showToast('Pop-up blocked');
+      } else if (href.startsWith('/') || href.startsWith('mailto:')) {
+        W.location.assign(href);
       }
     }
   };
 
-  const syncHoveredOrFocused = (event) => {
-    const item = event.target instanceof Element ? event.target.closest('.cmd-item') : null;
+  const findItem = (e) => e.target?.closest?.('.cmd-item');
+  const syncHoveredOrFocused = (e) => {
+    const item = findItem(e);
     if (!item || item.hidden) return;
     const idx = getVisible().indexOf(item);
     if (idx !== -1 && idx !== activeIndex) setSelected(idx, false);
@@ -512,8 +507,9 @@ export function initCommandMenuPanel() {
 
   D.addEventListener('keydown', (event) => {
     if (!isOpen()) return;
+    const k = event.key;
 
-    if (event.key === 'Tab') {
+    if (k === 'Tab') {
       const focusables = getFocusables();
       if (!focusables.length) return;
       const cur = focusables.indexOf(D.activeElement);
@@ -529,40 +525,32 @@ export function initCommandMenuPanel() {
       return;
     }
 
-    if (event.key === 'Escape') {
+    if (k === 'Escape') {
       event.preventDefault();
       closeMenu(true);
       return;
     }
 
-    if (
-      event.key === 'ArrowDown' ||
-      event.key === 'ArrowUp' ||
-      event.key === 'Home' ||
-      event.key === 'End'
-    ) {
-      const onItem =
-        D.activeElement instanceof Element && Boolean(D.activeElement.closest('.cmd-item'));
-      if ((event.key === 'Home' || event.key === 'End') && !onItem) {
-        return;
-      }
+    if (k === 'ArrowDown' || k === 'ArrowUp' || k === 'Home' || k === 'End') {
+      const onItem = Boolean(D.activeElement?.closest?.('.cmd-item'));
+      if ((k === 'Home' || k === 'End') && !onItem) return;
       event.preventDefault();
       const visible = getVisible();
       if (!visible.length) return;
       const targetIndex =
-        event.key === 'Home'
+        k === 'Home'
           ? 0
-          : event.key === 'End'
+          : k === 'End'
             ? visible.length - 1
-            : activeIndex + (event.key === 'ArrowDown' ? 1 : -1);
+            : activeIndex + (k === 'ArrowDown' ? 1 : -1);
       setSelected(targetIndex, true);
       if (onItem && activeIndex >= 0 && visible[activeIndex]) {
-        visible[activeIndex].focus({ preventScroll: true });
+        visible[activeIndex].focus(NO_SCROLL);
       }
       return;
     }
 
-    if (event.key === 'Enter' && D.activeElement === input) {
+    if (k === 'Enter' && D.activeElement === input) {
       const visible = getVisible();
       if (activeIndex >= 0 && visible[activeIndex]) {
         event.preventDefault();
@@ -579,15 +567,12 @@ export function initCommandMenuPanel() {
     if (e.pointerType !== 'touch') syncHoveredOrFocused(e);
   });
   list.addEventListener('click', (e) => {
-    const item = e.target instanceof Element ? e.target.closest('.cmd-item') : null;
+    const item = findItem(e);
     if (item && !item.hidden) runItem(item);
   });
-  closeBtn?.addEventListener('click', () => {
-    closeMenu(true);
-  });
-  backdrop.addEventListener('click', () => {
-    closeMenu(true);
-  });
+  const closeTrue = () => closeMenu(true);
+  closeBtn?.addEventListener('click', closeTrue);
+  backdrop.addEventListener('click', closeTrue);
 
   return {
     isOpen,

@@ -731,6 +731,19 @@ describe('Command Menu Interaction', () => {
       cy.get('#command-empty').should('not.be.visible');
     });
 
+    // Grounded Resume Matches surface cited evidence from /llms.txt for recruiter queries
+    cy.get('#command-input').focus().clear().type('Azure DevOps CI/CD');
+    cy.contains('#command-dialog .cmd-group-heading', 'Resume Matches').should('be.visible');
+    cy.contains('#command-dialog .cmd-item--match:not([hidden])', 'Azure DevOps')
+      .should('be.visible')
+      .and('contain.text', 'AVEVA');
+    runAxeAndRecord(null, '#command-dialog');
+
+    cy.get('#command-input').focus().clear().type('StickyMinds flaky');
+    cy.contains('#command-dialog .cmd-item--match:not([hidden])', 'StickyMinds')
+      .should('be.visible')
+      .and('have.attr', 'data-href', '#publications');
+
     // Zero-results state traps Tab strictly between input and close button
     cy.get('#command-input').clear().type('nonexistent-command-xyz');
     cy.get('#command-empty').should('be.visible').and('contain.text', 'No results found.');
@@ -757,13 +770,13 @@ describe('Command Menu Interaction', () => {
       expect(win.document.body.style.overflow).to.eq('');
     });
 
-    // Ctrl+J opens and toggles closed cleanly; backdrop click closes menu
+    // Ctrl+J and Ctrl+K open and toggle closed cleanly; backdrop click closes menu
     cy.get('body').type('{ctrl}j');
     cy.get('#command-dialog').should('be.visible');
     cy.get('body').type('{ctrl}j');
     cy.get('#command-dialog').should('not.be.visible');
 
-    cy.get('body').type('{ctrl}j');
+    cy.get('body').type('{ctrl}k');
     cy.get('#command-dialog').should('be.visible');
     cy.get('#command-backdrop').click(10, 10, { force: true });
     cy.get('#command-dialog').should('not.be.visible');
@@ -1291,12 +1304,21 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
     });
     cy.get('header a[href="/architecture/"]').should('be.visible');
     cy.get('a[href="/quality/report.json"]').should('be.visible');
+    cy.contains('h2', 'ai & retrieval evaluation benchmark').should('be.visible');
+    cy.contains('retrieval pass@1').should('be.visible');
+    cy.contains('citation groundedness').should('be.visible');
 
     cy.request('/quality/report.json').then((res) => {
       expect(res.status).to.eq(200);
       const report = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;
       expect(report.schemaVersion).to.eq(1);
       expect(report.gates).to.have.length(10);
+      expect(report.aiEvaluation).to.be.an('object');
+      expect(report.aiEvaluation.passed).to.eq(true);
+      expect(report.aiEvaluation.passAt1Rate).to.eq(1);
+      expect(report.aiEvaluation.hitAt3Rate).to.eq(1);
+      expect(report.aiEvaluation.groundednessRate).to.eq(1);
+      expect(report.aiEvaluation.withinTokenBudget).to.eq(true);
       expect(report.artifacts.resumePdfPages).to.eq(MAX_PDF_PAGES);
       expect(report.artifacts.ogCardBytes).to.be.greaterThan(5000);
       expect(report.artifacts.contactVcfBytes).to.be.greaterThan(100);

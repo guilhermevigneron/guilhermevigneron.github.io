@@ -43,7 +43,7 @@ export function buildArchitecturePage({
     {
       title: '4. Built-In Quality Gates',
       summary:
-        'Before anything goes live, automated checks verify Biome lint, unit tests, dependency audit, HTML5 validity, mobile speed budgets, WCAG 2.1 AA accessibility, and zero broken links.',
+        'Before anything goes live, automated checks verify Biome lint, unit tests, dependency audit, HTML5 validity, AI retrieval groundedness, mobile speed budgets, WCAG 2.1 AA accessibility, and zero broken links.',
       detail: `Live results published to ${endpoints.qualityPath}`,
     },
   ];

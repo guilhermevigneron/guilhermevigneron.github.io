@@ -177,6 +177,17 @@
   color: var(--faint);
 }
 
+.cmd-item--match {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.cmd-item--match .cmd-item-hint {
+  max-width: 100%;
+  text-align: left;
+}
+
 .cmd-item:hover .cmd-item-hint,
 .cmd-item[data-selected="true"] .cmd-item-hint {
   color: var(--body);

@@ -15,7 +15,8 @@ import {
   evaluateVitalsBudgets,
 } from '../scripts/check-performance.mjs';
 import { buildArchitecturePage } from '../scripts/generate-architecture.mjs';
-import { evaluateQualityGates } from '../scripts/generate-quality-report.mjs';
+import { buildQualityPage, evaluateQualityGates } from '../scripts/generate-quality-report.mjs';
+import { evaluateAiReadiness, GOLDEN_RECRUITER_QUERIES } from '../scripts/lib/ai-evals.mjs';
 import {
   startStaticServer as browserStartStaticServer,
   stopStaticServer as browserStopStaticServer,
@@ -30,7 +31,7 @@ import {
   validatePdfBuffer,
 } from '../scripts/lib/pdf.mjs';
 import { normalizePng } from '../scripts/lib/png.mjs';
-import { buildCommandMenuConfig } from '../scripts/lib/site-config.mjs';
+import { buildCommandMenuConfig, buildResumeEvidence } from '../scripts/lib/site-config.mjs';
 import { minifyCssFiles, minifyJsFiles } from '../scripts/minify-assets.mjs';
 import { minifyHtml } from '../scripts/minify-html.mjs';
 import { validateHtmlFiles } from '../scripts/run-html-validate.mjs';
@@ -57,6 +58,12 @@ import {
   validateResumeSchema,
   validateSyncState,
 } from '../scripts/validate-sync.mjs';
+import {
+  matchResumeEvidence,
+  parseLlmsEvidence,
+  scoreEvidenceItem,
+  tokenizeSearch,
+} from '../src/js/resume-search.mjs';
 
 const resume = JSON.parse(fs.readFileSync(path.join(ROOT, 'resume.json'), 'utf8'));
 
@@ -1409,5 +1416,80 @@ describe('resume.json and manifest schema invariants', () => {
       assert.ok(fs.existsSync(filePath), `Manifest icon missing on disk: ${icon.src}`);
       assert.ok(fs.statSync(filePath).size > 0, `Manifest icon empty: ${icon.src}`);
     }
+  });
+});
+
+describe('grounded resume search & AI retrieval evaluation gate', () => {
+  it('tokenizes natural-language and technical queries with C#/.NET/CI-CD normalization and stopword stripping', () => {
+    const tokens = tokenizeSearch('Does Guilherme have C# and CI/CD experience?', true);
+    assert.ok(tokens.includes('dotnet'));
+    assert.ok(tokens.includes('cicd'));
+    assert.ok(tokens.includes('experience'));
+    assert.ok(!tokens.includes('does'));
+    assert.ok(!tokens.includes('guilherme'));
+  });
+
+  it('parses llms.txt into cited evidence tuples and matches recruiter queries accurately', () => {
+    const llmsTxt = fs.readFileSync(path.join(ROOT, 'llms.txt'), 'utf8');
+    const evidence = parseLlmsEvidence(llmsTxt);
+    assert.ok(evidence.length >= 20);
+
+    const adoMatches = matchResumeEvidence(evidence, 'Azure DevOps CI/CD pipelines', 3);
+    assert.ok(adoMatches.length > 0);
+    assert.equal(adoMatches[0].item[2], 'experience');
+    assert.ok(adoMatches[0].item[1].includes('AVEVA'));
+
+    const flakyMatches = matchResumeEvidence(evidence, 'StickyMinds flaky tests reliability', 3);
+    assert.ok(flakyMatches.length > 0);
+    assert.equal(flakyMatches[0].item[2], 'publications');
+
+    const objEvidence = buildResumeEvidence(resume);
+    assert.ok(objEvidence.length >= 20);
+    assert.ok(scoreEvidenceItem(objEvidence[0], ['principal', 'technologist'], 'principal') > 0);
+    assert.deepEqual(matchResumeEvidence(evidence, 'a'), []);
+  });
+
+  it('passes all 12 golden recruiter queries with 100% Pass@1, Hit@3, and citation groundedness, and rejects ungrounded mutations', () => {
+    const llmsTxt = fs.readFileSync(path.join(ROOT, 'llms.txt'), 'utf8');
+    const evalResult = evaluateAiReadiness({ resume, llmsTxt });
+    assert.equal(evalResult.passed, true);
+    assert.equal(evalResult.totalQueries, GOLDEN_RECRUITER_QUERIES.length);
+    assert.equal(evalResult.passAt1Rate, 1);
+    assert.equal(evalResult.hitAt3Rate, 1);
+    assert.equal(evalResult.groundednessRate, 1);
+    assert.equal(evalResult.withinTokenBudget, true);
+
+    const hallucinatedLlms = `${llmsTxt.replace(
+      '## Machine-Readable',
+      '## Experience\n- Quantum Blockchain Hyperdrive Architect at MarsCorp (2099)\n  - Invented warp-speed teleportation compilers on Jupiter.\n\n## Machine-Readable'
+    )}`;
+    const hallucinatedEval = evaluateAiReadiness({ resume, llmsTxt: hallucinatedLlms });
+    assert.equal(hallucinatedEval.passed, false);
+    assert.ok(hallucinatedEval.groundednessRate < 1);
+  });
+
+  it('publishes aiEvaluation telemetry in /quality/report.json and renders the AI benchmark section on /quality/', () => {
+    withTempDir('quality-ai-eval-', (tmpDir) => {
+      const siteDir = path.join(tmpDir, '_site');
+      const reportsDir = path.join(tmpDir, '.ci-reports');
+      fs.mkdirSync(siteDir, { recursive: true });
+      fs.mkdirSync(reportsDir, { recursive: true });
+      fs.copyFileSync(path.join(ROOT, 'llms.txt'), path.join(siteDir, 'llms.txt'));
+
+      buildQualityPage({ rootDir: ROOT, siteDir, reportsDir, resume });
+      const qualityHtml = fs.readFileSync(path.join(siteDir, 'quality', 'index.html'), 'utf8');
+      const qualityReport = JSON.parse(
+        fs.readFileSync(path.join(siteDir, 'quality', 'report.json'), 'utf8')
+      );
+
+      assert.equal(qualityReport.gates.length, 10);
+      assert.ok(qualityReport.aiEvaluation);
+      assert.equal(qualityReport.aiEvaluation.passed, true);
+      assert.equal(qualityReport.aiEvaluation.passAt1Rate, 1);
+      assert.equal(qualityReport.aiEvaluation.groundednessRate, 1);
+      assert.ok(qualityHtml.includes('ai &amp; retrieval evaluation benchmark'));
+      assert.ok(qualityHtml.includes('retrieval pass@1'));
+      assert.ok(qualityHtml.includes('citation groundedness'));
+    });
   });
 });

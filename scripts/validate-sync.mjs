@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { evaluateAiReadiness } from './lib/ai-evals.mjs';
 import { resolveBuildYear } from './lib/io.mjs';
 import { isEntrypoint, ROOT } from './lib/paths.mjs';
 import { buildCommandMenuConfig } from './lib/site-config.mjs';
@@ -740,6 +741,26 @@ export function validateSyncState({
     }
   });
 
+  check('AI retrieval benchmark & groundedness gate passes across golden recruiter queries', () => {
+    const aiEval = evaluateAiReadiness({ resume, llmsTxt });
+    assert.equal(
+      aiEval.groundednessRate,
+      1,
+      `AI evidence groundedness below 100% (${aiEval.groundedCount}/${aiEval.evidenceCount})`
+    );
+    assert.ok(
+      aiEval.withinTokenBudget,
+      `llms.txt exceeds token budget (${aiEval.estimatedTokens} > ${aiEval.maxTokenBudget})`
+    );
+    const failedQueries = aiEval.results.filter((r) => !r.passed).map((r) => r.id);
+    assert.equal(
+      failedQueries.length,
+      0,
+      `AI retrieval benchmark failed queries: ${failedQueries.join(', ')}`
+    );
+    assert.equal(aiEval.passed, true, 'AI readiness evaluation gate failed');
+  });
+
   check(
     'site.webmanifest, sitemap.xml, robots.txt, security.txt, command-menu-panel.js, and 404.html align with resume.json',
     () => {
@@ -905,6 +926,7 @@ export function validateAllFromRoot(rootDir = ROOT) {
   const currentYear = resolveBuildYear(resume, rootDir);
 
   const checks = [];
+  const aiEvaluation = evaluateAiReadiness({ resume, llmsTxt });
   try {
     const passedChecks = validateSyncState({
       resume,
@@ -932,6 +954,7 @@ export function validateAllFromRoot(rootDir = ROOT) {
           passed: checks.length > 0 && checks.every((c) => c.passed),
           timestamp: new Date().toISOString(),
           checks,
+          aiEvaluation,
         },
         null,
         2
