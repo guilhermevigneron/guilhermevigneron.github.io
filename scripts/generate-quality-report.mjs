@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   escapeHtml,
   getAssetUrls,
@@ -58,52 +59,20 @@ function statusBadge(status) {
   return '<span class="status-badge status-badge--pending">PENDING</span>';
 }
 
-function buildQualityPage() {
-  const resume = readJsonIfExists(path.join(ROOT, 'resume.json'));
-  const ownerName = resume?.basics?.name || 'Guilherme Vigneron de Oliveira';
-  const siteUrl = String(resume?.basics?.url || 'https://guilhermevigneron.dev').replace(/\/$/, '');
-  const domain = siteUrl.replace(/^https?:\/\//, '');
-  const currentYear = new Date().getUTCFullYear();
-
-  const lintReport = readJsonIfExists(path.join(reportsDir, 'lint-report.json'));
-  const unitReport = readJsonIfExists(path.join(reportsDir, 'unit-report.json'));
-  const securityReport = readJsonIfExists(path.join(reportsDir, 'security-report.json'));
-  const syncReport = readJsonIfExists(path.join(reportsDir, 'sync-validation.json'));
-  const pdfReport = readJsonIfExists(path.join(reportsDir, 'pdf-report.json'));
-  const ogReport = readJsonIfExists(path.join(reportsDir, 'og-report.json'));
-  const htmlReport = readJsonIfExists(path.join(reportsDir, 'html-validate.json'));
-  const cypressReport = readJsonIfExists(path.join(reportsDir, 'cypress-results.json'));
-  const perfReport = readJsonIfExists(path.join(reportsDir, 'perf-report.json'));
-  const lycheeExit = process.env.LYCHEE_STATUS;
-
-  const assetUrls = getAssetUrls(reportsDir, true);
-
-  const cssBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'css', 'styles.css'));
-  const subpageCssBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'css', 'subpage.css'));
-  const printCssBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'css', 'print.css'));
-  const initialJsBytes = sumFileSizesBytes([
-    path.join(siteDir, 'assets', 'js', 'theme-init.js'),
-    path.join(siteDir, 'assets', 'js', 'theme.js'),
-    path.join(siteDir, 'assets', 'js', 'command-menu.js'),
-  ]);
-  const commandMenuPanelJsBytes = getFileSizeBytes(
-    path.join(siteDir, 'assets', 'js', 'command-menu-panel.js')
-  );
-  const fontsBytes = sumFileSizesBytes([
-    path.join(siteDir, 'assets', 'fonts', 'GeistMono-Variable.woff2'),
-    path.join(siteDir, 'assets', 'fonts', 'GeistPixel-Square.woff2'),
-  ]);
-  const pdfBytes = getFileSizeBytes(path.join(siteDir, 'resume.pdf'));
-  const indexBytes = getFileSizeBytes(path.join(siteDir, 'index.html'));
-  const ogCardBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'og-card.png'));
-  const contactVcfBytes = getFileSizeBytes(path.join(siteDir, 'contact.vcf'));
-  const expiryDays = getSecurityExpiryDays();
-
-  const cssSize = formatKb(cssBytes);
-  const fontSize = formatKb(fontsBytes);
-  const pdfSize = formatKb(pdfBytes);
-  const indexSize = formatKb(indexBytes);
-
+export function evaluateQualityGates({
+  lintReport = null,
+  unitReport = null,
+  securityReport = null,
+  syncReport = null,
+  pdfReport = null,
+  ogReport = null,
+  htmlReport = null,
+  cypressReport = null,
+  perfReport = null,
+  lycheeExit = undefined,
+  expiryDays = null,
+  pdfSize = 'N/A',
+} = {}) {
   const lintStatus = lintReport ? (lintReport.passed ? 'pass' : 'fail') : 'pending';
   const unitStatus = unitReport ? (unitReport.passed ? 'pass' : 'fail') : 'pending';
   const auditStatus = securityReport ? (securityReport.passed ? 'pass' : 'fail') : 'pending';
@@ -163,14 +132,6 @@ function buildQualityPage() {
     ? syncReport.checks.filter((c) => c.passed).length
     : 0;
   const syncTotalCount = Array.isArray(syncReport?.checks) ? syncReport.checks.length : 0;
-
-  const generatedAt = new Date().toISOString();
-  const commitSha = process.env.GITHUB_SHA ? process.env.GITHUB_SHA.slice(0, 7) : 'local';
-  const branchRef = process.env.GITHUB_REF_NAME || 'workspace';
-  const runUrl =
-    process.env.GITHUB_SERVER_URL && process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID
-      ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
-      : null;
 
   const cards = [
     {
@@ -296,6 +257,78 @@ function buildQualityPage() {
   const hasFail = cards.some((c) => c.status === 'fail');
   const hasPending = cards.some((c) => c.status === 'pending');
   const overallStatus = hasFail ? 'fail' : hasPending ? 'pending' : 'pass';
+
+  return { cards, overallStatus, pdfStatus };
+}
+
+export function buildQualityPage() {
+  const resume = readJsonIfExists(path.join(ROOT, 'resume.json'));
+  const ownerName = resume?.basics?.name || 'Guilherme Vigneron de Oliveira';
+  const siteUrl = String(resume?.basics?.url || 'https://guilhermevigneron.dev').replace(/\/$/, '');
+  const domain = siteUrl.replace(/^https?:\/\//, '');
+  const currentYear = new Date().getUTCFullYear();
+
+  const lintReport = readJsonIfExists(path.join(reportsDir, 'lint-report.json'));
+  const unitReport = readJsonIfExists(path.join(reportsDir, 'unit-report.json'));
+  const securityReport = readJsonIfExists(path.join(reportsDir, 'security-report.json'));
+  const syncReport = readJsonIfExists(path.join(reportsDir, 'sync-validation.json'));
+  const pdfReport = readJsonIfExists(path.join(reportsDir, 'pdf-report.json'));
+  const ogReport = readJsonIfExists(path.join(reportsDir, 'og-report.json'));
+  const htmlReport = readJsonIfExists(path.join(reportsDir, 'html-validate.json'));
+  const cypressReport = readJsonIfExists(path.join(reportsDir, 'cypress-results.json'));
+  const perfReport = readJsonIfExists(path.join(reportsDir, 'perf-report.json'));
+  const lycheeExit = process.env.LYCHEE_STATUS;
+
+  const assetUrls = getAssetUrls(reportsDir, true);
+
+  const cssBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'css', 'styles.css'));
+  const subpageCssBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'css', 'subpage.css'));
+  const printCssBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'css', 'print.css'));
+  const initialJsBytes = sumFileSizesBytes([
+    path.join(siteDir, 'assets', 'js', 'theme-init.js'),
+    path.join(siteDir, 'assets', 'js', 'theme.js'),
+    path.join(siteDir, 'assets', 'js', 'command-menu.js'),
+  ]);
+  const commandMenuPanelJsBytes = getFileSizeBytes(
+    path.join(siteDir, 'assets', 'js', 'command-menu-panel.js')
+  );
+  const fontsBytes = sumFileSizesBytes([
+    path.join(siteDir, 'assets', 'fonts', 'GeistMono-Variable.woff2'),
+    path.join(siteDir, 'assets', 'fonts', 'GeistPixel-Square.woff2'),
+  ]);
+  const pdfBytes = getFileSizeBytes(path.join(siteDir, 'resume.pdf'));
+  const indexBytes = getFileSizeBytes(path.join(siteDir, 'index.html'));
+  const ogCardBytes = getFileSizeBytes(path.join(siteDir, 'assets', 'og-card.png'));
+  const contactVcfBytes = getFileSizeBytes(path.join(siteDir, 'contact.vcf'));
+  const expiryDays = getSecurityExpiryDays();
+
+  const cssSize = formatKb(cssBytes);
+  const fontSize = formatKb(fontsBytes);
+  const pdfSize = formatKb(pdfBytes);
+  const indexSize = formatKb(indexBytes);
+
+  const { cards, overallStatus, pdfStatus } = evaluateQualityGates({
+    lintReport,
+    unitReport,
+    securityReport,
+    syncReport,
+    pdfReport,
+    ogReport,
+    htmlReport,
+    cypressReport,
+    perfReport,
+    lycheeExit,
+    expiryDays,
+    pdfSize,
+  });
+
+  const generatedAt = new Date().toISOString();
+  const commitSha = process.env.GITHUB_SHA ? process.env.GITHUB_SHA.slice(0, 7) : 'local';
+  const branchRef = process.env.GITHUB_REF_NAME || 'workspace';
+  const runUrl =
+    process.env.GITHUB_SERVER_URL && process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID
+      ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+      : null;
 
   const reportPayload = {
     schemaVersion: 1,
@@ -447,4 +480,10 @@ function buildQualityPage() {
   console.log('Generated _site/quality/index.html & _site/quality/report.json');
 }
 
-buildQualityPage();
+const isEntrypoint =
+  Boolean(process.argv[1]) &&
+  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
+
+if (isEntrypoint) {
+  buildQualityPage();
+}

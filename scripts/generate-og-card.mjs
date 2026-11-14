@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   closeBrowserSafely,
   launchHeadlessBrowser,
@@ -15,7 +16,45 @@ const siteDir = path.join(ROOT, '_site');
 const ogOutPath = path.join(siteDir, 'assets', 'og-card.png');
 const ogTempPath = `${ogOutPath}.tmp`;
 
-function buildCardHtml(resume) {
+export function parsePngDimensions(pngBytes) {
+  if (!Buffer.isBuffer(pngBytes) || pngBytes.length < 24) {
+    return null;
+  }
+  const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (!pngBytes.subarray(0, 8).equals(pngSignature)) {
+    return null;
+  }
+  if (pngBytes.subarray(12, 16).toString('ascii') !== 'IHDR') {
+    return null;
+  }
+  return {
+    width: pngBytes.readUInt32BE(16),
+    height: pngBytes.readUInt32BE(20),
+  };
+}
+
+export function validatePngBuffer(
+  pngBytes,
+  expectedWidth = 1200,
+  expectedHeight = 630,
+  minBytes = 5000
+) {
+  const dims = parsePngDimensions(pngBytes);
+  if (!dims) {
+    throw new Error('Generated og-card.png does not have valid PNG/IHDR header');
+  }
+  if (dims.width !== expectedWidth || dims.height !== expectedHeight) {
+    throw new Error(
+      `Generated og-card.png dimensions ${dims.width}x${dims.height} do not match ${expectedWidth}x${expectedHeight}`
+    );
+  }
+  if (pngBytes.length < minBytes) {
+    throw new Error(`Generated og-card.png unexpectedly small (${pngBytes.length} bytes)`);
+  }
+  return dims;
+}
+
+export function buildCardHtml(resume) {
   const years = computeYearsOfExperience(resume) || 18;
   const domain = String(resume.basics.url || '').replace(/^https?:\/\//, '');
   const loc = [resume.basics.location?.city, resume.basics.location?.region]
@@ -166,17 +205,7 @@ function buildCardHtml(resume) {
 </html>`;
 }
 
-function readPngDimensions(pngBytes) {
-  if (pngBytes.length < 24 || pngBytes.toString('ascii', 12, 16) !== 'IHDR') {
-    throw new Error('Generated og-card.png is missing valid IHDR chunk');
-  }
-  return {
-    width: pngBytes.readUInt32BE(16),
-    height: pngBytes.readUInt32BE(20),
-  };
-}
-
-async function generateOgCard() {
+export async function generateOgCard() {
   if (!fs.existsSync(path.join(siteDir, 'assets', 'avatar.jpg'))) {
     throw new Error('_site/assets/avatar.jpg not found. Copy assets before generating OG card.');
   }
@@ -285,19 +314,7 @@ async function generateOgCard() {
     }
 
     const pngBytes = fs.readFileSync(ogTempPath);
-    const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-    if (!pngBytes.subarray(0, 8).equals(pngSignature)) {
-      throw new Error('Generated og-card.png does not have valid PNG magic signature');
-    }
-    const { width, height } = readPngDimensions(pngBytes);
-    if (width !== 1200 || height !== 630) {
-      throw new Error(
-        `Generated og-card.png has invalid dimensions ${width}x${height} (expected 1200x630)`
-      );
-    }
-    if (pngBytes.length < 5000) {
-      throw new Error(`Generated og-card.png unexpectedly small (${pngBytes.length} bytes)`);
-    }
+    const { width, height } = validatePngBuffer(pngBytes, 1200, 630);
 
     fs.renameSync(ogTempPath, ogOutPath);
 
@@ -331,7 +348,13 @@ async function generateOgCard() {
   }
 }
 
-generateOgCard().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const isEntrypoint =
+  Boolean(process.argv[1]) &&
+  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
+
+if (isEntrypoint) {
+  generateOgCard().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   closeBrowserSafely,
   launchHeadlessBrowser,
@@ -8,14 +9,16 @@ import {
   stopStaticServer,
 } from './lib/browser.mjs';
 import { atomicWriteFileSync } from './lib/chrome.mjs';
-import { countPdfPages } from './lib/pdf.mjs';
+import { countPdfPages, validatePdfBuffer } from './lib/pdf.mjs';
+
+export { countPdfPages, validatePdfBuffer };
 
 const ROOT = process.cwd();
 const siteDir = path.join(ROOT, '_site');
 const pdfOutPath = path.join(siteDir, 'resume.pdf');
 const pdfTempPath = `${pdfOutPath}.tmp`;
 
-async function generatePdf() {
+export async function generatePdf() {
   if (!fs.existsSync(path.join(siteDir, 'index.html'))) {
     throw new Error('_site/index.html not found. Build static files before generating PDF.');
   }
@@ -150,39 +153,10 @@ async function generatePdf() {
     }
 
     const pdfBytes = fs.readFileSync(pdfTempPath);
-    if (!pdfBytes.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
-      throw new Error('Generated resume.pdf does not start with %PDF- magic header');
-    }
-    if (pdfBytes.length < 5000) {
-      throw new Error(`Generated resume.pdf unexpectedly small (${pdfBytes.length} bytes)`);
-    }
-
-    const pdfLatin1 = pdfBytes.toString('latin1');
-    const isTagged = /\/StructTreeRoot\b/.test(pdfLatin1);
-    const hasType3Fonts = /\/Subtype\s*\/Type3\b/.test(pdfLatin1);
-    const hasEmbeddedImages = /\/Subtype\s*\/Image\b/.test(pdfLatin1);
-    const pageCount = countPdfPages(pdfBytes);
-
-    if (!isTagged) {
-      throw new Error(
-        'Generated resume.pdf is missing /StructTreeRoot (tagged PDF required for ATS/a11y)'
-      );
-    }
-    if (hasType3Fonts) {
-      throw new Error(
-        'Generated resume.pdf contains Type 3 fonts; use static TrueType/OpenType fonts in print CSS'
-      );
-    }
-    if (hasEmbeddedImages) {
-      throw new Error(
-        'Generated resume.pdf contains embedded raster images; hide imagery in print CSS for ATS'
-      );
-    }
-    if (pageCount < 1 || pageCount > maxPdfPages) {
-      throw new Error(
-        `Generated resume.pdf page count ${pageCount} violates maxPdfPages=${maxPdfPages}`
-      );
-    }
+    const { isTagged, hasType3Fonts, hasEmbeddedImages, pageCount } = validatePdfBuffer(
+      pdfBytes,
+      maxPdfPages
+    );
 
     fs.renameSync(pdfTempPath, pdfOutPath);
 
@@ -220,7 +194,13 @@ async function generatePdf() {
   }
 }
 
-generatePdf().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const isEntrypoint =
+  Boolean(process.argv[1]) &&
+  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
+
+if (isEntrypoint) {
+  generatePdf().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

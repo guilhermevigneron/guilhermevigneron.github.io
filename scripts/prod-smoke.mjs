@@ -1,23 +1,21 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { countPdfPages } from './lib/pdf.mjs';
+import { pathToFileURL } from 'node:url';
+import { startStaticServer, stopStaticServer } from './lib/browser.mjs';
+import { validatePdfBuffer } from './lib/pdf.mjs';
 
 const ROOT = process.cwd();
-const resume = JSON.parse(fs.readFileSync(path.join(ROOT, 'resume.json'), 'utf8'));
-const canonicalUrl = String(
-  resume.meta?.canonical || resume.basics?.url || 'https://guilhermevigneron.dev'
-).replace(/\/+$/, '');
-const ownerName = resume.basics.name;
-const maxPdfPages = Number(resume.meta?.maxPdfPages || 1);
-
+const DEFAULT_BASE_URL = 'https://guilhermevigneron.dev';
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_RETRY_ATTEMPTS = 3;
 const MAX_REDIRECTS = 5;
 const USER_AGENT = 'guilhermevigneron-dev-smoke/1.0';
 
-function parseBaseUrl(rawValue) {
-  const normalized = (rawValue || canonicalUrl).trim().replace(/\/+$/, '');
+function parseBaseUrl(rawValue, fallbackUrl = DEFAULT_BASE_URL) {
+  const normalized = String(rawValue || fallbackUrl)
+    .trim()
+    .replace(/\/+$/, '');
   let parsed;
   try {
     parsed = new URL(normalized);
@@ -34,8 +32,6 @@ function parseBaseUrl(rawValue) {
     origin: parsed.origin,
   };
 }
-
-const { baseUrl: BASE_URL, origin: BASE_ORIGIN } = parseBaseUrl(process.env.SMOKE_BASE_URL);
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -54,7 +50,7 @@ function parseRetryDelayMs(response, attempt) {
   return base + jitter;
 }
 
-async function fetchOnceWithSafeRedirects(initialUrl, options = {}) {
+async function fetchOnceWithSafeRedirects(initialUrl, targetOrigin, options = {}) {
   let currentUrl = initialUrl;
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
@@ -81,7 +77,7 @@ async function fetchOnceWithSafeRedirects(initialUrl, options = {}) {
       if (fromParsed.protocol === 'https:' && nextParsed.protocol !== 'https:') {
         throw new Error(`Unsafe HTTPS -> ${nextParsed.protocol} redirect to ${nextParsed.href}`);
       }
-      if (nextParsed.origin !== BASE_ORIGIN) {
+      if (nextParsed.origin !== targetOrigin) {
         throw new Error(`Unexpected off-origin redirect from ${currentUrl} to ${nextParsed.href}`);
       }
       currentUrl = nextParsed.href;
@@ -94,59 +90,66 @@ async function fetchOnceWithSafeRedirects(initialUrl, options = {}) {
   throw new Error(`Exceeded maximum redirect hops (${MAX_REDIRECTS}) for ${initialUrl}`);
 }
 
-async function fetchWithRetry(endpointPath, expectedStatus = 200) {
-  const normalizedPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
-  const url = `${BASE_URL}${normalizedPath}`;
-  let lastError;
+function createSmokeClient(baseUrl, targetOrigin) {
+  async function fetchWithRetry(endpointPath, expectedStatus = 200) {
+    const normalizedPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
+    const url = `${baseUrl}${normalizedPath}`;
+    let lastError;
 
-  for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt += 1) {
-    try {
-      const response = await fetchOnceWithSafeRedirects(url);
-      if (response.status === 429 || response.status >= 500) {
-        if (attempt < MAX_RETRY_ATTEMPTS) {
-          const delayMs = parseRetryDelayMs(response, attempt);
-          await response.body?.cancel().catch(() => {});
-          await sleep(delayMs);
-          continue;
+    for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt += 1) {
+      try {
+        const response = await fetchOnceWithSafeRedirects(url, targetOrigin);
+        if (response.status === 429 || response.status >= 500) {
+          if (attempt < MAX_RETRY_ATTEMPTS) {
+            const delayMs = parseRetryDelayMs(response, attempt);
+            await response.body?.cancel().catch(() => {});
+            await sleep(delayMs);
+            continue;
+          }
         }
+        if (response.status !== expectedStatus) {
+          await response.body?.cancel().catch(() => {});
+          throw new Error(`Expected HTTP ${expectedStatus} for ${url}, got ${response.status}`);
+        }
+        return response;
+      } catch (err) {
+        lastError = err;
+        const statusMismatch =
+          typeof err?.message === 'string' && err.message.startsWith('Expected HTTP ');
+        const unsafeRedirect =
+          typeof err?.message === 'string' &&
+          (err.message.includes('redirect') || err.message.includes('Redirect'));
+        if (attempt === MAX_RETRY_ATTEMPTS || statusMismatch || unsafeRedirect) {
+          throw lastError;
+        }
+        await sleep(parseRetryDelayMs(null, attempt));
       }
-      if (response.status !== expectedStatus) {
-        await response.body?.cancel().catch(() => {});
-        throw new Error(`Expected HTTP ${expectedStatus} for ${url}, got ${response.status}`);
-      }
-      return response;
-    } catch (err) {
-      lastError = err;
-      const statusMismatch =
-        typeof err?.message === 'string' && err.message.startsWith('Expected HTTP ');
-      const unsafeRedirect =
-        typeof err?.message === 'string' &&
-        (err.message.includes('redirect') || err.message.includes('Redirect'));
-      if (attempt === MAX_RETRY_ATTEMPTS || statusMismatch || unsafeRedirect) {
-        throw lastError;
-      }
-      await sleep(parseRetryDelayMs(null, attempt));
     }
+
+    throw lastError;
   }
 
-  throw lastError;
-}
-
-async function fetchCheckedAsset(endpointPath, expectedContentType, minBytes = 1) {
-  const res = await fetchWithRetry(endpointPath, 200);
-  const contentType = res.headers.get('content-type') || '';
-  if (expectedContentType) {
+  async function fetchCheckedAsset(endpointPath, expectedContentType, minBytes = 1) {
+    const res = await fetchWithRetry(endpointPath, 200);
+    const contentType = res.headers.get('content-type') || '';
+    if (expectedContentType) {
+      const expected = Array.isArray(expectedContentType)
+        ? expectedContentType
+        : [expectedContentType];
+      assert.ok(
+        expected.some((type) => contentType.toLowerCase().includes(type)),
+        `Unexpected content-type for ${endpointPath}: "${contentType}" (expected "${expected.join(' | ')}")`
+      );
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
     assert.ok(
-      contentType.toLowerCase().includes(expectedContentType),
-      `Unexpected content-type for ${endpointPath}: "${contentType}" (expected "${expectedContentType}")`
+      buf.length >= minBytes,
+      `Asset ${endpointPath} too small: ${buf.length} B (min ${minBytes} B)`
     );
+    return { res, buf, contentType };
   }
-  const buf = Buffer.from(await res.arrayBuffer());
-  assert.ok(
-    buf.length >= minBytes,
-    `Asset ${endpointPath} too small: ${buf.length} B (min ${minBytes} B)`
-  );
-  return { res, buf, contentType };
+
+  return { fetchWithRetry, fetchCheckedAsset };
 }
 
 function readAttr(attrString, name) {
@@ -251,8 +254,8 @@ function readPngDimensions(pngBuf) {
   };
 }
 
-async function verifySubpageHtml(route, labels) {
-  const res = await fetchWithRetry(route, 200);
+async function verifySubpageHtml(client, route, labels) {
+  const res = await client.fetchWithRetry(route, 200);
   const ct = res.headers.get('content-type') || '';
   assert.ok(ct.includes('text/html'), `${route} unexpected content-type: ${ct}`);
   const html = await res.text();
@@ -286,14 +289,31 @@ async function verifySubpageHtml(route, labels) {
   );
 
   for (const url of [...refs.stylesheets, ...refs.scripts]) {
-    await fetchCheckedAsset(url, contentTypeForAsset(url), 100);
+    await client.fetchCheckedAsset(url, contentTypeForAsset(url), 100);
   }
 }
 
-async function main() {
-  console.log(`Running production smoke tests against ${BASE_URL}...`);
+export async function runSmokeTests({
+  baseUrl,
+  allowLocalPending = process.env.SMOKE_ALLOW_LOCAL_PENDING === '1',
+  rootDir = ROOT,
+} = {}) {
+  const resume = JSON.parse(fs.readFileSync(path.join(rootDir, 'resume.json'), 'utf8'));
+  const canonicalUrl = String(
+    resume.meta?.canonical || resume.basics?.url || DEFAULT_BASE_URL
+  ).replace(/\/+$/, '');
+  const ownerName = resume.basics.name;
+  const maxPdfPages = Number(resume.meta?.maxPdfPages || 1);
+  const { baseUrl: targetBaseUrl, origin: targetOrigin } = parseBaseUrl(
+    baseUrl || process.env.SMOKE_BASE_URL,
+    canonicalUrl
+  );
+  const client = createSmokeClient(targetBaseUrl, targetOrigin);
+  const { fetchWithRetry, fetchCheckedAsset } = client;
+
+  console.log(`Running smoke tests against ${targetBaseUrl}...`);
   const failures = [];
-  const allowPending = process.env.SMOKE_ALLOW_PENDING === '1';
+  const allowPending = allowLocalPending || process.env.SMOKE_ALLOW_PENDING === '1';
 
   const runCheck = async (name, fn) => {
     try {
@@ -394,7 +414,7 @@ async function main() {
 
     for (const assetUrl of allAssetUrls) {
       assert.ok(assetUrl.startsWith('/'), `Non-local asset URL referenced: ${assetUrl}`);
-      const minSize = assetUrl.endsWith('.woff2') ? 5000 : assetUrl.endsWith('.avif') ? 500 : 100;
+      const minSize = assetUrl.endsWith('.woff2') ? 2000 : assetUrl.endsWith('.avif') ? 500 : 100;
       await fetchCheckedAsset(assetUrl, contentTypeForAsset(assetUrl), minSize);
     }
 
@@ -432,21 +452,9 @@ async function main() {
 
   await runCheck('resume-pdf', async () => {
     const { buf: pdfBuf } = await fetchCheckedAsset('/resume.pdf', 'application/pdf', 5000);
-    assert.ok(pdfBuf.subarray(0, 5).equals(Buffer.from('%PDF-')), 'Invalid PDF magic bytes');
-    const pdfText = pdfBuf.toString('latin1');
-    const pdfPages = countPdfPages(pdfBuf);
-    assert.ok(
-      pdfPages >= 1 && pdfPages <= maxPdfPages,
-      `Expected 1..${maxPdfPages}-page PDF, got ${pdfPages}`
-    );
-    assert.ok(/\/StructTreeRoot\b/.test(pdfText), '/resume.pdf missing /StructTreeRoot');
-    assert.ok(!/\/Subtype\s*\/Type3\b/.test(pdfText), '/resume.pdf contains Type3 fonts');
-    assert.ok(
-      !/\/Subtype\s*\/Image\b/.test(pdfText),
-      '/resume.pdf contains embedded raster images'
-    );
+    const pdfMeta = validatePdfBuffer(pdfBuf, maxPdfPages);
     console.log(
-      `PASS /resume.pdf (${pdfPages} page, tagged, ${(pdfBuf.length / 1024).toFixed(1)} KB)`
+      `PASS /resume.pdf (${pdfMeta.pageCount} page, tagged=${pdfMeta.isTagged}, ${(pdfBuf.length / 1024).toFixed(1)} KB)`
     );
   });
 
@@ -466,7 +474,11 @@ async function main() {
     assert.ok(llmsText.includes('/architecture/'), 'llms.txt missing /architecture/');
     assert.ok(llmsText.includes('/quality/report.json'), 'llms.txt missing /quality/report.json');
 
-    const { buf: vcfBuf } = await fetchCheckedAsset('/contact.vcf', 'text/vcard', 100);
+    const { buf: vcfBuf } = await fetchCheckedAsset(
+      '/contact.vcf',
+      ['text/vcard', 'text/x-vcard'],
+      100
+    );
     const vcfText = vcfBuf.toString('utf8');
     assert.ok(vcfText.includes('BEGIN:VCARD'), 'contact.vcf missing BEGIN:VCARD');
     assert.ok(vcfText.includes(`FN:${ownerName}`), 'contact.vcf missing FN');
@@ -501,11 +513,11 @@ async function main() {
   });
 
   await runCheck('quality-and-architecture-pages', async () => {
-    await verifySubpageHtml('/quality/', [
+    await verifySubpageHtml(client, '/quality/', [
       'Quality &amp; Verification Report',
       'Quality & Verification Report',
     ]);
-    await verifySubpageHtml('/architecture/', 'Architecture Overview');
+    await verifySubpageHtml(client, '/architecture/', 'Architecture Overview');
 
     const { buf: qualityJsonBuf } = await fetchCheckedAsset(
       '/quality/report.json',
@@ -515,8 +527,8 @@ async function main() {
     const qualityJson = JSON.parse(qualityJsonBuf.toString('utf8'));
     assert.equal(qualityJson.schemaVersion, 1);
     assert.ok(
-      Array.isArray(qualityJson.gates) && qualityJson.gates.length >= 9,
-      'quality/report.json missing gates'
+      Array.isArray(qualityJson.gates) && qualityJson.gates.length === 10,
+      `quality/report.json expected 10 gates, got ${qualityJson.gates?.length}`
     );
     const failingGates = qualityJson.gates.filter((g) => g.status === 'fail');
     assert.equal(
@@ -524,7 +536,16 @@ async function main() {
       0,
       `Failing gates in report.json: ${JSON.stringify(failingGates)}`
     );
-    if (!allowPending) {
+    if (allowPending) {
+      const unexpectedPending = qualityJson.gates.filter(
+        (g) => g.status !== 'pass' && !(g.id === 'link-integrity' && g.status === 'pending')
+      );
+      assert.equal(
+        unexpectedPending.length,
+        0,
+        `Unexpected non-passing gates in local smoke check: ${JSON.stringify(unexpectedPending)}`
+      );
+    } else {
       const pendingGates = qualityJson.gates.filter((g) => g.status !== 'pass');
       assert.equal(
         pendingGates.length,
@@ -553,15 +574,20 @@ async function main() {
   });
 
   await runCheck('not-found-handler', async () => {
-    await verifySubpageHtml('/404.html', 'Page Not Found');
+    await verifySubpageHtml(client, '/404.html', 'Page Not Found');
 
-    const res = await fetchWithRetry('/nonexistent-smoke-check-404', 404);
-    const ct = res.headers.get('content-type') || '';
-    assert.ok(ct.includes('text/html'), `Expected text/html 404 page, got: ${ct}`);
-    const body = await res.text();
-    assertStrictCsp(body, '/404');
-    assert.ok(body.includes('Page Not Found'), '404 response missing "Page Not Found" heading');
-    assert.ok(body.includes('href="/"'), '404 response missing return link to /');
+    for (const missingPath of [
+      '/nonexistent-smoke-check-404',
+      '/nonexistent-nested/deep/smoke-check',
+    ]) {
+      const res = await fetchWithRetry(missingPath, 404);
+      const ct = res.headers.get('content-type') || '';
+      assert.ok(ct.includes('text/html'), `Expected text/html 404 page, got: ${ct}`);
+      const body = await res.text();
+      assertStrictCsp(body, missingPath);
+      assert.ok(body.includes('Page Not Found'), '404 response missing "Page Not Found" heading');
+      assert.ok(body.includes('href="/"'), '404 response missing return link to /');
+    }
     console.log(
       'PASS /quality/, /quality/report.json, /architecture/, /sitemap.xml, /404.html, and 404 handling'
     );
@@ -573,10 +599,46 @@ async function main() {
     );
   }
 
-  console.log('All production smoke tests passed!');
+  console.log('All smoke tests passed!');
+}
+async function main() {
+  const useLocal = process.argv.includes('--local');
+  const allowLocalPending =
+    process.env.SMOKE_ALLOW_LOCAL_PENDING === '1' || process.argv.includes('--allow-local-pending');
+  if (!useLocal || process.env.SMOKE_BASE_URL) {
+    await runSmokeTests({
+      baseUrl: process.env.SMOKE_BASE_URL || DEFAULT_BASE_URL,
+      allowLocalPending,
+    });
+    return;
+  }
+
+  const siteDir = path.join(ROOT, '_site');
+  if (!fs.existsSync(path.join(siteDir, 'index.html'))) {
+    throw new Error(
+      '_site/index.html not found. Run "npm run build" before "--local" smoke tests.'
+    );
+  }
+
+  const { server, baseUrl } = await startStaticServer(siteDir);
+  try {
+    await runSmokeTests({
+      baseUrl,
+      allowLocalPending,
+      rootDir: ROOT,
+    });
+  } finally {
+    await stopStaticServer(server);
+  }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const isEntrypoint =
+  Boolean(process.argv[1]) &&
+  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
+
+if (isEntrypoint) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

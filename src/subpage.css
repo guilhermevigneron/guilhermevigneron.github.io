@@ -96,6 +96,10 @@ html.dark {
   min-width: 0;
 }
 
+.subpage-nav-actions .icon-btn {
+  flex-shrink: 0;
+}
+
 .ghost-link {
   display: inline-flex;
   align-items: center;
@@ -103,6 +107,7 @@ html.dark {
   gap: 0.375rem;
   min-height: 2.75rem;
   padding: 0.5rem 0.875rem;
+  white-space: nowrap;
   border-radius: var(--radius);
   border: 1px solid var(--border-ui, var(--rule));
   font-size: 0.75rem;

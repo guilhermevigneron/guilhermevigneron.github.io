@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
 import {
   closeBrowserSafely,
@@ -12,10 +13,8 @@ import {
 import { atomicWriteFileSync } from './lib/chrome.mjs';
 
 const ROOT = process.cwd();
-const siteDir = path.join(ROOT, '_site');
-const reportsDir = path.join(ROOT, '.ci-reports');
 
-const BUDGETS = {
+export const BUDGETS = {
   screenCssMaxBytes: 12 * 1024,
   commandMenuCssMaxBytes: 4 * 1024,
   subpageCssMaxBytes: 6 * 1024,
@@ -38,10 +37,29 @@ const BUDGETS = {
   maxLongTaskMs: 100,
 };
 
-function fileSize(relPath) {
-  const full = path.join(siteDir, relPath);
+function readAssetManifest(rootDir = ROOT) {
+  const manifestPath = path.join(rootDir, '.ci-reports', 'asset-manifest.json');
+  if (!fs.existsSync(manifestPath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function resolveAvatarPath(manifest, relPath) {
+  return (
+    manifest?.avatarReplacements?.[`/${relPath}`] ||
+    manifest?.avatarReplacements?.[relPath] ||
+    relPath
+  );
+}
+
+function fileSize(targetSiteDir, relPath) {
+  const normalized = String(relPath).replace(/^\//, '');
+  const full = path.join(targetSiteDir, normalized);
   if (!fs.existsSync(full)) {
-    throw new Error(`Expected built asset missing: ${relPath}`);
+    throw new Error(`Expected built asset missing: ${normalized}`);
   }
   return fs.statSync(full).size;
 }
@@ -57,133 +75,499 @@ async function waitForFontsReady(page) {
   );
 }
 
-function brotliSize(relPath) {
-  const full = path.join(siteDir, relPath);
+function brotliSize(targetSiteDir, relPath) {
+  const full = path.join(targetSiteDir, String(relPath).replace(/^\//, ''));
   return zlib.brotliCompressSync(fs.readFileSync(full)).length;
 }
 
-async function main() {
-  const qualityOnly = process.argv.includes('--quality-only');
-
-  if (!fs.existsSync(path.join(siteDir, 'index.html'))) {
-    throw new Error('_site/index.html not found. Run "npm run build" first.');
-  }
-
-  const assetSizes = {
-    screenCssBytes: fileSize('assets/css/styles.css'),
-    commandMenuCssBytes: fileSize('assets/css/command-menu.css'),
-    subpageCssBytes: fileSize('assets/css/subpage.css'),
-    printCssBytes: fileSize('assets/css/print.css'),
-    themeInitJsBytes: fileSize('assets/js/theme-init.js'),
-    themeJsBytes: fileSize('assets/js/theme.js'),
-    commandMenuJsBytes: fileSize('assets/js/command-menu.js'),
-    commandMenuPanelJsBytes: fileSize('assets/js/command-menu-panel.js'),
-    monoFontBytes: fileSize('assets/fonts/GeistMono-Variable.woff2'),
-    pixelFontBytes: fileSize('assets/fonts/GeistPixel-Square.woff2'),
-    indexHtmlBytes: fileSize('index.html'),
-    notFoundHtmlBytes: fileSize('404.html'),
-    qualityHtmlBytes: fs.existsSync(path.join(siteDir, 'quality/index.html'))
-      ? fileSize('quality/index.html')
-      : null,
-    architectureHtmlBytes: fs.existsSync(path.join(siteDir, 'architecture/index.html'))
-      ? fileSize('architecture/index.html')
-      : null,
-    avatarJpgBytes: fileSize('assets/avatar.jpg'),
-    avatarAvif168Bytes: fileSize('assets/avatar-168.avif'),
-    avatarAvif224Bytes: fileSize('assets/avatar-224.avif'),
-    avatarAvif336Bytes: fileSize('assets/avatar-336.avif'),
-    avatarWebp168Bytes: fileSize('assets/avatar-168.webp'),
-    avatarWebp224Bytes: fileSize('assets/avatar-224.webp'),
-    avatarWebp336Bytes: fileSize('assets/avatar-336.webp'),
-  };
+export function evaluateAssetBudgets(assetSizes, budgets = BUDGETS) {
+  assert.ok(assetSizes && typeof assetSizes === 'object', 'assetSizes must be an object');
   const initialJsBytes =
+    assetSizes.initialJsBytes ??
     assetSizes.themeInitJsBytes + assetSizes.themeJsBytes + assetSizes.commandMenuJsBytes;
   const combinedFontsBytes = assetSizes.monoFontBytes + assetSizes.pixelFontBytes;
-  const initialBrotliBytes =
-    brotliSize('index.html') +
-    brotliSize('assets/css/styles.css') +
-    brotliSize('assets/css/print.css') +
-    brotliSize('assets/js/theme-init.js') +
-    brotliSize('assets/js/theme.js') +
-    brotliSize('assets/js/command-menu.js') +
-    assetSizes.monoFontBytes +
-    assetSizes.pixelFontBytes +
-    assetSizes.avatarAvif336Bytes;
 
   assert.ok(
-    assetSizes.screenCssBytes <= BUDGETS.screenCssMaxBytes,
-    `Screen CSS ${assetSizes.screenCssBytes} B exceeds budget ${BUDGETS.screenCssMaxBytes} B`
+    assetSizes.screenCssBytes <= budgets.screenCssMaxBytes,
+    `Screen CSS ${assetSizes.screenCssBytes} B exceeds budget ${budgets.screenCssMaxBytes} B`
   );
-  assert.ok(
-    assetSizes.commandMenuCssBytes <= BUDGETS.commandMenuCssMaxBytes,
-    `Command menu CSS ${assetSizes.commandMenuCssBytes} B exceeds budget ${BUDGETS.commandMenuCssMaxBytes} B`
-  );
-  assert.ok(
-    assetSizes.subpageCssBytes <= BUDGETS.subpageCssMaxBytes,
-    `Subpage CSS ${assetSizes.subpageCssBytes} B exceeds budget ${BUDGETS.subpageCssMaxBytes} B`
-  );
-  assert.ok(
-    assetSizes.printCssBytes <= BUDGETS.printCssMaxBytes,
-    `Print CSS ${assetSizes.printCssBytes} B exceeds budget ${BUDGETS.printCssMaxBytes} B`
-  );
-  assert.ok(
-    initialJsBytes <= BUDGETS.initialJsMaxBytes,
-    `Initial JS ${initialJsBytes} B exceeds budget ${BUDGETS.initialJsMaxBytes} B`
-  );
-  assert.ok(
-    assetSizes.commandMenuPanelJsBytes <= BUDGETS.lazyPanelJsMaxBytes,
-    `Lazy command menu panel JS ${assetSizes.commandMenuPanelJsBytes} B exceeds budget ${BUDGETS.lazyPanelJsMaxBytes} B`
-  );
-  assert.ok(
-    combinedFontsBytes <= BUDGETS.combinedFontsMaxBytes,
-    `Combined fonts ${combinedFontsBytes} B exceed budget ${BUDGETS.combinedFontsMaxBytes} B`
-  );
-  assert.ok(
-    assetSizes.indexHtmlBytes <= BUDGETS.indexHtmlMaxBytes,
-    `index.html ${assetSizes.indexHtmlBytes} B exceeds budget ${BUDGETS.indexHtmlMaxBytes} B`
-  );
-  assert.ok(
-    assetSizes.notFoundHtmlBytes <= BUDGETS.notFoundHtmlMaxBytes,
-    `404.html ${assetSizes.notFoundHtmlBytes} B exceeds budget ${BUDGETS.notFoundHtmlMaxBytes} B`
-  );
-  if (assetSizes.qualityHtmlBytes !== null) {
+  if (assetSizes.commandMenuCssBytes !== undefined) {
     assert.ok(
-      assetSizes.qualityHtmlBytes <= BUDGETS.qualityHtmlMaxBytes,
-      `quality/index.html ${assetSizes.qualityHtmlBytes} B exceeds budget ${BUDGETS.qualityHtmlMaxBytes} B`
-    );
-  }
-  if (assetSizes.architectureHtmlBytes !== null) {
-    assert.ok(
-      assetSizes.architectureHtmlBytes <= BUDGETS.architectureHtmlMaxBytes,
-      `architecture/index.html ${assetSizes.architectureHtmlBytes} B exceeds budget ${BUDGETS.architectureHtmlMaxBytes} B`
+      assetSizes.commandMenuCssBytes <= budgets.commandMenuCssMaxBytes,
+      `Command menu CSS ${assetSizes.commandMenuCssBytes} B exceeds budget ${budgets.commandMenuCssMaxBytes} B`
     );
   }
   assert.ok(
-    assetSizes.avatarJpgBytes <= BUDGETS.avatarJpgMaxBytes,
-    `avatar.jpg ${assetSizes.avatarJpgBytes} B exceeds budget ${BUDGETS.avatarJpgMaxBytes} B`
+    assetSizes.subpageCssBytes <= budgets.subpageCssMaxBytes,
+    `Subpage CSS ${assetSizes.subpageCssBytes} B exceeds budget ${budgets.subpageCssMaxBytes} B`
+  );
+  assert.ok(
+    assetSizes.printCssBytes <= budgets.printCssMaxBytes,
+    `Print CSS ${assetSizes.printCssBytes} B exceeds budget ${budgets.printCssMaxBytes} B`
+  );
+  assert.ok(
+    initialJsBytes <= budgets.initialJsMaxBytes,
+    `Initial JS ${initialJsBytes} B exceeds budget ${budgets.initialJsMaxBytes} B`
+  );
+  assert.ok(
+    assetSizes.commandMenuPanelJsBytes <= budgets.lazyPanelJsMaxBytes,
+    `Lazy command menu panel JS ${assetSizes.commandMenuPanelJsBytes} B exceeds budget ${budgets.lazyPanelJsMaxBytes} B`
+  );
+  assert.ok(
+    combinedFontsBytes <= budgets.combinedFontsMaxBytes,
+    `Combined fonts ${combinedFontsBytes} B exceed budget ${budgets.combinedFontsMaxBytes} B`
+  );
+  assert.ok(
+    assetSizes.indexHtmlBytes <= budgets.indexHtmlMaxBytes,
+    `index.html ${assetSizes.indexHtmlBytes} B exceeds budget ${budgets.indexHtmlMaxBytes} B`
+  );
+  assert.ok(
+    assetSizes.notFoundHtmlBytes <= budgets.notFoundHtmlMaxBytes,
+    `404.html ${assetSizes.notFoundHtmlBytes} B exceeds budget ${budgets.notFoundHtmlMaxBytes} B`
+  );
+  if (assetSizes.qualityHtmlBytes != null) {
+    assert.ok(
+      assetSizes.qualityHtmlBytes <= budgets.qualityHtmlMaxBytes,
+      `quality/index.html ${assetSizes.qualityHtmlBytes} B exceeds budget ${budgets.qualityHtmlMaxBytes} B`
+    );
+  }
+  if (assetSizes.architectureHtmlBytes != null) {
+    assert.ok(
+      assetSizes.architectureHtmlBytes <= budgets.architectureHtmlMaxBytes,
+      `architecture/index.html ${assetSizes.architectureHtmlBytes} B exceeds budget ${budgets.architectureHtmlMaxBytes} B`
+    );
+  }
+  assert.ok(
+    assetSizes.avatarJpgBytes <= budgets.avatarJpgMaxBytes,
+    `avatar.jpg ${assetSizes.avatarJpgBytes} B exceeds budget ${budgets.avatarJpgMaxBytes} B`
+  );
+  assert.ok(
+    assetSizes.avatarAvif224Bytes <= budgets.avatarAvifMaxBytes,
+    `avatar-224.avif ${assetSizes.avatarAvif224Bytes} B exceeds budget ${budgets.avatarAvifMaxBytes} B`
   );
   for (const [label, bytes] of [
     ['avatar-168.avif', assetSizes.avatarAvif168Bytes],
-    ['avatar-224.avif', assetSizes.avatarAvif224Bytes],
     ['avatar-336.avif', assetSizes.avatarAvif336Bytes],
   ]) {
-    assert.ok(
-      bytes <= BUDGETS.avatarAvifMaxBytes,
-      `${label} ${bytes} B exceeds budget ${BUDGETS.avatarAvifMaxBytes} B`
-    );
+    if (bytes !== undefined) {
+      assert.ok(
+        bytes <= budgets.avatarAvifMaxBytes,
+        `${label} ${bytes} B exceeds budget ${budgets.avatarAvifMaxBytes} B`
+      );
+    }
   }
   for (const [label, bytes] of [
     ['avatar-168.webp', assetSizes.avatarWebp168Bytes],
     ['avatar-224.webp', assetSizes.avatarWebp224Bytes],
     ['avatar-336.webp', assetSizes.avatarWebp336Bytes],
   ]) {
+    if (bytes !== undefined) {
+      assert.ok(
+        bytes <= budgets.avatarWebpMaxBytes,
+        `${label} ${bytes} B exceeds budget ${budgets.avatarWebpMaxBytes} B`
+      );
+    }
+  }
+
+  return { initialJsBytes, combinedFontsBytes };
+}
+
+export function evaluateVitalsBudgets(vitals, budgets = BUDGETS, overflowChecks = []) {
+  assert.ok(vitals && typeof vitals === 'object', 'vitals must be an object');
+  if (vitals.eagerPanelLoaded !== undefined) {
+    assert.equal(
+      vitals.eagerPanelLoaded,
+      false,
+      'Lazy command-menu-panel JS should not load during initial page load'
+    );
+  }
+  if (vitals.eagerCommandCssLoaded !== undefined) {
+    assert.equal(
+      vitals.eagerCommandCssLoaded,
+      false,
+      'Lazy command-menu CSS should not load during initial page load'
+    );
+  }
+  assert.ok(
+    typeof vitals.cls === 'number' &&
+      !Number.isNaN(vitals.cls) &&
+      vitals.cls >= 0 &&
+      vitals.cls <= budgets.clsMax,
+    `Mobile CLS ${vitals.cls} missing or exceeds budget ${budgets.clsMax}`
+  );
+  assert.ok(
+    typeof vitals.lcpMs === 'number' && vitals.lcpMs > 0 && vitals.lcpMs <= budgets.lcpMaxMs,
+    `Mobile LCP ${vitals.lcpMs}ms missing or exceeds budget ${budgets.lcpMaxMs}ms`
+  );
+  assert.ok(
+    typeof vitals.fcpMs === 'number' && vitals.fcpMs > 0 && vitals.fcpMs <= budgets.fcpMaxMs,
+    `Mobile FCP ${vitals.fcpMs}ms missing or exceeds budget ${budgets.fcpMaxMs}ms`
+  );
+  assert.ok(
+    typeof vitals.totalTransferBytes === 'number' &&
+      vitals.totalTransferBytes > 0 &&
+      vitals.totalTransferBytes <= budgets.totalMobileTransferMaxBytes,
+    `Mobile initial payload ${vitals.totalTransferBytes} B missing or exceeds budget ${budgets.totalMobileTransferMaxBytes} B`
+  );
+  if (vitals.domNodes !== undefined) {
     assert.ok(
-      bytes <= BUDGETS.avatarWebpMaxBytes,
-      `${label} ${bytes} B exceeds budget ${BUDGETS.avatarWebpMaxBytes} B`
+      vitals.domNodes <= budgets.maxDomNodes,
+      `DOM node count ${vitals.domNodes} exceeds budget ${budgets.maxDomNodes}`
+    );
+  }
+  if (vitals.maxLongTaskMs !== undefined) {
+    assert.ok(
+      vitals.maxLongTaskMs <= budgets.maxLongTaskMs,
+      `Max long task ${vitals.maxLongTaskMs}ms exceeds budget ${budgets.maxLongTaskMs}ms`
     );
   }
 
-  const { server, baseUrl } = await startStaticServer(siteDir);
+  for (const check of overflowChecks) {
+    assert.ok(
+      check.scrollWidth <= check.clientWidth,
+      `Horizontal overflow on ${check.route} at ${check.width}px: scrollWidth=${check.scrollWidth} > clientWidth=${check.clientWidth}`
+    );
+  }
+}
+
+async function attachRouteInterceptor(page, baseOrigin, blockedExternalRequests, axeSource) {
+  await page.route('**/*', (route) => {
+    const url = route.request().url();
+    if (axeSource) {
+      try {
+        const parsed = new URL(url);
+        if (parsed.origin === baseOrigin && parsed.pathname === '/__pw_axe__/axe.min.js') {
+          return route.fulfill({
+            status: 200,
+            contentType: 'application/javascript; charset=utf-8',
+            body: axeSource,
+          });
+        }
+      } catch {
+        // Continue normal check
+      }
+    }
+    if (url.startsWith('data:') || url.startsWith('blob:')) {
+      return route.continue();
+    }
+    try {
+      if (new URL(url).origin === baseOrigin) {
+        return route.continue();
+      }
+    } catch {
+      // Fall through to abort invalid URLs
+    }
+    blockedExternalRequests.push(url);
+    return route.abort();
+  });
+}
+
+async function measureOverflowAtWidths(page, baseUrl, route, widths) {
+  await page.goto(`${baseUrl}${route}`, { waitUntil: 'load' });
+  await page.evaluate(() => document.fonts.ready);
+  const results = [];
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 800 });
+    const overflow = await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              resolve({
+                scrollWidth: document.documentElement.scrollWidth,
+                clientWidth: document.documentElement.clientWidth,
+              });
+            });
+          });
+        })
+    );
+    results.push({ route, width, ...overflow });
+    assert.ok(
+      overflow.scrollWidth <= overflow.clientWidth,
+      `Horizontal overflow on ${route} at ${width}px: scrollWidth=${overflow.scrollWidth} > clientWidth=${overflow.clientWidth}`
+    );
+  }
+  return results;
+}
+
+async function verifyQualityReportArtifacts(targetSiteDir, baseUrl) {
+  const reportPath = path.join(targetSiteDir, 'quality', 'report.json');
+  assert.ok(fs.existsSync(reportPath), 'Missing _site/quality/report.json');
+  const reportJson = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+  assert.equal(reportJson.schemaVersion, 1, 'Unexpected quality report schemaVersion');
+  assert.ok(
+    Array.isArray(reportJson.gates) && reportJson.gates.length === 10,
+    `Expected 10 quality gates, got ${reportJson.gates?.length}`
+  );
+
+  const failingGates = reportJson.gates.filter((g) => g.status === 'fail');
+  assert.equal(
+    failingGates.length,
+    0,
+    `Failing gates in quality/report.json: ${JSON.stringify(failingGates)}`
+  );
+
+  if (process.env.LYCHEE_STATUS === 'success') {
+    assert.equal(
+      reportJson.overallStatus,
+      'pass',
+      'Final CI quality report overallStatus must be pass'
+    );
+    const nonPassing = reportJson.gates.filter((g) => g.status !== 'pass');
+    assert.equal(
+      nonPassing.length,
+      0,
+      `Non-passing gates in CI quality report: ${JSON.stringify(nonPassing)}`
+    );
+  } else {
+    const unexpectedPending = reportJson.gates.filter(
+      (g) => g.status === 'pending' && g.id !== 'link-integrity'
+    );
+    assert.equal(
+      unexpectedPending.length,
+      0,
+      `Unexpected pending gates before quality verification: ${JSON.stringify(unexpectedPending)}`
+    );
+  }
+
+  const res = await fetch(`${baseUrl}/quality/report.json`, {
+    signal: AbortSignal.timeout(10000),
+  });
+  assert.equal(res.status, 200, 'Expected HTTP 200 for /quality/report.json');
+}
+
+async function auditQualityPageAccessibilityAndTouch({
+  browser,
+  baseUrl,
+  baseOrigin,
+  axeSource,
+  blockedExternalRequests,
+  failedRequests,
+  consoleErrors,
+}) {
+  const matrix = [
+    {
+      viewport: { width: 1280, height: 800 },
+      isMobile: false,
+      hasTouch: false,
+      theme: 'light',
+      label: 'quality-desktop-light',
+    },
+    {
+      viewport: { width: 1280, height: 800 },
+      isMobile: false,
+      hasTouch: false,
+      theme: 'dark',
+      label: 'quality-desktop-dark',
+    },
+    {
+      viewport: { width: 375, height: 667 },
+      isMobile: true,
+      hasTouch: true,
+      theme: 'light',
+      label: 'quality-mobile-light',
+    },
+    {
+      viewport: { width: 375, height: 667 },
+      isMobile: true,
+      hasTouch: true,
+      theme: 'dark',
+      label: 'quality-mobile-dark',
+    },
+  ];
+
+  for (const scenario of matrix) {
+    const ctx = await browser.newContext({
+      viewport: scenario.viewport,
+      deviceScaleFactor: scenario.isMobile ? 2 : 1,
+      isMobile: scenario.isMobile,
+      hasTouch: scenario.hasTouch,
+    });
+    const pg = await ctx.newPage();
+
+    await attachRouteInterceptor(pg, baseOrigin, blockedExternalRequests, axeSource);
+    pg.on('response', (res) => {
+      const pathname = new URL(res.url()).pathname;
+      if (res.status() >= 400 && pathname !== '/404.html') {
+        failedRequests.push({ url: pathname, status: res.status() });
+      }
+    });
+    pg.on('pageerror', (err) => consoleErrors.push(err.message));
+    pg.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+    });
+
+    await pg.addInitScript((theme) => {
+      localStorage.setItem('theme', theme);
+      window.__cspViolations = [];
+      window.addEventListener('securitypolicyviolation', (ev) => {
+        window.__cspViolations.push(`${ev.violatedDirective}:${ev.blockedURI}`);
+      });
+    }, scenario.theme);
+
+    await pg.goto(`${baseUrl}/quality/`, { waitUntil: 'load' });
+    await pg.evaluate(() => document.fonts.ready);
+
+    const isDark = await pg.evaluate(() => document.documentElement.classList.contains('dark'));
+    assert.equal(isDark, scenario.theme === 'dark', `Theme mismatch for ${scenario.label}`);
+
+    if (scenario.isMobile) {
+      const touchReport = await pg.evaluate(() => {
+        const navTargets = [
+          ...document.querySelectorAll('.subpage-nav-actions a, .subpage-nav-actions button'),
+        ]
+          .filter((el) => getComputedStyle(el).display !== 'none')
+          .map((el) => {
+            const rect = el.getBoundingClientRect();
+            return {
+              text: el.textContent.trim() || el.getAttribute('aria-label') || el.id,
+              width: rect.width,
+              height: rect.height,
+            };
+          });
+        const footerLinks = [...document.querySelectorAll('.cv-footer-links a')].map((el) => {
+          const rect = el.getBoundingClientRect();
+          return { text: el.textContent.trim(), width: rect.width, height: rect.height };
+        });
+        return { navTargets, footerLinks };
+      });
+
+      for (const target of touchReport.navTargets) {
+        assert.ok(
+          target.width >= 44 && target.height >= 44,
+          `/quality/ mobile nav target "${target.text}" too small (${target.width}x${target.height})`
+        );
+      }
+      for (const link of touchReport.footerLinks) {
+        assert.ok(
+          link.height >= 44,
+          `/quality/ mobile footer link "${link.text}" tap height too small (${link.height})`
+        );
+      }
+    }
+
+    const axeResults = await pg.evaluate(async () => {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = '/__pw_axe__/axe.min.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+      return window.axe.run(document);
+    });
+
+    const cspViolations = await pg.evaluate(() => window.__cspViolations || []);
+    assert.equal(
+      cspViolations.length,
+      0,
+      `CSP violations on ${scenario.label}: ${cspViolations.join(', ')}`
+    );
+    assert.equal(
+      axeResults.violations.length,
+      0,
+      `WCAG violations on ${scenario.label}: ${JSON.stringify(axeResults.violations.map((v) => v.id))}`
+    );
+
+    await ctx.close();
+  }
+}
+
+export async function runPerformanceAudit({ qualityOnly = false, rootDir = ROOT } = {}) {
+  const targetSiteDir = path.join(rootDir, '_site');
+  const targetReportsDir = path.join(rootDir, '.ci-reports');
+
+  if (!fs.existsSync(path.join(targetSiteDir, 'index.html'))) {
+    throw new Error('_site/index.html not found. Run "npm run build" first.');
+  }
+
+  const manifest = readAssetManifest(rootDir);
+  const screenCssPath = manifest?.cssUrl || 'assets/css/styles.css';
+  const printCssPath = manifest?.printCssUrl || 'assets/css/print.css';
+  const themeInitJsPath = manifest?.themeInitJsUrl || 'assets/js/theme-init.js';
+  const themeJsPath = manifest?.themeJsUrl || 'assets/js/theme.js';
+  const commandMenuJsPath = manifest?.commandMenuJsUrl || 'assets/js/command-menu.js';
+  const assetSizes = {
+    screenCssBytes: fileSize(targetSiteDir, screenCssPath),
+    commandMenuCssBytes: fileSize(
+      targetSiteDir,
+      manifest?.commandMenuCssUrl || 'assets/css/command-menu.css'
+    ),
+    subpageCssBytes: fileSize(targetSiteDir, manifest?.subpageCssUrl || 'assets/css/subpage.css'),
+    printCssBytes: fileSize(targetSiteDir, printCssPath),
+    themeInitJsBytes: fileSize(targetSiteDir, themeInitJsPath),
+    themeJsBytes: fileSize(targetSiteDir, themeJsPath),
+    commandMenuJsBytes: fileSize(targetSiteDir, commandMenuJsPath),
+    commandMenuPanelJsBytes: fileSize(
+      targetSiteDir,
+      manifest?.commandMenuPanelJsUrl || 'assets/js/command-menu-panel.js'
+    ),
+    monoFontBytes: fileSize(
+      targetSiteDir,
+      manifest?.monoFontUrl || 'assets/fonts/GeistMono-Variable.woff2'
+    ),
+    pixelFontBytes: fileSize(
+      targetSiteDir,
+      manifest?.pixelFontUrl || 'assets/fonts/GeistPixel-Square.woff2'
+    ),
+    indexHtmlBytes: fileSize(targetSiteDir, 'index.html'),
+    notFoundHtmlBytes: fileSize(targetSiteDir, '404.html'),
+    qualityHtmlBytes: fs.existsSync(path.join(targetSiteDir, 'quality/index.html'))
+      ? fileSize(targetSiteDir, 'quality/index.html')
+      : null,
+    architectureHtmlBytes: fs.existsSync(path.join(targetSiteDir, 'architecture/index.html'))
+      ? fileSize(targetSiteDir, 'architecture/index.html')
+      : null,
+    avatarJpgBytes: fileSize(targetSiteDir, resolveAvatarPath(manifest, 'assets/avatar.jpg')),
+    avatarAvif168Bytes: fileSize(
+      targetSiteDir,
+      resolveAvatarPath(manifest, 'assets/avatar-168.avif')
+    ),
+    avatarAvif224Bytes: fileSize(
+      targetSiteDir,
+      resolveAvatarPath(manifest, 'assets/avatar-224.avif')
+    ),
+    avatarAvif336Bytes: fileSize(
+      targetSiteDir,
+      resolveAvatarPath(manifest, 'assets/avatar-336.avif')
+    ),
+    avatarWebp168Bytes: fileSize(
+      targetSiteDir,
+      resolveAvatarPath(manifest, 'assets/avatar-168.webp')
+    ),
+    avatarWebp224Bytes: fileSize(
+      targetSiteDir,
+      resolveAvatarPath(manifest, 'assets/avatar-224.webp')
+    ),
+    avatarWebp336Bytes: fileSize(
+      targetSiteDir,
+      resolveAvatarPath(manifest, 'assets/avatar-336.webp')
+    ),
+  };
+  const { initialJsBytes, combinedFontsBytes } = evaluateAssetBudgets(assetSizes, BUDGETS);
+  const initialBrotliBytes =
+    brotliSize(targetSiteDir, 'index.html') +
+    brotliSize(targetSiteDir, screenCssPath) +
+    brotliSize(targetSiteDir, printCssPath) +
+    brotliSize(targetSiteDir, themeInitJsPath) +
+    brotliSize(targetSiteDir, themeJsPath) +
+    brotliSize(targetSiteDir, commandMenuJsPath) +
+    assetSizes.monoFontBytes +
+    assetSizes.pixelFontBytes +
+    assetSizes.avatarAvif336Bytes;
+
+  const resumePath = path.join(rootDir, 'resume.json');
+  const resumeData = fs.existsSync(resumePath)
+    ? JSON.parse(fs.readFileSync(resumePath, 'utf8'))
+    : null;
+  const projects = resumeData?.projects || [];
+  const expectProjectsHiddenInPrint =
+    projects.length > 0 && projects.every((project) => project.showInPrint === false);
+
+  const axePath = path.join(rootDir, 'node_modules', 'axe-core', 'axe.min.js');
+  const axeSource = qualityOnly && fs.existsSync(axePath) ? fs.readFileSync(axePath, 'utf8') : null;
+
+  const { server, baseUrl } = await startStaticServer(targetSiteDir);
 
   let browser;
   const failedRequests = [];
@@ -210,22 +594,7 @@ async function main() {
     context.setDefaultNavigationTimeout(30_000);
 
     const page = await context.newPage();
-
-    await page.route('**/*', (route) => {
-      const url = route.request().url();
-      if (url.startsWith('data:') || url.startsWith('blob:')) {
-        return route.continue();
-      }
-      try {
-        if (new URL(url).origin === baseOrigin) {
-          return route.continue();
-        }
-      } catch {
-        // Fall through to abort invalid URLs
-      }
-      blockedExternalRequests.push(url);
-      return route.abort();
-    });
+    await attachRouteInterceptor(page, baseOrigin, blockedExternalRequests, null);
 
     page.on('response', (res) => {
       try {
@@ -302,7 +671,13 @@ async function main() {
         `Unexpected HTTP status navigating to /: ${navRes ? navRes.status() : 'no response'}`
       );
       await waitForFontsReady(page);
-      await page.waitForTimeout(450);
+      await page.evaluate(
+        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      );
+      await page.waitForFunction(
+        () => window.__perfMetrics?.fcp !== null && window.__perfMetrics?.lcp !== null,
+        { timeout: 10_000 }
+      );
 
       vitals = await page.evaluate(() => {
         const nav = performance.getEntriesByType('navigation')[0];
@@ -348,35 +723,87 @@ async function main() {
         uploadThroughput: -1,
       });
       await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+
+      await page.emulateMedia({ media: 'print', colorScheme: 'light' });
+      const printAudit = await page.evaluate(() => {
+        const displayOf = (sel) => {
+          const el = document.querySelector(sel);
+          return el ? getComputedStyle(el).display : null;
+        };
+        return {
+          printContactDisplay: displayOf('.print-contact'),
+          headerActionsDisplay: displayOf('.header-actions'),
+          avatarDisplay: displayOf('.avatar-picture'),
+          footerDisplay: displayOf('.cv-footer-wrap'),
+          commandBarDisplay: displayOf('.command-bar'),
+          projectsDisplay: displayOf('#projects'),
+        };
+      });
+      assert.notEqual(
+        printAudit.printContactDisplay,
+        'none',
+        '.print-contact must be visible in @media print'
+      );
+      assert.equal(
+        printAudit.headerActionsDisplay,
+        'none',
+        '.header-actions must be hidden in @media print'
+      );
+      assert.equal(
+        printAudit.avatarDisplay,
+        'none',
+        '.avatar-picture must be hidden in @media print'
+      );
+      assert.equal(
+        printAudit.footerDisplay,
+        'none',
+        '.cv-footer-wrap must be hidden in @media print'
+      );
+      assert.equal(
+        printAudit.commandBarDisplay,
+        'none',
+        '.command-bar must be hidden in @media print'
+      );
+      if (expectProjectsHiddenInPrint) {
+        assert.equal(
+          printAudit.projectsDisplay,
+          'none',
+          '#projects must be hidden in @media print'
+        );
+      }
+      await page.emulateMedia({ media: 'screen', colorScheme: 'light' });
     }
 
-    // Check overflow across mobile viewports & routes (navigate once per route, resize in-place)
     const routesToCheck = qualityOnly
       ? ['/quality/']
       : ['/', '/404.html', '/quality/', '/architecture/'];
 
     for (const route of routesToCheck) {
-      const navRes = await page.goto(`${baseUrl}${route}`, {
-        waitUntil: 'load',
-        timeout: 30_000,
-      });
-      assert.ok(
-        navRes && navRes.status() < 400,
-        `Unexpected HTTP status navigating to ${route}: ${navRes ? navRes.status() : 'no response'}`
+      const routeOverflow = await measureOverflowAtWidths(
+        page,
+        baseUrl,
+        route,
+        [320, 375, 390, 768]
       );
-      await waitForFontsReady(page);
-      for (const width of [320, 375, 390, 768]) {
-        await page.setViewportSize({ width, height: 800 });
-        const overflow = await page.evaluate(() => ({
-          scrollWidth: document.documentElement.scrollWidth,
-          clientWidth: document.documentElement.clientWidth,
-        }));
-        overflowChecks.push({ route, width, ...overflow });
-        assert.ok(
-          overflow.scrollWidth <= overflow.clientWidth,
-          `Horizontal overflow on ${route} at ${width}px: scrollWidth=${overflow.scrollWidth} > clientWidth=${overflow.clientWidth}`
+      overflowChecks.push(...routeOverflow);
+    }
+
+    if (qualityOnly) {
+      await verifyQualityReportArtifacts(targetSiteDir, baseUrl);
+      if (!axeSource) {
+        throw new Error(
+          'node_modules/axe-core/axe.min.js missing for --quality-only WCAG verification'
         );
       }
+      await auditQualityPageAccessibilityAndTouch({
+        browser,
+        baseUrl,
+        baseOrigin,
+        axeSource,
+        blockedExternalRequests,
+        failedRequests,
+        consoleErrors,
+      });
     }
 
     assert.equal(
@@ -397,35 +824,12 @@ async function main() {
 
     if (qualityOnly) {
       console.log(
-        `PASS /quality/ render & overflow audit (${overflowChecks.length} viewports, 0 console/network errors)`
+        `PASS /quality/ render, report.json, mobile touch & 4-way WCAG AA audit (${overflowChecks.length} viewports, 0 console/network errors)`
       );
       return;
     }
 
-    assert.ok(
-      vitals.cls <= BUDGETS.clsMax,
-      `Mobile CLS ${vitals.cls} exceeds budget ${BUDGETS.clsMax}`
-    );
-    assert.ok(
-      typeof vitals.lcpMs === 'number' && vitals.lcpMs > 0 && vitals.lcpMs <= BUDGETS.lcpMaxMs,
-      `Mobile LCP ${vitals.lcpMs}ms missing or exceeds budget ${BUDGETS.lcpMaxMs}ms`
-    );
-    assert.ok(
-      typeof vitals.fcpMs === 'number' && vitals.fcpMs > 0 && vitals.fcpMs <= BUDGETS.fcpMaxMs,
-      `Mobile FCP ${vitals.fcpMs}ms missing or exceeds budget ${BUDGETS.fcpMaxMs}ms`
-    );
-    assert.ok(
-      vitals.totalTransferBytes <= BUDGETS.totalMobileTransferMaxBytes,
-      `Mobile initial payload ${vitals.totalTransferBytes} B exceeds budget ${BUDGETS.totalMobileTransferMaxBytes} B`
-    );
-    assert.ok(
-      vitals.domNodes <= BUDGETS.maxDomNodes,
-      `DOM node count ${vitals.domNodes} exceeds budget ${BUDGETS.maxDomNodes}`
-    );
-    assert.ok(
-      vitals.maxLongTaskMs <= BUDGETS.maxLongTaskMs,
-      `Max long task ${vitals.maxLongTaskMs}ms exceeds budget ${BUDGETS.maxLongTaskMs}ms`
-    );
+    evaluateVitalsBudgets(vitals, BUDGETS, overflowChecks);
 
     const report = {
       passed: true,
@@ -442,9 +846,9 @@ async function main() {
       timestamp: new Date().toISOString(),
     };
 
-    fs.mkdirSync(reportsDir, { recursive: true });
+    fs.mkdirSync(targetReportsDir, { recursive: true });
     atomicWriteFileSync(
-      path.join(reportsDir, 'perf-report.json'),
+      path.join(targetReportsDir, 'perf-report.json'),
       JSON.stringify(report, null, 2),
       'utf8'
     );
@@ -459,7 +863,14 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const isEntrypoint =
+  Boolean(process.argv[1]) &&
+  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
+
+if (isEntrypoint) {
+  const qualityOnly = process.argv.includes('--quality-only');
+  runPerformanceAudit({ qualityOnly }).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

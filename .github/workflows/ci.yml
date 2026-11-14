@@ -158,6 +158,9 @@ jobs:
       - name: Verify /quality Telemetry Overall Status
         run: node -e "const r = JSON.parse(require('node:fs').readFileSync('./_site/quality/report.json', 'utf8')); if (r.overallStatus !== 'pass') { console.error(JSON.stringify(r, null, 2)); process.exit(1); }"
 
+      - name: Run Built Artifact Smoke Tests
+        run: node scripts/prod-smoke.mjs --local
+
       - name: Link Checker (final /quality Report)
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
@@ -175,12 +178,20 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Package GitHub Pages artifact (preserving .well-known)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          tar --dereference --hard-dereference --directory _site -cvf "${{ runner.temp }}/artifact.tar" --exclude=.git --exclude=.github .
+
       - name: Upload GitHub Pages artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          path: _site
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
           retention-days: 1
+          if-no-files-found: error
+          archive: true
 
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

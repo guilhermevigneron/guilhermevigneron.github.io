@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { startStaticServer, stopStaticServer } from './lib/browser.mjs';
 
 const ROOT = process.cwd();
@@ -27,7 +28,7 @@ function parseTimeoutMs() {
   return ms;
 }
 
-function resolveBrowser() {
+export function resolveBrowser() {
   if (process.env.CYPRESS_BROWSER) {
     return process.env.CYPRESS_BROWSER;
   }
@@ -125,7 +126,7 @@ function runCypress(cmd, args, options, timeoutMs) {
   });
 }
 
-async function main() {
+export async function runE2E() {
   if (!fs.existsSync(path.join(siteDir, 'index.html'))) {
     throw new Error('_site/index.html not found. Run "npm run build" first.');
   }
@@ -161,7 +162,13 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const isEntrypoint =
+  Boolean(process.argv[1]) &&
+  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
+
+if (isEntrypoint) {
+  runE2E().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

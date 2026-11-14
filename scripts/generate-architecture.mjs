@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   escapeHtml,
   getAssetUrls,
@@ -10,12 +11,11 @@ import { minifyHtml } from './minify-html.mjs';
 
 const ROOT = process.cwd();
 const siteDir = path.join(ROOT, '_site');
-const reportsDir = path.join(ROOT, '.ci-reports');
 const outDir = path.join(siteDir, 'architecture');
 const outFile = path.join(outDir, 'index.html');
 
-function buildArchitecturePage() {
-  const resume = readJsonIfExists(path.join(ROOT, 'resume.json'));
+export function buildArchitectureHtml(rootDir = ROOT) {
+  const resume = readJsonIfExists(path.join(rootDir, 'resume.json'));
   const ownerName = resume?.basics?.name || 'Guilherme Vigneron de Oliveira';
   const siteUrl = String(resume?.basics?.url || 'https://guilhermevigneron.dev').replace(/\/$/, '');
   const domain = siteUrl.replace(/^https?:\/\//, '');
@@ -23,7 +23,7 @@ function buildArchitecturePage() {
     resume?.projects?.find((p) => String(p.url || '').includes('github.com'))?.url ||
     'https://github.com/guilhermevigneron/guilhermevigneron.github.io';
   const currentYear = new Date().getUTCFullYear();
-  const assetUrls = getAssetUrls(reportsDir, true);
+  const assetUrls = getAssetUrls(path.join(rootDir, '.ci-reports'), true);
 
   const arrowSvg =
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>';
@@ -159,9 +159,19 @@ function buildArchitecturePage() {
     assetUrls,
   });
 
+  return minifyHtml(html);
+}
+
+export function buildArchitecturePage() {
   fs.mkdirSync(outDir, { recursive: true });
-  fs.writeFileSync(outFile, minifyHtml(html), 'utf8');
+  fs.writeFileSync(outFile, buildArchitectureHtml(ROOT), 'utf8');
   console.log(`Generated ${path.relative(ROOT, outFile)}`);
 }
 
-buildArchitecturePage();
+const isEntrypoint =
+  Boolean(process.argv[1]) &&
+  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
+
+if (isEntrypoint) {
+  buildArchitecturePage();
+}
