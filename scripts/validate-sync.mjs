@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { resolveBuildYear } from './lib/io.mjs';
+import { isEntrypoint, ROOT } from './lib/paths.mjs';
 import { buildCommandMenuConfig } from './lib/site-config.mjs';
-
-const ROOT = process.cwd();
 
 const HTML_ENTITIES = {
   '&amp;': '&',
@@ -326,7 +325,7 @@ export function validateSyncState({
   securityTxt = null,
   commandPanelJs = null,
   contactVcf = null,
-  currentYear = new Date().getUTCFullYear(),
+  currentYear = resolveBuildYear(resume),
 }) {
   const yearStr = String(currentYear);
   const baseUrl = String(resume.basics?.url || '').replace(/\/$/, '');
@@ -793,52 +792,29 @@ export function validateSyncState({
         const host = baseUrl.replace(/^https?:\/\//, '');
         const github = resume.basics.profiles.find((p) => p.network.toLowerCase() === 'github');
         const linkedin = resume.basics.profiles.find((p) => p.network.toLowerCase() === 'linkedin');
-        if (commandPanelJs.includes("from 'site-config'")) {
-          const cfg = buildCommandMenuConfig(resume);
-          assert.equal(cfg.email, resume.basics.email, 'site-config email out of sync');
-          assert.equal(cfg.siteUrl, baseUrl, 'site-config siteUrl out of sync');
-          assert.equal(cfg.host, host, 'site-config host out of sync');
-          assert.equal(
-            cfg.profiles.find((p) => p.network.toLowerCase() === 'github')?.url || '',
-            github?.url || '',
-            'site-config githubUrl out of sync'
-          );
-          assert.equal(
-            cfg.profiles.find((p) => p.network.toLowerCase() === 'linkedin')?.url || '',
-            linkedin?.url || '',
-            'site-config linkedinUrl out of sync'
-          );
-          assert.equal(
-            cfg.sections.some((s) => s.id === 'languages'),
-            Boolean(resume.languages?.length),
-            'site-config hasLanguages out of sync'
-          );
-        } else {
-          assert.ok(
-            commandPanelJs.includes(`email: '${resume.basics.email}'`),
-            'command-menu-panel.js email out of sync'
-          );
-          assert.ok(
-            commandPanelJs.includes(`siteUrl: '${baseUrl}'`),
-            'command-menu-panel.js siteUrl out of sync'
-          );
-          assert.ok(
-            commandPanelJs.includes(`host: '${host}'`),
-            'command-menu-panel.js host out of sync'
-          );
-          assert.ok(
-            commandPanelJs.includes(`githubUrl: '${github?.url || ''}'`),
-            'command-menu-panel.js githubUrl out of sync'
-          );
-          assert.ok(
-            commandPanelJs.includes(`linkedinUrl: '${linkedin?.url || ''}'`),
-            'command-menu-panel.js linkedinUrl out of sync'
-          );
-          assert.ok(
-            commandPanelJs.includes(`hasLanguages: ${Boolean(resume.languages?.length)}`),
-            'command-menu-panel.js hasLanguages out of sync'
-          );
-        }
+        assert.ok(
+          commandPanelJs.includes("from 'site-config'"),
+          "command-menu-panel.js must import from 'site-config'"
+        );
+        const cfg = buildCommandMenuConfig(resume);
+        assert.equal(cfg.email, resume.basics.email, 'site-config email out of sync');
+        assert.equal(cfg.siteUrl, baseUrl, 'site-config siteUrl out of sync');
+        assert.equal(cfg.host, host, 'site-config host out of sync');
+        assert.equal(
+          cfg.profiles.find((p) => p.network.toLowerCase() === 'github')?.url || '',
+          github?.url || '',
+          'site-config githubUrl out of sync'
+        );
+        assert.equal(
+          cfg.profiles.find((p) => p.network.toLowerCase() === 'linkedin')?.url || '',
+          linkedin?.url || '',
+          'site-config linkedinUrl out of sync'
+        );
+        assert.equal(
+          cfg.sections.some((s) => s.id === 'languages'),
+          Boolean(resume.languages?.length),
+          'site-config hasLanguages out of sync'
+        );
       }
 
       assert.ok(decoded404.includes(resume.basics.name), '404.html owner name out of sync');
@@ -926,6 +902,7 @@ export function validateAllFromRoot(rootDir = ROOT) {
     : null;
   const vcfPath = path.join(rootDir, '_site', 'contact.vcf');
   const contactVcf = fs.existsSync(vcfPath) ? fs.readFileSync(vcfPath, 'utf8') : null;
+  const currentYear = resolveBuildYear(resume, rootDir);
 
   const checks = [];
   try {
@@ -940,6 +917,7 @@ export function validateAllFromRoot(rootDir = ROOT) {
       securityTxt,
       commandPanelJs,
       contactVcf,
+      currentYear,
     });
     checks.push(...passedChecks);
   } catch (err) {
@@ -964,11 +942,7 @@ export function validateAllFromRoot(rootDir = ROOT) {
   return checks;
 }
 
-const isEntrypoint =
-  Boolean(process.argv[1]) &&
-  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
-
-if (isEntrypoint) {
+if (isEntrypoint(import.meta.url)) {
   const checks = validateAllFromRoot(ROOT);
   console.log(`Sync validation passed (${checks.length}/${checks.length} checks).`);
 }

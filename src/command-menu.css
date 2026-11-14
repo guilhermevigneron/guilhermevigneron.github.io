@@ -221,3 +221,24 @@
     padding: 0.6875rem 0.5rem;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .cmd-close,
+  .cmd-item {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .cmd-item[data-selected="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  .cmd-dialog,
+  .cmd-toast {
+    border-color: CanvasText;
+  }
+}

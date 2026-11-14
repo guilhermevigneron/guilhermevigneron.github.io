@@ -1,11 +1,10 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { startStaticServer, stopStaticServer } from './lib/browser.mjs';
+import { isEntrypoint, ROOT, SITE_DIR } from './lib/paths.mjs';
 
-const ROOT = process.cwd();
-const siteDir = path.join(ROOT, '_site');
+const siteDir = SITE_DIR;
 const host = '127.0.0.1';
 
 function parsePort() {
@@ -162,11 +161,7 @@ export async function runE2E() {
   }
 }
 
-const isEntrypoint =
-  Boolean(process.argv[1]) &&
-  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
-
-if (isEntrypoint) {
+if (isEntrypoint(import.meta.url)) {
   runE2E().catch((err) => {
     console.error(err);
     process.exit(1);

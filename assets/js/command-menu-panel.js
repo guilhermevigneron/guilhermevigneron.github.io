@@ -3,7 +3,7 @@ import SITE_CFG from 'site-config';
 const COPIED = ' copied to clipboard';
 
 const { email, host, siteUrl, toggleEvent, profiles, sections, ep } = SITE_CFG;
-const [pdfPath, , vcfPath, vcfDl, archPath, qualPath, qJsonPath, llmsPath] = ep;
+const [pdfPath, jsonPath, vcfPath, vcfDl, archPath, qualPath, qJsonPath, llmsPath] = ep;
 
 export function initCommandMenuPanel() {
   const D = document;
@@ -150,7 +150,7 @@ export function initCommandMenuPanel() {
       ['Architecture Overview', archPath, archPath, 'diagram pipeline'],
       ['Live Quality Report', qualPath, qualPath, 'verification ci'],
       ['Quality Telemetry (JSON)', qJsonPath, qJsonPath, 'api'],
-      ['JSON Resume', ep[1], ep[1], 'schema'],
+      ['JSON Resume', jsonPath, jsonPath, 'schema'],
       ['llms.txt', llmsPath, llmsPath, 'markdown profile'],
     ];
 
@@ -249,7 +249,7 @@ export function initCommandMenuPanel() {
     if (typeof W.fetch !== 'function') return Promise.reject(new Error('Fetch unavailable'));
     const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
     const timer = ctrl ? W.setTimeout(() => ctrl.abort(), 5000) : null;
-    llmsPromise = W.fetch('/llms.txt', ctrl ? { signal: ctrl.signal } : undefined)
+    llmsPromise = W.fetch(llmsPath, ctrl ? { signal: ctrl.signal } : undefined)
       .then((r) => {
         if (!r.ok) throw new Error(r.status);
         return r.text();
@@ -543,10 +543,7 @@ export function initCommandMenuPanel() {
     ) {
       const onItem =
         D.activeElement instanceof Element && Boolean(D.activeElement.closest('.cmd-item'));
-      if ((event.key === 'Home' || event.key === 'End') && !onItem && D.activeElement !== input) {
-        return;
-      }
-      if ((event.key === 'Home' || event.key === 'End') && D.activeElement === input && !onItem) {
+      if ((event.key === 'Home' || event.key === 'End') && !onItem) {
         return;
       }
       event.preventDefault();

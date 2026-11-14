@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { isEntrypoint, ROOT } from './lib/paths.mjs';
 import { validatePdfBuffer } from './lib/pdf.mjs';
 import { startStaticServer, stopStaticServer } from './serve.mjs';
 
-const ROOT = process.cwd();
 const DEFAULT_BASE_URL = 'https://guilhermevigneron.dev';
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_RETRY_ATTEMPTS = 3;
@@ -632,11 +631,7 @@ async function main() {
   }
 }
 
-const isEntrypoint =
-  Boolean(process.argv[1]) &&
-  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
-
-if (isEntrypoint) {
+if (isEntrypoint(import.meta.url)) {
   main().catch((err) => {
     console.error(err);
     process.exit(1);

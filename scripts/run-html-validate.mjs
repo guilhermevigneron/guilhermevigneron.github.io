@@ -1,10 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { HtmlValidate } from 'html-validate';
-
-const ROOT = process.cwd();
-const siteDir = path.join(ROOT, '_site');
+import { isEntrypoint, REPORTS_DIR, SITE_DIR } from './lib/paths.mjs';
 
 export function collectHtmlFiles(dir) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -20,10 +17,7 @@ export function collectHtmlFiles(dir) {
   return files.sort();
 }
 
-export async function validateHtmlFiles(
-  targetDir = siteDir,
-  reportsOutputDir = path.join(ROOT, '.ci-reports')
-) {
+export async function validateHtmlFiles(targetDir = SITE_DIR, reportsOutputDir = REPORTS_DIR) {
   if (!fs.existsSync(targetDir)) {
     throw new Error(
       `${path.basename(targetDir)} directory does not exist. Run "npm run build" first.`
@@ -103,11 +97,7 @@ export async function validateHtmlFiles(
   return summary;
 }
 
-const isEntrypoint =
-  Boolean(process.argv[1]) &&
-  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
-
-if (isEntrypoint) {
+if (isEntrypoint(import.meta.url)) {
   validateHtmlFiles()
     .then((summary) => {
       if (!summary.valid) {

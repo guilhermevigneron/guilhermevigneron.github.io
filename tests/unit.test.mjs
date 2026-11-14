@@ -607,9 +607,16 @@ describe('validate-sync positive and mutation paths', () => {
       () =>
         validateSyncState({
           ...base,
-          commandPanelJs: `${base.commandPanelJs.replace("from 'site-config'", "from 'legacy'")}\nemail: 'wrong@example.com'`,
+          commandPanelJs: base.commandPanelJs.replace("from 'site-config'", "from 'legacy'"),
         }),
-      /command-menu-panel\.js email out of sync/
+      /command-menu-panel\.js must import from 'site-config'/
+    );
+
+    const customYearResume = structuredClone(resume);
+    customYearResume.meta = { ...customYearResume.meta, copyrightYear: year - 1 };
+    assert.throws(
+      () => validateSyncState({ ...base, resume: customYearResume, currentYear: undefined }),
+      /Footer missing current copyright year/
     );
 
     assert.throws(

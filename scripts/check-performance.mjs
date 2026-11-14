@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
 import {
   closeBrowserSafely,
@@ -11,8 +10,7 @@ import {
   stopStaticServer,
 } from './lib/browser.mjs';
 import { writeJsonFile } from './lib/io.mjs';
-
-const ROOT = process.cwd();
+import { isEntrypoint, ROOT } from './lib/paths.mjs';
 
 export const BUDGETS = {
   screenCssMaxBytes: 12 * 1024,
@@ -858,11 +856,7 @@ export async function runPerformanceAudit({ qualityOnly = false, rootDir = ROOT 
   }
 }
 
-const isEntrypoint =
-  Boolean(process.argv[1]) &&
-  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
-
-if (isEntrypoint) {
+if (isEntrypoint(import.meta.url)) {
   const qualityOnly = process.argv.includes('--quality-only');
   runPerformanceAudit({ qualityOnly }).catch((err) => {
     console.error(err);

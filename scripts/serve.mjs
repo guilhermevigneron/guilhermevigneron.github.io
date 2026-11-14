@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { isEntrypoint, SITE_DIR } from './lib/paths.mjs';
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -262,12 +262,8 @@ export async function stopStaticServer(server, timeoutMs = 3000) {
   }
 }
 
-const isEntrypoint =
-  Boolean(process.argv[1]) &&
-  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
-
-if (isEntrypoint) {
-  const siteDir = path.join(process.cwd(), '_site');
+if (isEntrypoint(import.meta.url)) {
+  const siteDir = SITE_DIR;
   if (!fs.existsSync(siteDir)) {
     console.error('Error: _site/ directory does not exist. Run "npm run build" first.');
     process.exit(1);
