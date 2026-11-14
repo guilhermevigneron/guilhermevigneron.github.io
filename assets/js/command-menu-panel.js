@@ -204,6 +204,7 @@ export function initCommandMenuPanel() {
     g.remove();
   });
 
+  const itemActions = new WeakMap();
   let itemCounter = 0;
   getGroups(Boolean(byId('about'))).forEach(([heading, rows], groupIdx) => {
     const headingId = `cmd-group-${groupIdx}`;
@@ -217,6 +218,12 @@ export function initCommandMenuPanel() {
     rows.forEach(([title, hint, target, extras, dl]) => {
       const itemId = `cmd-item-${itemCounter}`;
       itemCounter += 1;
+      const meta = {
+        action: target[0] === ':' ? target.slice(1) : null,
+        href: target[0] === ':' ? null : target[0] === '>' ? target.slice(1) : target,
+        external: target[0] === '>',
+        dl: dl || null,
+      };
       const attrs = {
         id: itemId,
         type: 'button',
@@ -224,18 +231,16 @@ export function initCommandMenuPanel() {
         'aria-selected': 'false',
         'data-selected': 'false',
         'data-label': `${title} ${hint} ${extras || ''}`.trim(),
-        'data-download': dl || null,
+        'data-download': meta.dl,
       };
-      if (target[0] === ':') {
-        attrs['data-action'] = target.slice(1);
-      } else if (target[0] === '>') {
-        attrs['data-href'] = target.slice(1);
-        attrs['data-external'] = 'true';
+      if (meta.action) {
+        attrs['data-action'] = meta.action;
       } else {
-        attrs['data-href'] = target;
-        attrs['data-external'] = 'false';
+        attrs['data-href'] = meta.href;
+        attrs['data-external'] = String(meta.external);
       }
       const btn = el('button', 'cmd-item', null, attrs);
+      itemActions.set(btn, meta);
       btn.append(el('span', '', title), el('span', 'cmd-item-hint', hint));
       group.appendChild(btn);
     });
@@ -248,6 +253,7 @@ export function initCommandMenuPanel() {
   let activeIndex = -1;
   let toastTimer = null;
   let cachedLlms = '';
+  let llmsPromise = null;
 
   const showToast = (msg) => {
     if (!toast) return;
@@ -260,11 +266,35 @@ export function initCommandMenuPanel() {
     }, 2400);
   };
 
+  const fetchLlms = () => {
+    if (cachedLlms) return Promise.resolve(cachedLlms);
+    if (llmsPromise) return llmsPromise;
+    if (typeof W.fetch !== 'function') return Promise.reject(new Error('Fetch unavailable'));
+    const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = ctrl ? W.setTimeout(() => ctrl.abort(), 5000) : null;
+    llmsPromise = W.fetch('/llms.txt', ctrl ? { signal: ctrl.signal } : undefined)
+      .then((r) => {
+        if (!r.ok) throw new Error(r.status);
+        return r.text();
+      })
+      .then((txt) => {
+        if (!txt) throw new Error('Empty');
+        cachedLlms = txt;
+        return txt;
+      })
+      .finally(() => {
+        if (timer) W.clearTimeout(timer);
+        llmsPromise = null;
+      });
+    return llmsPromise;
+  };
+
   const copyFallback = (text) => {
     const a = el('textarea', 'sr-only', null, { readonly: '' });
     a.value = text;
     D.body.appendChild(a);
     a.select();
+    a.setSelectionRange?.(0, text.length);
     let ok = false;
     try {
       ok = D.execCommand('copy');
@@ -275,11 +305,15 @@ export function initCommandMenuPanel() {
     return ok;
   };
 
-  const copyText = (text, label) => {
+  const copyText = (text, label, failMsg = 'Copy unavailable in this browser') => {
     const msg = `${label}${COPIED}`;
-    const finish = (ok) => showToast(ok ? msg : 'Copy unavailable in this browser');
-    const clip = navigator.clipboard;
-    const res = clip?.writeText ? clip.writeText(text) : null;
+    const finish = (ok) => showToast(ok ? msg : failMsg);
+    let res = null;
+    try {
+      res = navigator.clipboard?.writeText ? navigator.clipboard.writeText(text) : null;
+    } catch {
+      res = null;
+    }
     if (res && typeof res.then === 'function') {
       res.then(
         () => finish(true),
@@ -356,6 +390,7 @@ export function initCommandMenuPanel() {
     D.documentElement.style.overflow = 'hidden';
     D.body.style.overflow = 'hidden';
     input.focus({ preventScroll: true });
+    fetchLlms().catch(() => {});
   };
 
   const closeMenu = (restore) => {
@@ -366,26 +401,24 @@ export function initCommandMenuPanel() {
     input.removeAttribute('aria-activedescendant');
     D.documentElement.style.overflow = '';
     D.body.style.overflow = '';
-    if (restore && lastFocused instanceof HTMLElement && D.contains(lastFocused)) {
+    if (restore && lastFocused instanceof HTMLElement && lastFocused.isConnected) {
       lastFocused.focus({ preventScroll: true });
     }
   };
 
   const runItem = (item) => {
-    if (!item) return;
-    const action = item.getAttribute('data-action');
-    const href = item.getAttribute('data-href');
-    const dl = item.getAttribute('data-download');
-    const external = item.getAttribute('data-external') === 'true';
+    const meta = item ? itemActions.get(item) : null;
+    if (!meta) return;
+    const { action, href, dl, external } = meta;
 
     if (action === 'print') {
       const target = lastFocused;
       closeMenu(false);
-      if (target instanceof HTMLElement && D.contains(target)) {
+      if (target instanceof HTMLElement && target.isConnected) {
         W.addEventListener(
           'afterprint',
           () => {
-            if (D.contains(target)) target.focus({ preventScroll: true });
+            if (target.isConnected) target.focus({ preventScroll: true });
           },
           { once: true }
         );
@@ -397,12 +430,14 @@ export function initCommandMenuPanel() {
     }
 
     if (action === 'toggle-theme') {
+      const wasDark = D.documentElement.classList.contains('dark');
       byId('theme-toggle')?.click();
       closeMenu(true);
+      const isDark = D.documentElement.classList.contains('dark');
       showToast(
-        D.documentElement.classList.contains('dark')
-          ? 'Switched to dark theme'
-          : 'Switched to light theme'
+        isDark === wasDark
+          ? 'Theme toggle unavailable'
+          : `Switched to ${isDark ? 'dark' : 'light'} theme`
       );
     } else if (action === 'copy-email') {
       closeMenu(true);
@@ -415,23 +450,23 @@ export function initCommandMenuPanel() {
       if (cachedLlms) {
         copyText(cachedLlms, 'Markdown resume');
       } else {
-        W.fetch('/llms.txt')
-          .then((r) => {
-            if (!r.ok) throw new Error(r.status);
-            return r.text();
-          })
-          .then((txt) => {
-            cachedLlms = txt;
-            copyText(txt, 'Markdown resume');
-          })
+        fetchLlms()
+          .then((txt) =>
+            copyText(txt, 'Markdown resume', 'Markdown resume ready — select Copy again')
+          )
           .catch(() => showToast('Unable to fetch Markdown resume'));
       }
     } else if (href) {
       if (href[0] === '#') {
         closeMenu(false);
-        const target = D.querySelector(href);
+        const target = byId(href.slice(1));
         if (target) {
-          const reduced = W.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+          let reduced = false;
+          try {
+            reduced = Boolean(W.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
+          } catch {
+            reduced = false;
+          }
           target.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
           if (!target.hasAttribute('tabindex')) {
             target.setAttribute('tabindex', '-1');
@@ -439,7 +474,7 @@ export function initCommandMenuPanel() {
           target.focus({ preventScroll: true });
           W.history?.replaceState?.(null, '', href);
         }
-      } else if (dl) {
+      } else if (dl && href.startsWith('/')) {
         closeMenu(true);
         const link = el('a', '', null, { href, download: dl });
         D.body.appendChild(link);
@@ -448,8 +483,11 @@ export function initCommandMenuPanel() {
         showToast('Downloading contact vCard');
       } else {
         closeMenu(true);
-        if (external) W.open(href, '_blank', 'noopener,noreferrer');
-        else W.location.href = href;
+        if (external && /^https?:\/\//i.test(href)) {
+          if (!W.open(href, '_blank', 'noopener,noreferrer')) showToast('Pop-up blocked');
+        } else if (href.startsWith('/') || href.startsWith('mailto:')) {
+          W.location.assign(href);
+        }
       }
     }
   };

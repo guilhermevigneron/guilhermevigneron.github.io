@@ -41,6 +41,7 @@ export function getAssetUrls(reportsDir, useManifest = true) {
   return {
     cssUrl: assetManifest?.cssUrl || '/assets/css/styles.css',
     subpageCssUrl: assetManifest?.subpageCssUrl || '/assets/css/subpage.css',
+    printCssUrl: assetManifest?.printCssUrl || '/assets/css/print.css',
     monoFontUrl: assetManifest?.monoFontUrl || '/assets/fonts/GeistMono-Variable.woff2',
     pixelFontUrl: assetManifest?.pixelFontUrl || '/assets/fonts/GeistPixel-Square.woff2',
     themeInitJsUrl: assetManifest?.themeInitJsUrl || '/assets/js/theme-init.js',
@@ -98,6 +99,7 @@ export function renderSubpageDocument({
     <script src="${escapeHtml(assetUrls.themeInitJsUrl)}"></script>
     <link rel="stylesheet" href="${escapeHtml(assetUrls.cssUrl)}">
     <link rel="stylesheet" href="${escapeHtml(assetUrls.subpageCssUrl)}">
+    <link rel="stylesheet" href="${escapeHtml(assetUrls.printCssUrl)}" media="print">
     <link rel="preload" href="${escapeHtml(assetUrls.monoFontUrl)}" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="${escapeHtml(assetUrls.pixelFontUrl)}" as="font" type="font/woff2" crossorigin>
     <script src="${escapeHtml(assetUrls.themeJsUrl)}" defer></script>
@@ -155,3 +157,15 @@ ${mainSectionsHtml}
 </html>
 `;
 }
+
+export function atomicWriteFileSync(targetPath, data, encoding) {
+  const tempPath = `${targetPath}.tmp`;
+  try {
+    fs.writeFileSync(tempPath, data, encoding);
+    fs.renameSync(tempPath, targetPath);
+  } catch (err) {
+    fs.rmSync(tempPath, { force: true });
+    throw err;
+  }
+}
+

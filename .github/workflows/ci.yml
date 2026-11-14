@@ -14,13 +14,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' || github.event_name == 'pull_request' }}
 
 jobs:
   dependency_review:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
@@ -40,6 +41,7 @@ jobs:
   codeql:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       security-events: write
       contents: read
@@ -65,6 +67,7 @@ jobs:
   build_and_test:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Harden Runner
@@ -83,8 +86,24 @@ jobs:
           node-version-file: '.node-version'
           cache: npm
 
+      - name: Cache Cypress binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/Cypress
+          key: cypress-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install dependencies
-        run: npm ci
+        run: |
+          for attempt in 1 2 3; do
+            if npm ci; then
+              exit 0
+            fi
+            if [ "${attempt}" -eq 3 ]; then
+              exit 1
+            fi
+            echo "npm ci failed on attempt ${attempt}; retrying in $((attempt * 5))s..."
+            sleep $((attempt * 5))
+          done
 
       - name: Single-Source Sync Parity Check
         run: npm run test:sync
@@ -96,7 +115,17 @@ jobs:
         run: npm run test:unit
 
       - name: Security Audit
-        run: npm run test:security
+        run: |
+          for attempt in 1 2 3; do
+            if npm run test:security; then
+              exit 0
+            fi
+            if [ "${attempt}" -eq 3 ]; then
+              exit 1
+            fi
+            echo "npm audit failed on attempt ${attempt}; retrying in $((attempt * 5))s..."
+            sleep $((attempt * 5))
+          done
 
       - name: Build static site, CSS/JS bundles, /resume.pdf & OG card
         run: npm run build -- --no-sync
@@ -108,7 +137,7 @@ jobs:
         id: lychee
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
-          args: --root-dir ${{ github.workspace }}/_site --index-files index.html --remap "^https://guilhermevigneron\.dev file://${{ github.workspace }}/_site" --accept 200..=299,999 --no-progress ./_site/index.html ./_site/404.html ./_site/quality/index.html ./_site/architecture/index.html
+          args: --root-dir ${{ github.workspace }}/_site --index-files index.html --remap "^https://guilhermevigneron\.dev file://${{ github.workspace }}/_site" --accept 200..=299,999 --max-retries 3 --retry-wait-time 5 --timeout 20 --no-progress ./_site/index.html ./_site/404.html ./_site/quality/index.html ./_site/architecture/index.html
 
       - name: Run Browser E2E & Accessibility Tests (Cypress)
         env:
@@ -132,18 +161,32 @@ jobs:
       - name: Link Checker (final /quality Report)
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
-          args: --root-dir ${{ github.workspace }}/_site --index-files index.html --remap "^https://guilhermevigneron\.dev file://${{ github.workspace }}/_site" --accept 200..=299,999 --no-progress ./_site/quality/index.html
+          args: --root-dir ${{ github.workspace }}/_site --index-files index.html --remap "^https://guilhermevigneron\.dev file://${{ github.workspace }}/_site" --accept 200..=299,999 --max-retries 3 --retry-wait-time 5 --timeout 20 --no-progress ./_site/quality/index.html
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ci-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .ci-reports/
+            cypress/screenshots/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload GitHub Pages artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: _site
+          retention-days: 1
 
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build_and_test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     concurrency:
       group: pages
       cancel-in-progress: false
@@ -155,6 +198,11 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
@@ -163,8 +211,10 @@ jobs:
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
   production_smoke_tests:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: deploy
+    if: ${{ always() && !cancelled() && ((github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.deploy.result == 'success') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Harden Runner
@@ -188,4 +238,4 @@ jobs:
       - name: Production Link Checker (guilhermevigneron.dev)
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
-          args: --accept 200..=299,999 --no-progress https://guilhermevigneron.dev https://guilhermevigneron.dev/404.html https://guilhermevigneron.dev/quality/ https://guilhermevigneron.dev/architecture/
+          args: --accept 200..=299,999 --max-retries 3 --retry-wait-time 5 --timeout 20 --no-progress https://guilhermevigneron.dev https://guilhermevigneron.dev/404.html https://guilhermevigneron.dev/quality/ https://guilhermevigneron.dev/architecture/

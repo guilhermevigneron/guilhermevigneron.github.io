@@ -22,6 +22,20 @@ html.dark {
   --status-pending-border: #4b3b1c;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --status-pass-bg: #12261b;
+    --status-pass-ink: #86efac;
+    --status-pass-border: #1f4730;
+    --status-fail-bg: #2a1416;
+    --status-fail-ink: #fca5a5;
+    --status-fail-border: #532327;
+    --status-pending-bg: #261e10;
+    --status-pending-ink: #fcd34d;
+    --status-pending-border: #4b3b1c;
+  }
+}
+
 .subpage-body {
   min-height: 100vh;
   min-height: 100dvh;

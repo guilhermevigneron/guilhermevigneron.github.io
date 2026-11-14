@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { rewriteAssetRefs } from './lib/chrome.mjs';
+import { atomicWriteFileSync, rewriteAssetRefs } from './lib/chrome.mjs';
 import { minifyCssFiles, minifyJsFiles } from './minify-assets.mjs';
 import { minifyHtml } from './minify-html.mjs';
 import { buildVCard } from './sync-resume.mjs';
@@ -12,6 +12,7 @@ const ROOT = process.cwd();
 const siteDir = path.join(ROOT, '_site');
 const reportsDir = path.join(ROOT, '.ci-reports');
 const skipSync = process.argv.includes('--no-sync');
+const activeChildren = new Set();
 
 function runNodeScript(relScript) {
   execFileSync(process.execPath, [path.join(ROOT, relScript)], {
@@ -19,20 +20,67 @@ function runNodeScript(relScript) {
   });
 }
 
+function terminateChildren(signal = 'SIGTERM') {
+  for (const child of activeChildren) {
+    if (child.exitCode === null && child.signalCode === null) {
+      try {
+        child.kill(signal);
+      } catch {
+        // Ignore already-exited child processes
+      }
+    }
+  }
+}
+
 function runNodeScriptAsync(relScript) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [path.join(ROOT, relScript)], {
       stdio: 'inherit',
     });
-    child.on('error', reject);
-    child.on('close', (code) => {
+    activeChildren.add(child);
+    child.on('error', (err) => {
+      activeChildren.delete(child);
+      reject(err);
+    });
+    child.on('close', (code, signal) => {
+      activeChildren.delete(child);
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`${relScript} exited with code ${code}`));
+        reject(
+          new Error(
+            `${relScript} exited with code ${code ?? 'null'}${signal ? ` (signal ${signal})` : ''}`
+          )
+        );
       }
     });
   });
+}
+
+async function runParallelGeneration() {
+  const tasks = [
+    runNodeScriptAsync('scripts/generate-pdf.mjs'),
+    runNodeScriptAsync('scripts/generate-og-card.mjs'),
+  ];
+  try {
+    await Promise.all(tasks);
+  } catch (err) {
+    terminateChildren('SIGTERM');
+    let forceKillTimer;
+    try {
+      await Promise.race([
+        Promise.allSettled(tasks),
+        new Promise((resolve) => {
+          forceKillTimer = setTimeout(resolve, 3000);
+          forceKillTimer.unref?.();
+        }),
+      ]);
+    } finally {
+      clearTimeout(forceKillTimer);
+    }
+    terminateChildren('SIGKILL');
+    throw err;
+  }
 }
 
 function copyFile(srcRel, destRel = srcRel) {
@@ -92,6 +140,7 @@ export async function buildSite() {
     'perf-report.json',
     'og-report.json',
     'pdf-report.json',
+    'asset-manifest.json',
   ]) {
     fs.rmSync(path.join(reportsDir, staleReport), { force: true });
   }
@@ -192,7 +241,7 @@ export async function buildSite() {
   }
 
   fs.mkdirSync(reportsDir, { recursive: true });
-  fs.writeFileSync(
+  atomicWriteFileSync(
     path.join(reportsDir, 'asset-manifest.json'),
     JSON.stringify(
       {
@@ -211,14 +260,12 @@ export async function buildSite() {
       },
       null,
       2
-    )
+    ),
+    'utf8'
   );
 
   console.log('5. Generating /resume.pdf and /assets/og-card.png (1200x630) in parallel...');
-  await Promise.all([
-    runNodeScriptAsync('scripts/generate-pdf.mjs'),
-    runNodeScriptAsync('scripts/generate-og-card.mjs'),
-  ]);
+  await runParallelGeneration();
 
   console.log('6. Generating initial /quality/index.html & /quality/report.json...');
   runNodeScript('scripts/generate-quality-report.mjs');
@@ -234,5 +281,17 @@ const isEntrypoint =
   import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
 
 if (isEntrypoint) {
+  const handleSignal = (signal) => {
+    console.error(`\nBuild interrupted by ${signal}; terminating child processes...`);
+    terminateChildren(signal);
+    const timer = setTimeout(() => {
+      terminateChildren('SIGKILL');
+      process.exit(signal === 'SIGINT' ? 130 : 143);
+    }, 3000);
+    timer.unref?.();
+  };
+  process.once('SIGINT', () => handleSignal('SIGINT'));
+  process.once('SIGTERM', () => handleSignal('SIGTERM'));
+
   await buildSite();
 }

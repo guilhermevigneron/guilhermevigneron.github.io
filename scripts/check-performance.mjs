@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { launchHeadlessBrowser } from './lib/browser.mjs';
-import { createStaticServer } from './serve.mjs';
+import {
+  closeBrowserSafely,
+  launchHeadlessBrowser,
+  registerCleanupSignals,
+  startStaticServer,
+  stopStaticServer,
+} from './lib/browser.mjs';
+import { atomicWriteFileSync } from './lib/chrome.mjs';
 
 const ROOT = process.cwd();
 const siteDir = path.join(ROOT, '_site');
@@ -30,6 +36,17 @@ function fileSize(relPath) {
     throw new Error(`Expected built asset missing: ${relPath}`);
   }
   return fs.statSync(full).size;
+}
+
+async function waitForFontsReady(page) {
+  await page.evaluate(() =>
+    Promise.race([
+      document.fonts.ready,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('document.fonts.ready timed out')), 10_000)
+      ),
+    ])
+  );
 }
 
 async function main() {
@@ -94,10 +111,7 @@ async function main() {
     `avatar-224.avif ${assetSizes.avatarAvif224Bytes} B exceeds budget ${BUDGETS.avatarAvifMaxBytes} B`
   );
 
-  const server = createStaticServer(siteDir);
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const { port } = server.address();
-  const baseUrl = `http://127.0.0.1:${port}`;
+  const { server, baseUrl } = await startStaticServer(siteDir);
 
   let browser;
   const failedRequests = [];
@@ -106,8 +120,13 @@ async function main() {
   const blockedExternalRequests = [];
   const baseOrigin = new URL(baseUrl).origin;
 
+  const unregisterSignals = registerCleanupSignals(async () => {
+    await closeBrowserSafely(browser);
+    await stopStaticServer(server);
+  });
+
   try {
-    ({ browser } = await launchHeadlessBrowser());
+    ({ browser } = await launchHeadlessBrowser(30_000));
 
     const context = await browser.newContext({
       viewport: { width: 390, height: 844 },
@@ -115,6 +134,8 @@ async function main() {
       isMobile: true,
       hasTouch: true,
     });
+    context.setDefaultTimeout(30_000);
+    context.setDefaultNavigationTimeout(30_000);
 
     const page = await context.newPage();
 
@@ -135,13 +156,17 @@ async function main() {
     });
 
     page.on('response', (res) => {
-      const url = res.url();
-      const pathname = new URL(url).pathname;
-      if (res.status() >= 400 && pathname !== '/404.html' && !pathname.includes('nonexistent')) {
-        failedRequests.push({ url: pathname, status: res.status() });
+      try {
+        const pathname = new URL(res.url()).pathname;
+        if (res.status() >= 400 && pathname !== '/404.html' && !pathname.includes('nonexistent')) {
+          failedRequests.push({ url: pathname, status: res.status() });
+        }
+      } catch {
+        // Ignore non-standard response URLs (e.g. data: / blob:)
       }
     });
     page.on('pageerror', (err) => consoleErrors.push(err.message));
+    page.on('crash', () => consoleErrors.push('page crashed during performance audit'));
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
         consoleErrors.push(msg.text());
@@ -183,8 +208,12 @@ async function main() {
       const cdp = await context.newCDPSession(page);
       await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 
-      await page.goto(`${baseUrl}/`, { waitUntil: 'load' });
-      await page.evaluate(() => document.fonts.ready);
+      const navRes = await page.goto(`${baseUrl}/`, { waitUntil: 'load', timeout: 30_000 });
+      assert.ok(
+        navRes && navRes.status() < 400,
+        `Unexpected HTTP status navigating to /: ${navRes ? navRes.status() : 'no response'}`
+      );
+      await waitForFontsReady(page);
       await page.waitForTimeout(450);
 
       vitals = await page.evaluate(() => {
@@ -222,8 +251,15 @@ async function main() {
       : ['/', '/404.html', '/quality/', '/architecture/'];
 
     for (const route of routesToCheck) {
-      await page.goto(`${baseUrl}${route}`, { waitUntil: 'load' });
-      await page.evaluate(() => document.fonts.ready);
+      const navRes = await page.goto(`${baseUrl}${route}`, {
+        waitUntil: 'load',
+        timeout: 30_000,
+      });
+      assert.ok(
+        navRes && navRes.status() < 400,
+        `Unexpected HTTP status navigating to ${route}: ${navRes ? navRes.status() : 'no response'}`
+      );
+      await waitForFontsReady(page);
       for (const width of [320, 375, 390, 768]) {
         await page.setViewportSize({ width, height: 800 });
         const overflow = await page.evaluate(() => ({
@@ -293,15 +329,19 @@ async function main() {
     };
 
     fs.mkdirSync(reportsDir, { recursive: true });
-    fs.writeFileSync(path.join(reportsDir, 'perf-report.json'), JSON.stringify(report, null, 2));
+    atomicWriteFileSync(
+      path.join(reportsDir, 'perf-report.json'),
+      JSON.stringify(report, null, 2),
+      'utf8'
+    );
 
     console.log(
       `PASS performance & mobile audit: screen CSS ${(assetSizes.screenCssBytes / 1024).toFixed(1)} KB, initial JS ${(initialJsBytes / 1024).toFixed(1)} KB, fonts ${(combinedFontsBytes / 1024).toFixed(1)} KB, mobile transfer ${(vitals.totalTransferBytes / 1024).toFixed(1)} KB, FCP ${vitals.fcpMs}ms, LCP ${vitals.lcpMs}ms, CLS ${vitals.cls}`
     );
   } finally {
-    if (browser) await browser.close();
-    server.closeAllConnections?.();
-    await new Promise((resolve) => server.close(resolve));
+    unregisterSignals();
+    await closeBrowserSafely(browser);
+    await stopStaticServer(server);
   }
 }
 

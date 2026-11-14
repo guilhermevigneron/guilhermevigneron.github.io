@@ -1,13 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { launchHeadlessBrowser } from './lib/browser.mjs';
-import { escapeHtml } from './lib/chrome.mjs';
-import { createStaticServer } from './serve.mjs';
+import {
+  closeBrowserSafely,
+  launchHeadlessBrowser,
+  registerCleanupSignals,
+  startStaticServer,
+  stopStaticServer,
+} from './lib/browser.mjs';
+import { atomicWriteFileSync, escapeHtml } from './lib/chrome.mjs';
 import { computeYearsOfExperience } from './sync-resume.mjs';
 
 const ROOT = process.cwd();
 const siteDir = path.join(ROOT, '_site');
 const ogOutPath = path.join(siteDir, 'assets', 'og-card.png');
+const ogTempPath = `${ogOutPath}.tmp`;
 
 function buildCardHtml(resume) {
   const years = computeYearsOfExperience(resume) || 18;
@@ -160,6 +166,16 @@ function buildCardHtml(resume) {
 </html>`;
 }
 
+function readPngDimensions(pngBytes) {
+  if (pngBytes.length < 24 || pngBytes.toString('ascii', 12, 16) !== 'IHDR') {
+    throw new Error('Generated og-card.png is missing valid IHDR chunk');
+  }
+  return {
+    width: pngBytes.readUInt32BE(16),
+    height: pngBytes.readUInt32BE(20),
+  };
+}
+
 async function generateOgCard() {
   if (!fs.existsSync(path.join(siteDir, 'assets', 'avatar.jpg'))) {
     throw new Error('_site/assets/avatar.jpg not found. Copy assets before generating OG card.');
@@ -168,25 +184,48 @@ async function generateOgCard() {
   const resume = JSON.parse(fs.readFileSync(path.join(ROOT, 'resume.json'), 'utf8'));
   const cardHtml = buildCardHtml(resume);
 
-  const server = createStaticServer(siteDir);
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const { port } = server.address();
-  const baseUrl = `http://127.0.0.1:${port}`;
+  fs.mkdirSync(path.dirname(ogOutPath), { recursive: true });
+  fs.rmSync(ogTempPath, { force: true });
+
+  const { server, baseUrl } = await startStaticServer(siteDir);
   const virtualUrl = `${baseUrl}/__og-card__.html`;
 
   let browser;
   const blockedExternalRequests = [];
+  const pageErrors = [];
+  const localFailures = [];
+
+  const unregisterSignals = registerCleanupSignals(async () => {
+    fs.rmSync(ogTempPath, { force: true });
+    await closeBrowserSafely(browser);
+    await stopStaticServer(server);
+  });
 
   try {
-    ({ browser } = await launchHeadlessBrowser());
+    ({ browser } = await launchHeadlessBrowser(30_000));
 
     const context = await browser.newContext({
       viewport: { width: 1200, height: 630 },
       deviceScaleFactor: 1,
     });
+    context.setDefaultTimeout(30_000);
+    context.setDefaultNavigationTimeout(30_000);
+
     const page = await context.newPage();
+    page.on('pageerror', (err) => pageErrors.push(`pageerror: ${err.message}`));
+    page.on('crash', () => pageErrors.push('page crashed while rendering OG card'));
 
     const baseOrigin = new URL(baseUrl).origin;
+    page.on('response', (res) => {
+      try {
+        if (new URL(res.url()).origin === baseOrigin && res.status() >= 400) {
+          localFailures.push(`${res.status()} ${new URL(res.url()).pathname}`);
+        }
+      } catch {
+        // Ignore non-URL responses
+      }
+    });
+
     await page.route('**/*', (route) => {
       const url = route.request().url();
       if (url === virtualUrl) {
@@ -210,11 +249,34 @@ async function generateOgCard() {
       return route.abort();
     });
 
-    await page.goto(virtualUrl, { waitUntil: 'load' });
-    await page.evaluate(() => document.fonts.ready);
+    await page.goto(virtualUrl, { waitUntil: 'load', timeout: 30_000 });
+    await page.evaluate(async () => {
+      await Promise.race([
+        document.fonts.ready,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('fonts.ready timed out')), 10_000)
+        ),
+      ]);
+      const avatar = document.querySelector('img.avatar');
+      if (!avatar?.complete || avatar.naturalWidth === 0) {
+        throw new Error('OG card avatar image failed to load');
+      }
+      if (
+        !document.fonts.check('400 16px "Geist Mono"') ||
+        !document.fonts.check('500 24px "Geist Pixel Square"')
+      ) {
+        throw new Error('OG card web fonts failed to load');
+      }
+    });
 
-    fs.mkdirSync(path.dirname(ogOutPath), { recursive: true });
-    await page.screenshot({ path: ogOutPath, type: 'png' });
+    if (pageErrors.length > 0) {
+      throw new Error(`Page errors during OG card render: ${pageErrors.join('; ')}`);
+    }
+    if (localFailures.length > 0) {
+      throw new Error(`Local asset errors during OG card render: ${localFailures.join(', ')}`);
+    }
+
+    await page.screenshot({ path: ogTempPath, type: 'png' });
 
     if (blockedExternalRequests.length > 0) {
       throw new Error(
@@ -222,40 +284,50 @@ async function generateOgCard() {
       );
     }
 
-    const pngBytes = fs.readFileSync(ogOutPath);
+    const pngBytes = fs.readFileSync(ogTempPath);
     const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     if (!pngBytes.subarray(0, 8).equals(pngSignature)) {
       throw new Error('Generated og-card.png does not have valid PNG magic signature');
+    }
+    const { width, height } = readPngDimensions(pngBytes);
+    if (width !== 1200 || height !== 630) {
+      throw new Error(
+        `Generated og-card.png has invalid dimensions ${width}x${height} (expected 1200x630)`
+      );
     }
     if (pngBytes.length < 5000) {
       throw new Error(`Generated og-card.png unexpectedly small (${pngBytes.length} bytes)`);
     }
 
+    fs.renameSync(ogTempPath, ogOutPath);
+
     fs.mkdirSync(path.join(ROOT, '.ci-reports'), { recursive: true });
-    fs.writeFileSync(
+    atomicWriteFileSync(
       path.join(ROOT, '.ci-reports', 'og-report.json'),
       JSON.stringify(
         {
           passed: true,
           path: '/assets/og-card.png',
-          width: 1200,
-          height: 630,
+          width,
+          height,
           bytes: pngBytes.length,
           blockedExternalRequests: blockedExternalRequests.length,
           timestamp: new Date().toISOString(),
         },
         null,
         2
-      )
+      ),
+      'utf8'
     );
 
     console.log(
-      `Generated _site/assets/og-card.png (1200x630, ${(pngBytes.length / 1024).toFixed(1)} KB)`
+      `Generated _site/assets/og-card.png (${width}x${height}, ${(pngBytes.length / 1024).toFixed(1)} KB)`
     );
   } finally {
-    if (browser) await browser.close();
-    server.closeAllConnections?.();
-    await new Promise((resolve) => server.close(resolve));
+    unregisterSignals();
+    fs.rmSync(ogTempPath, { force: true });
+    await closeBrowserSafely(browser);
+    await stopStaticServer(server);
   }
 }
 
