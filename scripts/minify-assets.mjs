@@ -8,6 +8,7 @@ const ROOT = process.cwd();
 export async function minifyCssFiles(outSiteDir = path.join(ROOT, '_site')) {
   const bundles = [
     ['src/styles.css', 'assets/css/styles.css'],
+    ['src/command-menu.css', 'assets/css/command-menu.css'],
     ['src/subpage.css', 'assets/css/subpage.css'],
     ['src/print.css', 'assets/css/print.css'],
   ];
@@ -19,10 +20,11 @@ export async function minifyCssFiles(outSiteDir = path.join(ROOT, '_site')) {
     const result = await esbuild.transform(source, {
       loader: 'css',
       minify: true,
+      target: ['chrome111', 'safari16.4', 'firefox113'],
       charset: 'utf8',
     });
     const compactCss = result.code
-      .replace(/(--[\w-]+):\s+/g, '$1:')
+      .replace(/(--[\w-]+):\s+(?=[^\s;])/g, '$1:')
       .replace(/(--font-[\w-]+:[^;]+)/g, (m) => m.replace(/,\s+/g, ','));
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     fs.writeFileSync(outputPath, compactCss, 'utf8');

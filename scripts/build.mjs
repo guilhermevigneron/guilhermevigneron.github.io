@@ -182,6 +182,7 @@ export async function buildSite() {
   rewriteTextFile('assets/css/styles.css', fontReplacements);
 
   const cssUrl = fingerprintAsset('assets/css/styles.css');
+  const commandMenuCssUrl = fingerprintAsset('assets/css/command-menu.css');
   const subpageCssUrl = fingerprintAsset('assets/css/subpage.css');
   const printCssUrl = fingerprintAsset('assets/css/print.css');
   const themeInitJsUrl = fingerprintAsset('assets/js/theme-init.js');
@@ -189,6 +190,7 @@ export async function buildSite() {
   const commandMenuPanelJsUrl = fingerprintAsset('assets/js/command-menu-panel.js');
   rewriteTextFile('assets/js/command-menu.js', {
     '/assets/js/command-menu-panel.js': commandMenuPanelJsUrl,
+    '/assets/css/command-menu.css': commandMenuCssUrl,
   });
   const commandMenuJsUrl = fingerprintAsset('assets/js/command-menu.js');
   const faviconSvgUrl = fingerprintAsset('assets/favicon.svg');
@@ -215,6 +217,7 @@ export async function buildSite() {
     ...fontReplacements,
     ...avatarReplacements,
     '/assets/css/styles.css': cssUrl,
+    '/assets/css/command-menu.css': commandMenuCssUrl,
     '/assets/css/subpage.css': subpageCssUrl,
     '/assets/css/print.css': printCssUrl,
     '/assets/js/theme-init.js': themeInitJsUrl,
@@ -242,6 +245,7 @@ export async function buildSite() {
 
   const assetManifest = {
     cssUrl,
+    commandMenuCssUrl,
     subpageCssUrl,
     printCssUrl,
     monoFontUrl,

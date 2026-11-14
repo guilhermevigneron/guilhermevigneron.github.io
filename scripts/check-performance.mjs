@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import {
   closeBrowserSafely,
   launchHeadlessBrowser,
@@ -16,18 +17,25 @@ const reportsDir = path.join(ROOT, '.ci-reports');
 
 const BUDGETS = {
   screenCssMaxBytes: 12 * 1024,
+  commandMenuCssMaxBytes: 4 * 1024,
   subpageCssMaxBytes: 6 * 1024,
   printCssMaxBytes: 3 * 1024,
   initialJsMaxBytes: 4 * 1024,
   lazyPanelJsMaxBytes: 12 * 1024,
   combinedFontsMaxBytes: 32 * 1024,
   indexHtmlMaxBytes: 25 * 1024,
+  notFoundHtmlMaxBytes: 8 * 1024,
+  qualityHtmlMaxBytes: 35 * 1024,
+  architectureHtmlMaxBytes: 25 * 1024,
   avatarJpgMaxBytes: 8 * 1024,
   avatarAvifMaxBytes: 4 * 1024,
+  avatarWebpMaxBytes: 5 * 1024,
   totalMobileTransferMaxBytes: 75 * 1024,
   clsMax: 0.01,
   lcpMaxMs: 2500,
   fcpMaxMs: 1800,
+  maxDomNodes: 500,
+  maxLongTaskMs: 100,
 };
 
 function fileSize(relPath) {
@@ -49,6 +57,11 @@ async function waitForFontsReady(page) {
   );
 }
 
+function brotliSize(relPath) {
+  const full = path.join(siteDir, relPath);
+  return zlib.brotliCompressSync(fs.readFileSync(full)).length;
+}
+
 async function main() {
   const qualityOnly = process.argv.includes('--quality-only');
 
@@ -58,6 +71,7 @@ async function main() {
 
   const assetSizes = {
     screenCssBytes: fileSize('assets/css/styles.css'),
+    commandMenuCssBytes: fileSize('assets/css/command-menu.css'),
     subpageCssBytes: fileSize('assets/css/subpage.css'),
     printCssBytes: fileSize('assets/css/print.css'),
     themeInitJsBytes: fileSize('assets/js/theme-init.js'),
@@ -67,16 +81,42 @@ async function main() {
     monoFontBytes: fileSize('assets/fonts/GeistMono-Variable.woff2'),
     pixelFontBytes: fileSize('assets/fonts/GeistPixel-Square.woff2'),
     indexHtmlBytes: fileSize('index.html'),
+    notFoundHtmlBytes: fileSize('404.html'),
+    qualityHtmlBytes: fs.existsSync(path.join(siteDir, 'quality/index.html'))
+      ? fileSize('quality/index.html')
+      : null,
+    architectureHtmlBytes: fs.existsSync(path.join(siteDir, 'architecture/index.html'))
+      ? fileSize('architecture/index.html')
+      : null,
     avatarJpgBytes: fileSize('assets/avatar.jpg'),
+    avatarAvif168Bytes: fileSize('assets/avatar-168.avif'),
     avatarAvif224Bytes: fileSize('assets/avatar-224.avif'),
+    avatarAvif336Bytes: fileSize('assets/avatar-336.avif'),
+    avatarWebp168Bytes: fileSize('assets/avatar-168.webp'),
+    avatarWebp224Bytes: fileSize('assets/avatar-224.webp'),
+    avatarWebp336Bytes: fileSize('assets/avatar-336.webp'),
   };
   const initialJsBytes =
     assetSizes.themeInitJsBytes + assetSizes.themeJsBytes + assetSizes.commandMenuJsBytes;
   const combinedFontsBytes = assetSizes.monoFontBytes + assetSizes.pixelFontBytes;
+  const initialBrotliBytes =
+    brotliSize('index.html') +
+    brotliSize('assets/css/styles.css') +
+    brotliSize('assets/css/print.css') +
+    brotliSize('assets/js/theme-init.js') +
+    brotliSize('assets/js/theme.js') +
+    brotliSize('assets/js/command-menu.js') +
+    assetSizes.monoFontBytes +
+    assetSizes.pixelFontBytes +
+    assetSizes.avatarAvif336Bytes;
 
   assert.ok(
     assetSizes.screenCssBytes <= BUDGETS.screenCssMaxBytes,
     `Screen CSS ${assetSizes.screenCssBytes} B exceeds budget ${BUDGETS.screenCssMaxBytes} B`
+  );
+  assert.ok(
+    assetSizes.commandMenuCssBytes <= BUDGETS.commandMenuCssMaxBytes,
+    `Command menu CSS ${assetSizes.commandMenuCssBytes} B exceeds budget ${BUDGETS.commandMenuCssMaxBytes} B`
   );
   assert.ok(
     assetSizes.subpageCssBytes <= BUDGETS.subpageCssMaxBytes,
@@ -103,13 +143,45 @@ async function main() {
     `index.html ${assetSizes.indexHtmlBytes} B exceeds budget ${BUDGETS.indexHtmlMaxBytes} B`
   );
   assert.ok(
+    assetSizes.notFoundHtmlBytes <= BUDGETS.notFoundHtmlMaxBytes,
+    `404.html ${assetSizes.notFoundHtmlBytes} B exceeds budget ${BUDGETS.notFoundHtmlMaxBytes} B`
+  );
+  if (assetSizes.qualityHtmlBytes !== null) {
+    assert.ok(
+      assetSizes.qualityHtmlBytes <= BUDGETS.qualityHtmlMaxBytes,
+      `quality/index.html ${assetSizes.qualityHtmlBytes} B exceeds budget ${BUDGETS.qualityHtmlMaxBytes} B`
+    );
+  }
+  if (assetSizes.architectureHtmlBytes !== null) {
+    assert.ok(
+      assetSizes.architectureHtmlBytes <= BUDGETS.architectureHtmlMaxBytes,
+      `architecture/index.html ${assetSizes.architectureHtmlBytes} B exceeds budget ${BUDGETS.architectureHtmlMaxBytes} B`
+    );
+  }
+  assert.ok(
     assetSizes.avatarJpgBytes <= BUDGETS.avatarJpgMaxBytes,
     `avatar.jpg ${assetSizes.avatarJpgBytes} B exceeds budget ${BUDGETS.avatarJpgMaxBytes} B`
   );
-  assert.ok(
-    assetSizes.avatarAvif224Bytes <= BUDGETS.avatarAvifMaxBytes,
-    `avatar-224.avif ${assetSizes.avatarAvif224Bytes} B exceeds budget ${BUDGETS.avatarAvifMaxBytes} B`
-  );
+  for (const [label, bytes] of [
+    ['avatar-168.avif', assetSizes.avatarAvif168Bytes],
+    ['avatar-224.avif', assetSizes.avatarAvif224Bytes],
+    ['avatar-336.avif', assetSizes.avatarAvif336Bytes],
+  ]) {
+    assert.ok(
+      bytes <= BUDGETS.avatarAvifMaxBytes,
+      `${label} ${bytes} B exceeds budget ${BUDGETS.avatarAvifMaxBytes} B`
+    );
+  }
+  for (const [label, bytes] of [
+    ['avatar-168.webp', assetSizes.avatarWebp168Bytes],
+    ['avatar-224.webp', assetSizes.avatarWebp224Bytes],
+    ['avatar-336.webp', assetSizes.avatarWebp336Bytes],
+  ]) {
+    assert.ok(
+      bytes <= BUDGETS.avatarWebpMaxBytes,
+      `${label} ${bytes} B exceeds budget ${BUDGETS.avatarWebpMaxBytes} B`
+    );
+  }
 
   const { server, baseUrl } = await startStaticServer(siteDir);
 
@@ -174,7 +246,7 @@ async function main() {
     });
 
     await page.addInitScript(() => {
-      window.__perfMetrics = { cls: 0, lcp: null, fcp: null };
+      window.__perfMetrics = { cls: 0, lcp: null, fcp: null, maxLongTaskMs: 0, longTasksCount: 0 };
       try {
         new PerformanceObserver((list) => {
           for (const entry of list.getEntries()) {
@@ -198,6 +270,15 @@ async function main() {
             }
           }
         }).observe({ type: 'paint', buffered: true });
+
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            window.__perfMetrics.longTasksCount += 1;
+            if (entry.duration > window.__perfMetrics.maxLongTaskMs) {
+              window.__perfMetrics.maxLongTaskMs = entry.duration;
+            }
+          }
+        }).observe({ type: 'longtask', buffered: true });
       } catch {
         // Ignore unsupported observer entries
       }
@@ -207,6 +288,13 @@ async function main() {
     if (!qualityOnly) {
       const cdp = await context.newCDPSession(page);
       await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+      await cdp.send('Network.enable');
+      await cdp.send('Network.emulateNetworkConditions', {
+        offline: false,
+        latency: 150,
+        downloadThroughput: (1.6 * 1024 * 1024) / 8,
+        uploadThroughput: (750 * 1024) / 8,
+      });
 
       const navRes = await page.goto(`${baseUrl}/`, { waitUntil: 'load', timeout: 30_000 });
       assert.ok(
@@ -229,10 +317,14 @@ async function main() {
           fcpMs: window.__perfMetrics.fcp === null ? null : Math.round(window.__perfMetrics.fcp),
           lcpMs: window.__perfMetrics.lcp === null ? null : Math.round(window.__perfMetrics.lcp),
           cls: Number((window.__perfMetrics.cls || 0).toFixed(4)),
+          maxLongTaskMs: Math.round(window.__perfMetrics.maxLongTaskMs || 0),
+          longTasksCount: window.__perfMetrics.longTasksCount || 0,
+          domNodes: document.querySelectorAll('*').length,
           totalTransferBytes: docBytes + resourceTransferBytes,
           resourceCount: resources.length,
           avatarCurrentSrc: avatarImg ? avatarImg.currentSrc : '',
           eagerPanelLoaded: resources.some((r) => r.name.includes('command-menu-panel')),
+          eagerCommandCssLoaded: resources.some((r) => r.name.includes('command-menu.') && r.name.endsWith('.css')),
         };
       });
 
@@ -241,7 +333,18 @@ async function main() {
         false,
         'Lazy command-menu-panel JS should not load during initial page load'
       );
+      assert.equal(
+        vitals.eagerCommandCssLoaded,
+        false,
+        'Lazy command-menu CSS should not load during initial page load'
+      );
 
+      await cdp.send('Network.emulateNetworkConditions', {
+        offline: false,
+        latency: 0,
+        downloadThroughput: -1,
+        uploadThroughput: -1,
+      });
       await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
     }
 
@@ -313,6 +416,14 @@ async function main() {
       vitals.totalTransferBytes <= BUDGETS.totalMobileTransferMaxBytes,
       `Mobile initial payload ${vitals.totalTransferBytes} B exceeds budget ${BUDGETS.totalMobileTransferMaxBytes} B`
     );
+    assert.ok(
+      vitals.domNodes <= BUDGETS.maxDomNodes,
+      `DOM node count ${vitals.domNodes} exceeds budget ${BUDGETS.maxDomNodes}`
+    );
+    assert.ok(
+      vitals.maxLongTaskMs <= BUDGETS.maxLongTaskMs,
+      `Max long task ${vitals.maxLongTaskMs}ms exceeds budget ${BUDGETS.maxLongTaskMs}ms`
+    );
 
     const report = {
       passed: true,
@@ -321,6 +432,7 @@ async function main() {
         ...assetSizes,
         initialJsBytes,
         combinedFontsBytes,
+        initialBrotliBytes,
       },
       mobileVitals: vitals,
       overflowChecksCount: overflowChecks.length,
@@ -336,7 +448,7 @@ async function main() {
     );
 
     console.log(
-      `PASS performance & mobile audit: screen CSS ${(assetSizes.screenCssBytes / 1024).toFixed(1)} KB, initial JS ${(initialJsBytes / 1024).toFixed(1)} KB, fonts ${(combinedFontsBytes / 1024).toFixed(1)} KB, mobile transfer ${(vitals.totalTransferBytes / 1024).toFixed(1)} KB, FCP ${vitals.fcpMs}ms, LCP ${vitals.lcpMs}ms, CLS ${vitals.cls}`
+      `PASS performance & mobile audit: screen CSS ${(assetSizes.screenCssBytes / 1024).toFixed(1)} KB, initial JS ${(initialJsBytes / 1024).toFixed(1)} KB, fonts ${(combinedFontsBytes / 1024).toFixed(1)} KB, mobile transfer ${(vitals.totalTransferBytes / 1024).toFixed(1)} KB (Brotli ~${(initialBrotliBytes / 1024).toFixed(1)} KB), DOM ${vitals.domNodes} nodes, FCP ${vitals.fcpMs}ms, LCP ${vitals.lcpMs}ms, CLS ${vitals.cls}`
     );
   } finally {
     unregisterSignals();

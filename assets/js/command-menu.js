@@ -1,6 +1,7 @@
 (() => {
   const D = document;
   const PANEL_URL = '/assets/js/command-menu-panel.js';
+  const PANEL_CSS_URL = '/assets/css/command-menu.css';
 
   function showLoadError() {
     if (!D.body) return;
@@ -18,6 +19,20 @@
     window.setTimeout(() => {
       toast.hidden = true;
     }, 2400);
+  }
+
+  function loadPanelStyles() {
+    if (D.querySelector(`link[href="${PANEL_CSS_URL}"]`)) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      const link = D.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = PANEL_CSS_URL;
+      link.onload = resolve;
+      link.onerror = resolve;
+      D.head.appendChild(link);
+    });
   }
 
   function initLoader() {
@@ -42,7 +57,7 @@
 
     function ensureLoaded() {
       if (!panelPromise) {
-        panelPromise = import(PANEL_URL).then((mod) => {
+        panelPromise = Promise.all([import(PANEL_URL), loadPanelStyles()]).then(([mod]) => {
           panelApi = mod.initCommandMenuPanel();
           return panelApi;
         });

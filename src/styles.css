@@ -3,7 +3,7 @@
   src: url("/assets/fonts/GeistMono-Variable.woff2") format("woff2");
   font-weight: 400 500;
   font-style: normal;
-  font-display: swap;
+  font-display: optional;
 }
 
 @font-face {
@@ -20,7 +20,7 @@
   src: url("/assets/fonts/GeistPixel-Square.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
-  font-display: swap;
+  font-display: optional;
 }
 
 @font-face {
@@ -711,177 +711,15 @@ html:not(.js) .command-bar {
   line-height: 1;
 }
 
-/* Command Menu Dialog */
-.cmd-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  background: var(--backdrop);
-  backdrop-filter: blur(2px);
-  overscroll-behavior: contain;
-}
-
-.cmd-dialog {
-  position: fixed;
-  top: max(1rem, env(safe-area-inset-top));
-  left: 50%;
-  z-index: 51;
-  width: calc(100% - 2rem);
-  max-width: 32rem;
-  max-height: calc(100vh - 2rem);
-  max-height: calc(100dvh - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-  transform: translateX(-50%);
-  overflow: hidden;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--bg);
-  color: var(--ink);
-  box-shadow: 0 20px 50px -12px #0004;
-}
-
-@media (min-width: 640px) {
-  .cmd-dialog {
-    top: 50%;
-    max-height: min(26rem, calc(100dvh - 3rem));
-    transform: translate(-50%, -50%);
-  }
-}
-
 [hidden] {
   display: none !important;
-}
-
-.cmd-input-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0 0.5rem 0 0.75rem;
-  border-bottom: 1px solid var(--rule);
-}
-
-.cmd-input-row:has(.cmd-input:focus-visible) {
-  outline: 2px solid var(--ink);
-  outline-offset: -2px;
-}
-
-.cmd-search-icon {
-  width: 1.125rem;
-  height: 1.125rem;
-  color: var(--faint);
-}
-
-.cmd-input {
-  height: 3rem;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  font-size: 1rem;
-  outline: none;
-}
-
-.cmd-input::placeholder {
-  color: var(--faint);
-}
-
-.cmd-close {
-  border-radius: 0.25rem;
-}
-
-.cmd-list {
-  flex: 1;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  padding: 0.25rem 0;
-}
-
-.cmd-empty {
-  padding: 1.5rem 1rem;
-  text-align: center;
-  font-size: 0.875rem;
-  color: var(--faint);
-}
-
-.cmd-group {
-  padding: 0.25rem 0.5rem;
-}
-
-.cmd-group-heading {
-  padding: 0.375rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--faint);
-}
-
-.cmd-item {
-  min-height: 2.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.625rem 0.5rem;
-  border: 1px solid transparent;
-  border-radius: 0.25rem;
-  text-align: left;
-  font-size: 0.875rem;
-  color: var(--body);
-  transition: background 120ms, color 120ms;
-}
-
-.cmd-item:focus-visible {
-  outline-offset: -2px;
-}
-
-.cmd-item:hover,
-.cmd-item:active,
-.cmd-item[data-selected="true"] {
-  background: var(--wash);
-  color: var(--ink);
-}
-
-.cmd-item-hint {
-  max-width: 45%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: right;
-  font-size: 0.75rem;
-  color: var(--faint);
-}
-
-.cmd-item:hover .cmd-item-hint,
-.cmd-item[data-selected="true"] .cmd-item-hint {
-  color: var(--body);
-}
-
-.cmd-toast {
-  position: fixed;
-  left: 50%;
-  bottom: max(1rem, env(safe-area-inset-bottom));
-  z-index: 60;
-  transform: translateX(-50%);
-  max-width: calc(100vw - 2rem);
-  padding: 0.5rem 0.875rem;
-  border: 1px solid transparent;
-  border-radius: 99rem;
-  background: var(--ink);
-  color: var(--bg);
-  font-size: 0.75rem;
-  line-height: 1.4;
-  text-align: center;
-  box-shadow: 0 8px 24px -6px #0004;
 }
 
 @media (min-width: 768px) {
   html {
     scroll-padding-bottom: 5rem;
   }
-
-  .cmd-toast {
-    bottom: 3rem;
-  }
 }
-
 @media (min-width: 768px) and (pointer: fine) {
   .header-actions,
   .contact-list {
@@ -896,20 +734,6 @@ html:not(.js) .command-bar {
   .cv-footer-links a {
     min-height: 1.5rem;
     padding: 0 0.25rem;
-  }
-
-  .cmd-input {
-    font-size: 0.875rem;
-  }
-
-  .cmd-close {
-    width: 1.75rem;
-    height: 1.75rem;
-  }
-
-  .cmd-item {
-    min-height: auto;
-    padding: 0.6875rem 0.5rem;
   }
 }
 

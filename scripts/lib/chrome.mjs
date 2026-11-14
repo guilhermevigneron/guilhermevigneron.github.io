@@ -120,12 +120,12 @@ export function renderSubpageDocument({
     <link rel="icon" href="/favicon.ico" sizes="32x32">
     <link rel="apple-touch-icon" href="${escapeHtml(assetUrls.appleTouchIconUrl)}">
     <link rel="manifest" href="/site.webmanifest">${canonicalUrl ? `\n    <link rel="canonical" href="${escapeHtml(canonicalUrl)}">` : ''}${socialMetaHtml}${alternatesHtml ? `\n${alternatesHtml}` : ''}
-    <script src="${escapeHtml(assetUrls.themeInitJsUrl)}"></script>
     <link rel="stylesheet" href="${escapeHtml(assetUrls.cssUrl)}">
     <link rel="stylesheet" href="${escapeHtml(assetUrls.subpageCssUrl)}">
     <link rel="stylesheet" href="${escapeHtml(assetUrls.printCssUrl)}" media="print">
     <link rel="preload" href="${escapeHtml(assetUrls.monoFontUrl)}" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="${escapeHtml(assetUrls.pixelFontUrl)}" as="font" type="font/woff2" crossorigin>
+    <script src="${escapeHtml(assetUrls.themeInitJsUrl)}"></script>
     <script src="${escapeHtml(assetUrls.themeJsUrl)}" defer></script>
     <script src="${escapeHtml(assetUrls.commandMenuJsUrl)}" defer></script>
 </head>

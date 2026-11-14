@@ -206,10 +206,13 @@ describe('minifyHtml', () => {
     assert.ok(output.endsWith('\n'));
   });
 
-  it('preserves whitespace inside <pre> blocks', () => {
-    const input = '<div>\n  <pre>  line 1\n    line 2  </pre>\n</div>';
+  it('preserves whitespace inside <pre> blocks and around inline <svg>/<pre> elements', () => {
+    const input =
+      '<div>\n  <pre>  line 1\n    line 2  </pre>\n</div>\n<span>a</span> <pre>b</pre> <svg><circle cx="1" cy="1" r="1"></circle></svg> <span>c</span>';
     const output = minifyHtml(input);
     assert.ok(output.includes('<pre>  line 1\n    line 2  </pre>'));
+    assert.ok(output.includes('<span>a</span> <pre>b</pre>'));
+    assert.ok(output.includes('</svg> <span>c</span>'));
   });
 
   it('collapses container boundaries while preserving inline link spacing', () => {

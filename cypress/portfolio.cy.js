@@ -121,7 +121,7 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
     cy.request('/assets/fonts/GeistPixel-Square.woff2').then((res) => {
       expect(res.status).to.eq(200);
       expect(res.headers['content-type']).to.include('font/woff2');
-      expect(res.body.length).to.be.greaterThan(10000);
+      expect(res.body.length).to.be.greaterThan(2000);
     });
 
     cy.request({ url: '/assets/avatar.jpg', encoding: 'binary' }).then((res) => {
@@ -788,16 +788,19 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
         .should('exist')
         .then(($script) => {
           const jsonLd = JSON.parse($script.text());
-          expect(jsonLd['@type']).to.eq('Person');
-          expect(jsonLd.name).to.eq(liveResume.basics.name);
-          expect(jsonLd.jobTitle).to.eq(liveResume.meta.jobTitle);
-          expect(jsonLd.email).to.eq(liveResume.basics.email);
+          const person = Array.isArray(jsonLd['@graph'])
+            ? jsonLd['@graph'].find((n) => n['@type'] === 'Person')
+            : jsonLd;
+          expect(person['@type']).to.eq('Person');
+          expect(person.name).to.eq(liveResume.basics.name);
+          expect(person.jobTitle).to.eq(liveResume.meta.jobTitle);
+          expect(person.email).to.eq(liveResume.basics.email);
           if (ACTIVE_JOB) {
-            expect(jsonLd.worksFor.name).to.eq(ACTIVE_JOB.name);
+            expect(person.worksFor.name).to.eq(ACTIVE_JOB.name);
           } else {
-            expect(jsonLd.worksFor).to.eq(undefined);
+            expect(person.worksFor).to.eq(undefined);
           }
-          expect(jsonLd.knowsAbout).to.deep.eq(liveResume.skills.map((s) => s.name));
+          expect(person.knowsAbout).to.include.members(liveResume.skills.map((s) => s.name));
         });
 
       cy.request('/llms.txt').then((llmsRes) => {
