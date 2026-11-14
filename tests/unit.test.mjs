@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
+import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import zlib from 'node:zlib';
 import * as esbuild from 'esbuild';
@@ -14,6 +16,10 @@ import {
 } from '../scripts/check-performance.mjs';
 import { buildArchitecturePage } from '../scripts/generate-architecture.mjs';
 import { evaluateQualityGates } from '../scripts/generate-quality-report.mjs';
+import {
+  startStaticServer as browserStartStaticServer,
+  stopStaticServer as browserStopStaticServer,
+} from '../scripts/lib/browser.mjs';
 import { escapeHtml, rewriteAssetRefs, sanitizeHref } from '../scripts/lib/html.mjs';
 import { normalizeBaseUrl, toPathname } from '../scripts/lib/io.mjs';
 import { ROOT } from '../scripts/lib/paths.mjs';
@@ -28,7 +34,7 @@ import { buildCommandMenuConfig } from '../scripts/lib/site-config.mjs';
 import { minifyCssFiles, minifyJsFiles } from '../scripts/minify-assets.mjs';
 import { minifyHtml } from '../scripts/minify-html.mjs';
 import { validateHtmlFiles } from '../scripts/run-html-validate.mjs';
-import { createStaticServer } from '../scripts/serve.mjs';
+import { createStaticServer, startStaticServer, stopStaticServer } from '../scripts/serve.mjs';
 import {
   build404Html,
   buildCvContentHtml,
@@ -1190,6 +1196,80 @@ describe('static server & html-validate checks', () => {
         server.closeAllConnections?.();
         await new Promise((resolve) => server.close(resolve));
       }
+    });
+  });
+
+  it('starts and stops ephemeral static servers via serve.mjs and re-exports cleanly in browser.mjs', async () => {
+    assert.equal(browserStartStaticServer, startStaticServer);
+    assert.equal(browserStopStaticServer, stopStaticServer);
+
+    await withTempDirAsync('start-stop-serve-', async (tmpDir) => {
+      fs.writeFileSync(path.join(tmpDir, 'index.html'), '<p>OK</p>', 'utf8');
+      const { server, baseUrl, port } = await startStaticServer(tmpDir);
+      assert.equal(baseUrl, `http://127.0.0.1:${port}`);
+      const res = await httpRequest(port, '/');
+      assert.equal(res.status, 200);
+      assert.equal(res.body, '<p>OK</p>');
+
+      await stopStaticServer(server);
+      await stopStaticServer(server);
+      await stopStaticServer(null);
+      assert.equal(server.listening, false);
+    });
+  });
+
+  it('keeps prod-smoke.mjs free of third-party dependencies so CI smoke tests run without npm install', () => {
+    const scriptsRoot = path.join(ROOT, 'scripts');
+    const entry = path.join(scriptsRoot, 'prod-smoke.mjs');
+    const visited = new Set();
+    const queue = [entry];
+
+    while (queue.length > 0) {
+      const filePath = queue.shift();
+      if (visited.has(filePath)) continue;
+      visited.add(filePath);
+
+      const source = fs.readFileSync(filePath, 'utf8');
+      const specifiers = [
+        ...[
+          ...source.matchAll(/^\s*(?:import|export)\s+(?:[\s\S]*?\sfrom\s+)?['"]([^'"]+)['"]/gm),
+        ].map((m) => m[1]),
+        ...[...source.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => m[1]),
+      ];
+
+      for (const spec of specifiers) {
+        if (spec.startsWith('node:')) continue;
+        assert.ok(
+          spec.startsWith('./') || spec.startsWith('../'),
+          `prod-smoke.mjs transitive graph must not depend on npm package "${spec}" (in ${path.relative(ROOT, filePath)})`
+        );
+        const resolved = path.resolve(path.dirname(filePath), spec);
+        assert.ok(
+          resolved.startsWith(scriptsRoot + path.sep),
+          `prod-smoke.mjs local import escaped scripts/: ${resolved}`
+        );
+        queue.push(resolved);
+      }
+    }
+
+    withTempDir('prod-smoke-zero-deps-', (tmpDir) => {
+      for (const srcPath of visited) {
+        const destPath = path.join(tmpDir, path.relative(ROOT, srcPath));
+        fs.mkdirSync(path.dirname(destPath), { recursive: true });
+        fs.copyFileSync(srcPath, destPath);
+      }
+
+      const isolatedEntry = path.join(tmpDir, 'scripts', 'prod-smoke.mjs');
+      const importCheck = execFileSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `import { runSmokeTests } from ${JSON.stringify(pathToFileURL(isolatedEntry).href)}; console.log(typeof runSmokeTests);`,
+        ],
+        { cwd: tmpDir, encoding: 'utf8' }
+      );
+      assert.equal(importCheck.trim(), 'function');
     });
   });
 

@@ -215,6 +215,53 @@ export function createStaticServer(siteDir) {
   return server;
 }
 
+export async function startStaticServer(siteDir, host = '127.0.0.1', port = 0) {
+  const server = createStaticServer(siteDir);
+  await new Promise((resolve, reject) => {
+    const onError = (err) => reject(err);
+    server.once('error', onError);
+    server.listen(port, host, () => {
+      server.off('error', onError);
+      resolve();
+    });
+  });
+
+  server.on('error', (err) => {
+    console.error(`Static server error: ${err.message}`);
+  });
+
+  const address = server.address();
+  if (!address || typeof address !== 'object') {
+    await stopStaticServer(server);
+    throw new Error('Static server failed to bind a valid TCP address');
+  }
+
+  return {
+    server,
+    baseUrl: `http://${host}:${address.port}`,
+    port: address.port,
+  };
+}
+
+export async function stopStaticServer(server, timeoutMs = 3000) {
+  if (!server?.listening) return;
+  let timer;
+  try {
+    server.closeAllConnections?.();
+    await Promise.race([
+      new Promise((resolve) => server.close(resolve)),
+      new Promise((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+        timer.unref?.();
+      }),
+    ]);
+  } catch (err) {
+    console.error(`Error closing static server: ${err.message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const isEntrypoint =
   Boolean(process.argv[1]) &&
   import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
