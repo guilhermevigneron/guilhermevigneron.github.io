@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    {{META}}
+    <meta name="robots" content="index, follow">
+    {{THEME_COLOR_METAS}}
+    {{CSP_META}}
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+    <link rel="manifest" href="/site.webmanifest">
+    {{HEAD_LINKS}}
+
+    <!-- JSON-LD Structured Data for AI Agents (synced from resume.json) -->
+    {{JSONLD}}
+
+    <script src="/assets/js/theme-init.js"></script>
+    <link rel="stylesheet" href="/assets/css/styles.css">
+    <link rel="stylesheet" href="/assets/css/print.css" media="print">
+    <link rel="preload" href="/assets/fonts/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/fonts/GeistPixel-Square.woff2" as="font" type="font/woff2" crossorigin>
+    <script src="/assets/js/theme.js" defer></script>
+    <script src="/assets/js/command-menu.js" defer></script>
+</head>
+<body data-page="home">
+
+    <a href="{{SKIP_LINK_HREF}}" class="sr-only skip-link">Skip to main content</a>
+
+    <main id="main-content" class="page-main">
+        <div class="cv-shell">
+{{CV_CONTENT}}
+        </div>
+    </main>
+
+    <footer class="cv-footer-wrap">
+        <div class="cv-footer-inner">
+            {{COPYRIGHT}}
+            <div class="cv-footer-links">
+                {{FOOTER_LINKS}}
+            </div>
+        </div>
+        {{COMMAND_BAR}}
+    </footer>
+
+</body>
+</html>

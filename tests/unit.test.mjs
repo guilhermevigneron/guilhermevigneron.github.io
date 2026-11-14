@@ -5,31 +5,37 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import vm from 'node:vm';
+import zlib from 'node:zlib';
+import * as esbuild from 'esbuild';
 import {
   BUDGETS,
   evaluateAssetBudgets,
   evaluateVitalsBudgets,
 } from '../scripts/check-performance.mjs';
-import { buildArchitectureHtml } from '../scripts/generate-architecture.mjs';
-import {
-  buildCardHtml,
-  parsePngDimensions,
-  validatePngBuffer,
-} from '../scripts/generate-og-card.mjs';
-import { countPdfPages, validatePdfBuffer } from '../scripts/generate-pdf.mjs';
+import { buildArchitecturePage } from '../scripts/generate-architecture.mjs';
 import { evaluateQualityGates } from '../scripts/generate-quality-report.mjs';
-import { rewriteAssetRefs } from '../scripts/lib/chrome.mjs';
+import { escapeHtml, rewriteAssetRefs, sanitizeHref } from '../scripts/lib/html.mjs';
+import { normalizeBaseUrl, toPathname } from '../scripts/lib/io.mjs';
+import { ROOT } from '../scripts/lib/paths.mjs';
+import {
+  countPdfPages,
+  inspectPdfBuffer,
+  normalizePdfTimestamps,
+  validatePdfBuffer,
+} from '../scripts/lib/pdf.mjs';
+import { normalizePng } from '../scripts/lib/png.mjs';
+import { buildCommandMenuConfig } from '../scripts/lib/site-config.mjs';
 import { minifyCssFiles, minifyJsFiles } from '../scripts/minify-assets.mjs';
 import { minifyHtml } from '../scripts/minify-html.mjs';
 import { validateHtmlFiles } from '../scripts/run-html-validate.mjs';
 import { createStaticServer } from '../scripts/serve.mjs';
 import {
-  buildCommandMenuMeta,
+  build404Html,
   buildCvContentHtml,
+  buildIndexHtml,
   buildIndexMeta,
   buildJsonLd,
   buildLlmsTxt,
-  buildNotFoundHtml,
   buildRobotsTxt,
   buildSitemapXml,
   buildSiteWebmanifest,
@@ -46,7 +52,6 @@ import {
   validateSyncState,
 } from '../scripts/validate-sync.mjs';
 
-const ROOT = process.cwd();
 const resume = JSON.parse(fs.readFileSync(path.join(ROOT, 'resume.json'), 'utf8'));
 
 function withTempDir(prefix, fn) {
@@ -65,16 +70,6 @@ async function withTempDirAsync(prefix, fn) {
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
-}
-
-function makeMockPng(width, height, totalBytes = 6000) {
-  const buf = Buffer.alloc(totalBytes, 0);
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(buf, 0);
-  buf.writeUInt32BE(13, 8);
-  Buffer.from('IHDR', 'ascii').copy(buf, 12);
-  buf.writeUInt32BE(width, 16);
-  buf.writeUInt32BE(height, 20);
-  return buf;
 }
 
 function makeMockPdf({
@@ -176,6 +171,16 @@ function httpRequest(port, reqPath, method = 'GET') {
   });
 }
 
+function buildTestPngChunk(type, data) {
+  const typeBuf = Buffer.from(type, 'ascii');
+  const lenBuf = Buffer.allocUnsafe(4);
+  lenBuf.writeUInt32BE(data.length, 0);
+  const crcBuf = Buffer.allocUnsafe(4);
+  const crcValue = zlib.crc32(Buffer.concat([typeBuf, data])) >>> 0;
+  crcBuf.writeUInt32BE(crcValue, 0);
+  return Buffer.concat([lenBuf, typeBuf, data, crcBuf]);
+}
+
 describe('sync-resume helpers', () => {
   it('computes years of experience from earliest work startDate and handles edge cases', () => {
     assert.equal(computeYearsOfExperience(resume, 2026), 18);
@@ -200,17 +205,17 @@ describe('sync-resume helpers', () => {
         name: 'Ada; Lovelace\\II',
         email: 'ada@example.com',
         url: 'https://example.com',
-        label: 'Mathematician, Pioneer\nLead',
+        label: 'Mathematician, Pioneer\nLead\\1',
         location: { city: 'London, UK', region: 'Greater;London', countryCode: 'GB' },
       },
-      work: [{ name: 'Past Co', endDate: '2020-01' }, { name: 'Engine; Labs, Inc.' }],
+      work: [{ name: 'Past Co', endDate: '2020-01' }, { name: 'Engine; Labs, Inc.\\2' }],
       meta: { jobTitle: 'Lead, Systems; R&D' },
     });
     assert.ok(customVcf.includes('FN:Ada\\; Lovelace\\\\II\r\n'));
-    assert.ok(customVcf.includes('ORG:Engine\\; Labs\\, Inc.\r\n'));
+    assert.ok(customVcf.includes('ORG:Engine\\; Labs\\, Inc.\\\\2\r\n'));
     assert.ok(customVcf.includes('TITLE:Lead\\, Systems\\; R&D\r\n'));
     assert.ok(customVcf.includes('ADR;TYPE=HOME:;;;London\\, UK;Greater\\;London;;GB\r\n'));
-    assert.ok(customVcf.includes('NOTE:Mathematician\\, Pioneer\\nLead\r\n'));
+    assert.ok(customVcf.includes('NOTE:Mathematician\\, Pioneer\\nLead\\\\1\r\n'));
 
     const minimalVcf = buildVCard({
       basics: { name: 'Ada', email: 'ada@example.com', url: 'https://example.com', label: 'Eng' },
@@ -247,7 +252,7 @@ describe('sync-resume helpers', () => {
     assert.equal('knowsLanguage' in noJobPerson, false);
   });
 
-  it('builds llms.txt, robots.txt, sitemap.xml, security.txt, and command-menu metadata', () => {
+  it('builds llms.txt, robots.txt, sitemap.xml, and syncs security.txt', () => {
     const txt = buildLlmsTxt(resume);
     assert.ok(txt.includes(`# ${resume.basics.name}`));
     assert.ok(txt.includes('## Experience'));
@@ -275,6 +280,7 @@ describe('sync-resume helpers', () => {
       basics: { ...resume.basics, url: 'https://example.dev/' },
       meta: {
         ...resume.meta,
+        canonical: 'https://example.dev/',
         resumePdfUrl: 'https://example.dev/resume.pdf',
         resumeJsonUrl: 'https://example.dev/resume.json',
         contactVcfUrl: 'https://example.dev/contact.vcf',
@@ -297,12 +303,18 @@ describe('sync-resume helpers', () => {
     assert.ok(secOut.includes(`Contact: mailto:${resume.basics.email}`));
     assert.ok(secOut.includes(`Canonical: ${resume.basics.url}/.well-known/security.txt`));
 
-    const panelMeta = buildCommandMenuMeta(resume);
-    assert.ok(panelMeta.includes(`email: '${resume.basics.email}'`));
-    assert.ok(panelMeta.includes('hasLanguages: true'));
+    const panelCfg = buildCommandMenuConfig(resume);
+    assert.equal(panelCfg.email, resume.basics.email);
+    assert.equal(
+      panelCfg.sections.some((s) => s.id === 'languages'),
+      true
+    );
 
-    const panelMetaNoLang = buildCommandMenuMeta({ ...resume, languages: [] });
-    assert.ok(panelMetaNoLang.includes('hasLanguages: false'));
+    const panelCfgNoLang = buildCommandMenuConfig({ ...resume, languages: [] });
+    assert.equal(
+      panelCfgNoLang.sections.some((s) => s.id === 'languages'),
+      false
+    );
   });
 
   it('builds escaped SEO metadata tags in buildIndexMeta', () => {
@@ -390,12 +402,12 @@ describe('sync-resume helpers', () => {
     assert.equal(manifest.description, resume.meta.manifestDescription);
     assert.equal(manifest.icons.length, 1);
 
-    const notFoundHtml = buildNotFoundHtml(
+    const notFoundHtml = build404Html(
       {
         ...resume,
         basics: { ...resume.basics, label: 'Security & Systems <Lead>' },
       },
-      2026
+      { year: 2026 }
     );
     assert.ok(notFoundHtml.includes('<meta name="robots" content="noindex">'));
     assert.ok(notFoundHtml.includes('Security &amp; Systems &lt;Lead&gt;'));
@@ -404,24 +416,21 @@ describe('sync-resume helpers', () => {
     assert.ok(notFoundHtml.includes('href="/quality/"'));
   });
 
-  it('runs syncAllFromResume idempotently in a temp directory and rejects missing markers', () => {
+  it('runs syncAllFromResume idempotently in a temp directory', () => {
     withTempDir('sync-resume-test-', (tmpDir) => {
       copyRepoSyncFiles(tmpDir);
+      fs.mkdirSync(path.join(tmpDir, 'src', 'templates'), { recursive: true });
+      fs.copyFileSync(
+        path.join(ROOT, 'src', 'templates', 'index.html'),
+        path.join(tmpDir, 'src', 'templates', 'index.html')
+      );
 
       syncAllFromResume(tmpDir);
       const syncedIndex = fs.readFileSync(path.join(tmpDir, 'index.html'), 'utf8');
       const syncedNotFound = fs.readFileSync(path.join(tmpDir, '404.html'), 'utf8');
-      const syncedPanel = fs.readFileSync(
-        path.join(tmpDir, 'assets', 'js', 'command-menu-panel.js'),
-        'utf8'
-      );
       syncAllFromResume(tmpDir);
       assert.equal(fs.readFileSync(path.join(tmpDir, 'index.html'), 'utf8'), syncedIndex);
       assert.equal(fs.readFileSync(path.join(tmpDir, '404.html'), 'utf8'), syncedNotFound);
-      assert.equal(
-        fs.readFileSync(path.join(tmpDir, 'assets', 'js', 'command-menu-panel.js'), 'utf8'),
-        syncedPanel
-      );
 
       const mutatedResume = structuredClone(resume);
       mutatedResume.basics.label = 'Principal Architect | Verification Systems';
@@ -436,32 +445,40 @@ describe('sync-resume helpers', () => {
       assert.ok(
         fs.readFileSync(path.join(tmpDir, '404.html'), 'utf8').includes(mutatedResume.basics.label)
       );
-      const updatedPanel = fs.readFileSync(
-        path.join(tmpDir, 'assets', 'js', 'command-menu-panel.js'),
-        'utf8'
-      );
-      assert.ok(updatedPanel.includes("email: 'updated@example.com'"));
-      assert.ok(updatedPanel.includes('hasLanguages: false'));
       assert.ok(
         fs
           .readFileSync(path.join(tmpDir, '.well-known', 'security.txt'), 'utf8')
           .includes('Contact: mailto:updated@example.com')
       );
-
-      fs.writeFileSync(path.join(tmpDir, 'index.html'), '<html><body>broken</body></html>', 'utf8');
-      assert.throws(() => syncAllFromResume(tmpDir), /Could not find .* markers in index\.html/);
-
-      fs.copyFileSync(path.join(ROOT, 'index.html'), path.join(tmpDir, 'index.html'));
-      fs.writeFileSync(
-        path.join(tmpDir, 'assets', 'js', 'command-menu-panel.js'),
-        '/* RESUME_META_END *//* RESUME_META_START */',
-        'utf8'
-      );
-      assert.throws(
-        () => syncAllFromResume(tmpDir),
-        /Could not find .* markers in assets\/js\/command-menu-panel\.js/
-      );
     });
+  });
+
+  it('builds 404.html and index.html directly from resume.json without hardcoded domain drift', () => {
+    const custom = {
+      ...resume,
+      basics: { ...resume.basics, name: 'Test User', url: 'https://custom-portfolio.example' },
+      meta: {
+        ...resume.meta,
+        canonical: 'https://custom-portfolio.example',
+        resumePdf: '/cv.pdf',
+        resumePdfUrl: 'https://custom-portfolio.example/cv.pdf',
+        qualityReportUrl: 'https://custom-portfolio.example/checks/',
+      },
+    };
+    const notFound = build404Html(custom, { year: 2027 });
+    assert.ok(notFound.includes('custom-portfolio.example'));
+    assert.ok(notFound.includes('href="/cv.pdf"'));
+    assert.ok(notFound.includes('href="/checks/"'));
+    assert.ok(notFound.includes('href="/llms.txt"'));
+    assert.ok(notFound.includes('<meta name="robots" content="noindex">'));
+    assert.ok(notFound.includes('&copy; 2027 Test User'));
+    assert.ok(!notFound.includes('guilhermevigneron.dev'));
+
+    const index = buildIndexHtml(custom, { rootDir: ROOT, year: 2027 });
+    assert.ok(index.includes('href="https://custom-portfolio.example"'));
+    assert.ok(index.includes('href="/cv.pdf"'));
+    assert.ok(index.includes('&copy; 2027 Test User'));
+    assert.ok(!index.includes('_START -->'));
   });
 });
 
@@ -584,7 +601,7 @@ describe('validate-sync positive and mutation paths', () => {
       () =>
         validateSyncState({
           ...base,
-          commandPanelJs: base.commandPanelJs.replace(resume.basics.email, 'wrong@example.com'),
+          commandPanelJs: `${base.commandPanelJs.replace("from 'site-config'", "from 'legacy'")}\nemail: 'wrong@example.com'`,
         }),
       /command-menu-panel\.js email out of sync/
     );
@@ -607,7 +624,10 @@ describe('validate-sync positive and mutation paths', () => {
       /Broken internal anchor #missing-target/
     );
 
-    const brokenCommandJs = base.commandPanelJs.replace("'#projects'", "'#deleted-section'");
+    const brokenCommandJs = base.commandPanelJs.replace(
+      'function getGroups(isHome) {',
+      "function getGroups(isHome) {\n    const href = '#deleted-section';"
+    );
     assert.throws(
       () => validateSyncState({ ...base, commandPanelJs: brokenCommandJs }),
       /Broken command-menu anchor #deleted-section/
@@ -804,6 +824,59 @@ describe('quality gate evaluator', () => {
   });
 });
 
+describe('shared lib helpers (html, io, site-config)', () => {
+  it('escapes HTML entities including single quotes and sanitizes URLs', () => {
+    assert.equal(
+      escapeHtml(`<a href="x" title='y'>&</a>`),
+      '&lt;a href=&quot;x&quot; title=&#39;y&#39;&gt;&amp;&lt;/a&gt;'
+    );
+    assert.equal(sanitizeHref('/quality/'), '/quality/');
+    assert.equal(sanitizeHref('#projects'), '#projects');
+    assert.equal(sanitizeHref('/quality/', { allowRelative: false }), '');
+    assert.equal(sanitizeHref('https://example.com/a'), 'https://example.com/a');
+    assert.equal(sanitizeHref('mailto:a@b.com'), '');
+    assert.equal(sanitizeHref('mailto:a@b.com', { allowMailto: true }), 'mailto:a@b.com');
+    assert.equal(sanitizeHref('javascript:alert(1)'), '');
+    assert.equal(sanitizeHref('data:text/html,<script>alert(1)</script>'), '');
+  });
+
+  it('normalizes base URLs and pathnames', () => {
+    assert.equal(normalizeBaseUrl(' https://example.com/// '), 'https://example.com');
+    assert.equal(toPathname('https://example.com/quality/report.json'), '/quality/report.json');
+    assert.equal(toPathname('/resume.pdf'), '/resume.pdf');
+    assert.equal(toPathname('not a url', '/fallback'), '/fallback');
+  });
+
+  it('derives command menu config dynamically from resume.json and drops empty sections', () => {
+    const partialResume = {
+      basics: {
+        name: 'Jane Doe',
+        email: 'jane@example.com',
+        url: 'https://janedoe.example',
+        summary: 'Summary text',
+        profiles: [{ network: 'GitHub', url: 'https://github.com/janedoe' }],
+      },
+      work: [{ name: 'Acme', position: 'Engineer' }],
+      projects: [],
+      skills: [{ name: 'Testing' }],
+      publications: [],
+      awards: [],
+      education: [],
+      languages: [{ language: 'English', fluency: 'Native' }],
+      meta: { canonical: 'https://janedoe.example', resumePdf: '/jane.pdf' },
+    };
+    const cfg = buildCommandMenuConfig(partialResume);
+    assert.equal(cfg.email, 'jane@example.com');
+    assert.equal(cfg.host, 'janedoe.example');
+    assert.equal(cfg.endpoints.resumePdf, '/jane.pdf');
+    assert.equal(cfg.endpoints.contactVcfFilename, 'jane-doe.vcf');
+    assert.deepEqual(
+      cfg.sections.map((s) => s.id),
+      ['about', 'experience', 'skills', 'languages']
+    );
+  });
+});
+
 describe('asset, PDF, PNG, E2E, and Architecture helpers', () => {
   it('rewrites exact asset paths without prefix collisions', () => {
     const input =
@@ -848,28 +921,12 @@ describe('asset, PDF, PNG, E2E, and Architecture helpers', () => {
     );
   });
 
-  it('builds OG card HTML and validates 1200x630 PNG headers', () => {
-    const cardHtml = buildCardHtml(resume);
-    assert.ok(cardHtml.includes(resume.basics.name));
-    assert.ok(cardHtml.includes('/assets/avatar.jpg'));
-
-    assert.equal(parsePngDimensions(Buffer.from('notpng')), null);
-    assert.deepEqual(parsePngDimensions(makeMockPng(1200, 630)), { width: 1200, height: 630 });
-    assert.equal(validatePngBuffer(makeMockPng(1200, 630), 1200, 630).width, 1200);
-
-    assert.throws(() => validatePngBuffer(Buffer.from('notpng')), /valid PNG\/IHDR header/);
-    assert.throws(() => validatePngBuffer(makeMockPng(1199, 630), 1200, 630), /1199x630/);
-    assert.throws(() => validatePngBuffer(makeMockPng(1200, 631), 1200, 630), /1200x631/);
-    assert.throws(
-      () => validatePngBuffer(makeMockPng(1200, 630, 100), 1200, 630),
-      /unexpectedly small/
-    );
-  });
-
   it('renders architecture overview HTML with or without asset-manifest.json', () => {
     withTempDir('arch-page-test-', (tmpDir) => {
       fs.copyFileSync(path.join(ROOT, 'resume.json'), path.join(tmpDir, 'resume.json'));
-      const unhashedHtml = buildArchitectureHtml(tmpDir);
+      buildArchitecturePage({ rootDir: tmpDir });
+      const archPath = path.join(tmpDir, '_site', 'architecture', 'index.html');
+      const unhashedHtml = fs.readFileSync(archPath, 'utf8');
       assert.ok(unhashedHtml.includes('Architecture Overview'));
       assert.ok(unhashedHtml.includes('/assets/css/subpage.css'));
       assert.ok(unhashedHtml.includes('href="/quality/"'));
@@ -880,7 +937,8 @@ describe('asset, PDF, PNG, E2E, and Architecture helpers', () => {
         JSON.stringify({ subpageCssUrl: '/assets/css/subpage.deadbeef.css' }),
         'utf8'
       );
-      const hashedHtml = buildArchitectureHtml(tmpDir);
+      buildArchitecturePage({ rootDir: tmpDir });
+      const hashedHtml = fs.readFileSync(archPath, 'utf8');
       assert.ok(hashedHtml.includes('/assets/css/subpage.deadbeef.css'));
     });
   });
@@ -900,6 +958,64 @@ describe('asset, PDF, PNG, E2E, and Architecture helpers', () => {
         process.env.CYPRESS_BROWSER = prevBrowser;
       }
     }
+  });
+});
+
+describe('PDF and PNG normalization helpers', () => {
+  it('counts PDF pages from Pages /Count dictionary or fallback /Page objects', () => {
+    assert.equal(countPdfPages(Buffer.from('%PDF-1.4 << /Type /Pages /Count 1 >>')), 1);
+    assert.equal(countPdfPages(Buffer.from('%PDF-1.4 << /Type /Page >> << /Type /Page >>')), 2);
+    assert.equal(countPdfPages(Buffer.from('not a pdf')), 0);
+  });
+
+  it('inspects PDF dictionaries with reordered /Count and /Type /Pages keys and normalizes timestamps', () => {
+    const tailMarker = 'trailer\n';
+    const samplePdf = `%PDF-1.4\n1 0 obj\n<< /Count 1 /Kids [2 0 R] /Type /Pages >>\nendobj\n3 0 obj\n<< /CreationDate (D:20250102030405Z) /ModDate (D:20250102030405-08'00') /Title (Resume) >>\nendobj\n${tailMarker}/StructTreeRoot 4 0 R\n`;
+    const buf = Buffer.from(samplePdf, 'latin1');
+
+    const inspected = inspectPdfBuffer(buf);
+    assert.equal(inspected.hasMagicHeader, true);
+    assert.equal(inspected.pages, 1);
+    assert.equal(inspected.tagged, true);
+    assert.equal(inspected.type3Fonts, false);
+    assert.equal(inspected.embeddedImages, false);
+
+    const fixedMs = Date.UTC(2026, 10, 13, 12, 34, 56);
+    const normalized = normalizePdfTimestamps(buf, fixedMs);
+    assert.equal(normalized.length, buf.length);
+    const normalizedText = normalized.toString('latin1');
+    assert.ok(normalizedText.includes('/CreationDate (D:20261113123456Z)'));
+    assert.ok(normalizedText.includes("/ModDate (D:20261113123456+00'00')"));
+    assert.equal(normalizedText.indexOf(tailMarker), samplePdf.indexOf(tailMarker));
+  });
+
+  it('normalizes two PNG encodings of identical scanlines into byte-identical buffers', () => {
+    const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const ihdrData = Buffer.alloc(13);
+    ihdrData.writeUInt32BE(2, 0);
+    ihdrData.writeUInt32BE(2, 4);
+    ihdrData[8] = 8;
+    ihdrData[9] = 2;
+    const ihdr = buildTestPngChunk('IHDR', ihdrData);
+    const iend = buildTestPngChunk('IEND', Buffer.alloc(0));
+    const scanlines = Buffer.from([0, 255, 0, 0, 0, 255, 0, 0, 0, 0, 255, 0, 0, 255]);
+
+    const deflatedFast = zlib.deflateSync(scanlines, { level: 1 });
+    const pngFast = Buffer.concat([signature, ihdr, buildTestPngChunk('IDAT', deflatedFast), iend]);
+
+    const deflatedSplit = zlib.deflateSync(scanlines, { level: 6 });
+    const mid = Math.floor(deflatedSplit.length / 2);
+    const pngSplit = Buffer.concat([
+      signature,
+      ihdr,
+      buildTestPngChunk('IDAT', deflatedSplit.subarray(0, mid)),
+      buildTestPngChunk('IDAT', deflatedSplit.subarray(mid)),
+      iend,
+    ]);
+
+    assert.equal(Buffer.compare(pngFast, pngSplit) !== 0, true);
+    assert.deepEqual(normalizePng(pngFast), normalizePng(pngSplit));
+    assert.throws(() => normalizePng(Buffer.from('not-a-png')), /Invalid PNG signature/);
   });
 });
 
@@ -945,7 +1061,7 @@ describe('HTML and asset minifiers', () => {
       await minifyCssFiles(tmpSite);
       const stylesCss = fs.readFileSync(path.join(tmpSite, 'assets', 'css', 'styles.css'), 'utf8');
       assert.ok(stylesCss.includes('--font-mono:'));
-      assert.ok(!stylesCss.includes('--font-mono: "Geist Mono", '));
+      assert.ok(stylesCss.includes('"Geist Mono", "Geist Mono Fallback"'));
       assert.ok(stylesCss.length < fs.statSync(path.join(ROOT, 'src', 'styles.css')).size);
 
       fs.mkdirSync(path.join(tmpSite, 'assets', 'js'), { recursive: true });
@@ -979,6 +1095,15 @@ describe('HTML and asset minifiers', () => {
     const input = '<ul><li>\n  <a href="/a">A</a> <a href="/b">B</a>\n</li></ul>';
     const output = minifyHtml(input);
     assert.equal(output, '<ul><li><a href="/a">A</a> <a href="/b">B</a></li></ul>\n');
+  });
+
+  it('preserves whitespace inside <pre> blocks and handles comment/raw-tag ordering safely', () => {
+    const input =
+      '<div><!-- <script>fake()</script> -->\n  <pre>  $100 $& __HTML_MINIFY_PRESERVE_0__  </pre>\n  <script>/* <!-- kept --> */ console.log("ok");</script>\n</div>';
+    const output = minifyHtml(input);
+    assert.ok(!output.includes('fake()'));
+    assert.ok(output.includes('<pre>  $100 $& __HTML_MINIFY_PRESERVE_0__  </pre>'));
+    assert.ok(output.includes('<script>/* <!-- kept --> */ console.log("ok");</script>'));
   });
 });
 
@@ -1101,7 +1226,12 @@ describe('static server & html-validate checks', () => {
 
 describe('theme-init graceful degradation', () => {
   it('falls back cleanly when localStorage and matchMedia throw', () => {
-    const code = fs.readFileSync(path.join(ROOT, 'assets/js/theme-init.js'), 'utf8');
+    const code = esbuild.buildSync({
+      entryPoints: [path.join(ROOT, 'assets/js/theme-init.js')],
+      bundle: true,
+      write: false,
+      format: 'iife',
+    }).outputFiles[0].text;
     const runInit = ({
       storedThrows = false,
       storedValue = null,

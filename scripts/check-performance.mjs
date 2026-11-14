@@ -10,7 +10,7 @@ import {
   startStaticServer,
   stopStaticServer,
 } from './lib/browser.mjs';
-import { atomicWriteFileSync } from './lib/chrome.mjs';
+import { writeJsonFile } from './lib/io.mjs';
 
 const ROOT = process.cwd();
 
@@ -846,12 +846,7 @@ export async function runPerformanceAudit({ qualityOnly = false, rootDir = ROOT 
       timestamp: new Date().toISOString(),
     };
 
-    fs.mkdirSync(targetReportsDir, { recursive: true });
-    atomicWriteFileSync(
-      path.join(targetReportsDir, 'perf-report.json'),
-      JSON.stringify(report, null, 2),
-      'utf8'
-    );
+    writeJsonFile(path.join(targetReportsDir, 'perf-report.json'), report);
 
     console.log(
       `PASS performance & mobile audit: screen CSS ${(assetSizes.screenCssBytes / 1024).toFixed(1)} KB, initial JS ${(initialJsBytes / 1024).toFixed(1)} KB, fonts ${(combinedFontsBytes / 1024).toFixed(1)} KB, mobile transfer ${(vitals.totalTransferBytes / 1024).toFixed(1)} KB (Brotli ~${(initialBrotliBytes / 1024).toFixed(1)} KB), DOM ${vitals.domNodes} nodes, FCP ${vitals.fcpMs}ms, LCP ${vitals.lcpMs}ms, CLS ${vitals.cls}`

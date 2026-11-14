@@ -1,27 +1,23 @@
-(() => {
-  const root = document.documentElement;
-  root.classList.add('js');
+import { syncThemeColorMeta, THEME_STORAGE_KEY } from '../../src/js/theme-shared.js';
 
-  let stored = null;
-  try {
-    stored = localStorage.getItem('theme');
-  } catch {
-    // Ignore storage errors in restricted browsing modes
-  }
+const root = document.documentElement;
+root.classList.add('js');
 
-  let prefersDark = false;
-  try {
-    prefersDark = Boolean(window.matchMedia?.('(prefers-color-scheme: dark)')?.matches);
-  } catch {
-    // Ignore matchMedia errors in restricted environments
-  }
+let stored = null;
+try {
+  stored = localStorage.getItem(THEME_STORAGE_KEY);
+} catch {
+  // Ignore storage errors in restricted browsing modes
+}
 
-  const isDark = stored === 'dark' || (stored !== 'light' && prefersDark);
-  root.classList.toggle('dark', isDark);
-  root.classList.toggle('light', !isDark);
+let prefersDark = false;
+try {
+  prefersDark = Boolean(window.matchMedia?.('(prefers-color-scheme: dark)')?.matches);
+} catch {
+  // Ignore matchMedia errors in restricted environments
+}
 
-  const color = isDark ? '#0d0c0a' : '#fafaf8';
-  document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
-    meta.setAttribute('content', color);
-  });
-})();
+const isDark = stored === 'dark' || (stored !== 'light' && prefersDark);
+root.classList.toggle('dark', isDark);
+root.classList.toggle('light', !isDark);
+syncThemeColorMeta(isDark);

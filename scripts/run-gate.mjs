@@ -1,9 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { writeReportJson } from './lib/io.mjs';
+import { REPORTS_DIR, ROOT } from './lib/paths.mjs';
 
-const ROOT = process.cwd();
-const reportsDir = path.join(ROOT, '.ci-reports');
 const testsDir = path.join(ROOT, 'tests');
 
 function listUnitTestFiles() {
@@ -56,20 +56,16 @@ if (result.error) {
 const exitCode = result.error ? 1 : (result.status ?? 1);
 const passed = exitCode === 0;
 
-fs.mkdirSync(reportsDir, { recursive: true });
-fs.writeFileSync(
-  path.join(reportsDir, gate.reportFile),
-  JSON.stringify(
-    {
-      gate: gateName,
-      passed,
-      exitCode,
-      durationMs: Date.now() - startedAt,
-      timestamp: new Date().toISOString(),
-    },
-    null,
-    2
-  )
+writeReportJson(
+  gate.reportFile,
+  {
+    gate: gateName,
+    passed,
+    exitCode,
+    durationMs: Date.now() - startedAt,
+    timestamp: new Date().toISOString(),
+  },
+  REPORTS_DIR
 );
 
 process.exit(exitCode);

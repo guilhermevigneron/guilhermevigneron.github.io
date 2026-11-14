@@ -1,32 +1,26 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import {
-  escapeHtml,
-  getAssetUrls,
-  readJsonIfExists,
-  renderSubpageDocument,
-} from './lib/chrome.mjs';
+import { escapeHtml, ICONS, renderSubpageLayout } from './lib/html.mjs';
+import { readJson, readJsonIfExists, resolveBuildYear } from './lib/io.mjs';
+import { isEntrypoint, ROOT, resolveRootPaths } from './lib/paths.mjs';
+import { getRepoUrl, getSiteEndpoints } from './lib/site-config.mjs';
 import { minifyHtml } from './minify-html.mjs';
 
-const ROOT = process.cwd();
-const siteDir = path.join(ROOT, '_site');
-const outDir = path.join(siteDir, 'architecture');
-const outFile = path.join(outDir, 'index.html');
-
-export function buildArchitectureHtml(rootDir = ROOT) {
-  const resume = readJsonIfExists(path.join(rootDir, 'resume.json'));
-  const ownerName = resume?.basics?.name || 'Guilherme Vigneron de Oliveira';
-  const siteUrl = String(resume?.basics?.url || 'https://guilhermevigneron.dev').replace(/\/$/, '');
-  const domain = siteUrl.replace(/^https?:\/\//, '');
-  const repoUrl =
-    resume?.projects?.find((p) => String(p.url || '').includes('github.com'))?.url ||
-    'https://github.com/guilhermevigneron/guilhermevigneron.github.io';
-  const currentYear = new Date().getUTCFullYear();
-  const assetUrls = getAssetUrls(path.join(rootDir, '.ci-reports'), true);
-
-  const arrowSvg =
-    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>';
+export function buildArchitecturePage({
+  rootDir = ROOT,
+  siteDir = null,
+  reportsDir = null,
+  resume: resumeArg = null,
+} = {}) {
+  const paths = resolveRootPaths(rootDir);
+  const resolvedSiteDir = siteDir || paths.siteDir;
+  const resolvedReportsDir = reportsDir || paths.reportsDir;
+  const resume = resumeArg || readJson(paths.resumePath);
+  const endpoints = getSiteEndpoints(resume);
+  const repoUrl = getRepoUrl(resume);
+  const ownerName = resume.basics.name;
+  const currentYear = resolveBuildYear(resume, rootDir);
+  const assetManifest = readJsonIfExists(path.join(resolvedReportsDir, 'asset-manifest.json'));
 
   const pillars = [
     {
@@ -43,22 +37,21 @@ export function buildArchitectureHtml(rootDir = ROOT) {
     },
     {
       title: '3. Automated PDF & Social Previews',
-      summary:
-        'On every build, a headless browser prints the page to a clean, single-page A4 resume (/resume.pdf) and renders a 1200x630 social preview card.',
+      summary: `On every build, a headless browser prints the page to a clean, single-page A4 resume (${endpoints.resumePdfPath}) and renders a 1200x630 social preview card.`,
       detail: 'Always-fresh PDF · 1-page layout gate',
     },
     {
       title: '4. Built-In Quality Gates',
       summary:
         'Before anything goes live, automated checks verify Biome lint, unit tests, dependency audit, HTML5 validity, mobile speed budgets, WCAG 2.1 AA accessibility, and zero broken links.',
-      detail: 'Live results published to /quality/',
+      detail: `Live results published to ${endpoints.qualityPath}`,
     },
   ];
 
-  const mainSectionsHtml = `            <section class="cv-section">
+  const mainHtml = `            <section class="cv-section">
                 <h1 class="cv-name">Architecture Overview</h1>
                 <p class="summary-copy">
-                    <strong>${escapeHtml(domain)}</strong> is a personal portfolio and resume built like a production software product. Instead of maintaining separate web pages, PDFs, and profile files by hand, a single data file drives an automated pipeline that builds, tests, and verifies every output before publishing.
+                    <strong>${escapeHtml(endpoints.domain)}</strong> is a personal portfolio and resume built like a production software product. Instead of maintaining separate web pages, PDFs, and profile files by hand, a single data file drives an automated pipeline that builds, tests, and verifies every output before publishing.
                 </p>
             </section>
 
@@ -76,7 +69,7 @@ export function buildArchitectureHtml(rootDir = ROOT) {
                         </div>
                     </div>
 
-                    <div class="arch-arrow" aria-hidden="true">${arrowSvg}</div>
+                    <div class="arch-arrow" aria-hidden="true">${ICONS.arrowRight}</div>
 
                     <div class="arch-stage">
                         <p class="arch-step">02 · automated build</p>
@@ -84,13 +77,13 @@ export function buildArchitectureHtml(rootDir = ROOT) {
                         <p class="arch-desc">Node.js scripts and headless Chromium compile every human and machine format.</p>
                         <div class="arch-items">
                             <div class="arch-chip">Website <span>(/)</span></div>
-                            <div class="arch-chip">A4 PDF <span>(/resume.pdf)</span></div>
-                            <div class="arch-chip">Contact <span>(/contact.vcf)</span></div>
-                            <div class="arch-chip">AI &amp; Search <span>(/llms.txt, JSON-LD)</span></div>
+                            <div class="arch-chip">A4 PDF <span>(${escapeHtml(endpoints.resumePdfPath)})</span></div>
+                            <div class="arch-chip">Contact <span>(${escapeHtml(endpoints.contactVcfPath)})</span></div>
+                            <div class="arch-chip">AI &amp; Search <span>(${escapeHtml(endpoints.llmsTxtPath)}, JSON-LD)</span></div>
                         </div>
                     </div>
 
-                    <div class="arch-arrow" aria-hidden="true">${arrowSvg}</div>
+                    <div class="arch-arrow" aria-hidden="true">${ICONS.arrowRight}</div>
 
                     <div class="arch-stage">
                         <p class="arch-step">03 · quality gates</p>
@@ -100,7 +93,7 @@ export function buildArchitectureHtml(rootDir = ROOT) {
                             <div class="arch-chip">Accessibility <span>(WCAG 2.1 AA)</span></div>
                             <div class="arch-chip">Mobile Speed <span>(Web Vitals)</span></div>
                             <div class="arch-chip">Security <span>(Strict CSP)</span></div>
-                            <div class="arch-chip">Live Report <span>(/quality/)</span></div>
+                            <div class="arch-chip">Live Report <span>(${escapeHtml(endpoints.qualityPath)})</span></div>
                         </div>
                     </div>
                 </div>
@@ -128,50 +121,45 @@ export function buildArchitectureHtml(rootDir = ROOT) {
                 <div class="panel-card">
                     <ul class="endpoint-list">
                         <li><a href="/">Portfolio &amp; Resume (/)</a> &mdash; Main CV view generated from resume.json</li>
-                        <li><a href="/quality/">Live Quality Report (/quality/)</a> &mdash; Real-time test, accessibility, and payload telemetry from the latest build</li>
-                        <li><a href="/resume.pdf">/resume.pdf</a> &mdash; Single-page A4 resume rendered by headless Chromium</li>
-                        <li><a href="/resume.json">/resume.json</a> &mdash; The single source-of-truth JSON Resume file</li>
+                        <li><a href="${escapeHtml(endpoints.qualityPath)}">Live Quality Report (${escapeHtml(endpoints.qualityPath)})</a> &mdash; Real-time test, accessibility, and payload telemetry from the latest build</li>
+                        <li><a href="${escapeHtml(endpoints.resumePdfPath)}">${escapeHtml(endpoints.resumePdfPath)}</a> &mdash; Single-page A4 resume rendered by headless Chromium</li>
+                        <li><a href="${escapeHtml(endpoints.resumeJsonPath)}">${escapeHtml(endpoints.resumeJsonPath)}</a> &mdash; The single source-of-truth JSON Resume file</li>
                         <li><a href="${escapeHtml(repoUrl)}" target="_blank" rel="noopener noreferrer">Source Code on GitHub</a> &mdash; Full build scripts, tests, and CI/CD workflow</li>
                     </ul>
                 </div>
             </section>`;
 
-  const html = renderSubpageDocument({
+  const html = renderSubpageLayout({
     title: `Architecture Overview - ${ownerName}`,
-    description: `High-level visual architecture of ${domain}: how a single resume.json source builds and verifies the site, PDF, and quality report.`,
-    canonicalUrl: `${siteUrl}/architecture/`,
-    ogImageUrl: `${siteUrl}${assetUrls.ogCardUrl}`,
-    ogImageAlt: resume?.meta?.ogImageAlt || `Architecture Overview - ${ownerName}`,
+    description: `High-level visual architecture of ${endpoints.domain}: how a single resume.json source builds and verifies the site, PDF, and quality report.`,
+    canonicalUrl: endpoints.architectureUrl,
     ownerName,
-    subtitleHtml: `<p class="entry-sub">How ${escapeHtml(domain)} Works</p>`,
+    subtitleHtml: `<p class="entry-sub">How ${escapeHtml(endpoints.domain)} Works</p>`,
     navLinks: [
       { href: '/', label: 'Portfolio' },
-      { href: '/quality/', label: 'Quality Report' },
+      { href: endpoints.qualityPath, label: 'Quality Report' },
     ],
-    mainSectionsHtml,
+    mainHtml,
     footerLinks: [
       { href: '/', label: 'Portfolio' },
-      { href: '/quality/', label: 'Quality Report' },
-      { href: '/resume.json', label: 'JSON Resume' },
-      { href: '/llms.txt', label: 'llms.txt' },
+      { href: endpoints.qualityPath, label: 'Quality Report' },
+      { href: endpoints.resumeJsonPath, label: 'JSON Resume' },
+      { href: endpoints.llmsTxtPath, label: 'llms.txt' },
     ],
-    copyrightHtml: `<span>&copy; ${escapeHtml(String(currentYear))} ${escapeHtml(ownerName)}</span>`,
-    assetUrls,
+    copyrightYear: currentYear,
+    assetManifest,
   });
 
-  return minifyHtml(html);
-}
-
-export function buildArchitecturePage() {
+  const outDir = path.join(
+    resolvedSiteDir,
+    endpoints.architecturePath.replace(/^\/+|\/+$/g, '') || 'architecture'
+  );
+  const outFile = path.join(outDir, 'index.html');
   fs.mkdirSync(outDir, { recursive: true });
-  fs.writeFileSync(outFile, buildArchitectureHtml(ROOT), 'utf8');
-  console.log(`Generated ${path.relative(ROOT, outFile)}`);
+  fs.writeFileSync(outFile, minifyHtml(html), 'utf8');
+  console.log(`Generated ${path.relative(rootDir, outFile)}`);
 }
 
-const isEntrypoint =
-  Boolean(process.argv[1]) &&
-  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
-
-if (isEntrypoint) {
+if (isEntrypoint(import.meta.url)) {
   buildArchitecturePage();
 }

@@ -1,0 +1,6 @@
+{
+  "storageKey": "theme",
+  "toggleEvent": "theme:toggle",
+  "light": "#fafaf8",
+  "dark": "#0d0c0a"
+}

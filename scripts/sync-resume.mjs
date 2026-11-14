@@ -1,9 +1,30 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { escapeHtml, getAssetUrls, renderSubpageDocument } from './lib/chrome.mjs';
+import {
+  escapeHtml,
+  ICONS,
+  renderCommandBarHtml,
+  renderCspMeta,
+  renderFooterLinks,
+  renderSubpageLayout,
+  renderThemeColorMetas,
+  sanitizeHref,
+} from './lib/html.mjs';
+import { readJson, resolveBuildYear, writeTextIfChanged } from './lib/io.mjs';
+import { isEntrypoint, ROOT, TEMPLATES_DIR } from './lib/paths.mjs';
+import { formatProfileDisplay, getSiteEndpoints, THEME_COLORS } from './lib/site-config.mjs';
 
-const ROOT = process.cwd();
+export function computeYearsOfExperience(data, currentYear = resolveBuildYear(data)) {
+  const startYears = (data?.work || [])
+    .map((job) => {
+      const m = String(job?.startDate || '').match(/^(\d{4})/);
+      return m ? Number(m[1]) : NaN;
+    })
+    .filter((y) => !Number.isNaN(y));
+  if (startYears.length === 0) return null;
+  const earliest = Math.min(...startYears);
+  return Math.max(1, currentYear - earliest);
+}
 
 function escapeVCardValue(value) {
   return String(value ?? '')
@@ -13,29 +34,24 @@ function escapeVCardValue(value) {
     .replace(/,/g, '\\,');
 }
 
-export function computeYearsOfExperience(data, currentYear = new Date().getUTCFullYear()) {
-  const startYears = (data.work || [])
-    .map((job) => {
-      const m = String(job.startDate || '').match(/^(\d{4})/);
-      return m ? Number(m[1]) : NaN;
-    })
-    .filter((y) => !Number.isNaN(y));
-  if (startYears.length === 0) return null;
-  const earliest = Math.min(...startYears);
-  return Math.max(1, currentYear - earliest);
+function getProfileIcon(network) {
+  const key = String(network || '').toLowerCase();
+  if (key === 'github') return ICONS.github;
+  if (key === 'linkedin') return ICONS.linkedin;
+  return ICONS.globe;
 }
 
 export function buildJsonLd(data) {
-  const baseUrl = String(data.basics.url || '').replace(/\/$/, '');
-  const canonicalUrl = `${baseUrl}/`;
+  const endpoints = getSiteEndpoints(data);
+  const canonicalUrl = `${endpoints.baseUrl}/`;
   const personId = `${canonicalUrl}#person`;
   const websiteId = `${canonicalUrl}#website`;
   const profilePageId = `${canonicalUrl}#profilepage`;
 
   const uniqueSchools = [];
   const seenSchools = new Set();
-  for (const edu of [...data.education].reverse()) {
-    if (!seenSchools.has(edu.institution)) {
+  for (const edu of [...(data.education || [])].reverse()) {
+    if (edu?.institution && !seenSchools.has(edu.institution)) {
       seenSchools.add(edu.institution);
       uniqueSchools.push({
         '@type': 'EducationalOrganization',
@@ -45,24 +61,25 @@ export function buildJsonLd(data) {
   }
 
   const currentEmployer = (data.work || []).find((job) => !job.endDate);
+  const loc = data.basics?.location;
   const knowsAbout = Array.from(
     new Set([
       ...(data.skills || []).map((s) => s.name),
       ...(data.projects || []).flatMap((p) => p.keywords || []),
     ])
-  );
+  ).filter(Boolean);
   const awards = (data.awards || []).map((a) => a.title).filter(Boolean);
 
   const personNode = {
     '@type': 'Person',
     '@id': personId,
     name: data.basics.name,
-    jobTitle: data.meta.jobTitle,
+    jobTitle: data.meta?.jobTitle || data.basics.label,
     url: canonicalUrl,
-    image: `${baseUrl}/assets/avatar.jpg`,
+    image: `${endpoints.baseUrl}/assets/avatar.jpg`,
     email: data.basics.email,
-    sameAs: data.basics.profiles.map((p) => p.url),
-    ...(currentEmployer
+    sameAs: (data.basics.profiles || []).map((p) => p.url).filter(Boolean),
+    ...(currentEmployer?.name
       ? {
           worksFor: {
             '@type': 'Organization',
@@ -71,16 +88,22 @@ export function buildJsonLd(data) {
         }
       : {}),
     knowsAbout,
-    ...(data.languages?.length ? { knowsLanguage: data.languages.map((l) => l.language) } : {}),
-    alumniOf: uniqueSchools,
+    ...(data.languages?.length
+      ? { knowsLanguage: data.languages.map((l) => l.language).filter(Boolean) }
+      : {}),
+    ...(uniqueSchools.length ? { alumniOf: uniqueSchools } : {}),
     ...(awards.length ? { award: awards } : {}),
-    address: {
-      '@type': 'PostalAddress',
-      addressLocality: data.basics.location.city,
-      addressRegion: data.basics.location.region,
-      addressCountry: data.basics.location.countryCode,
-    },
-    description: data.meta.shortDescription,
+    ...(loc
+      ? {
+          address: {
+            '@type': 'PostalAddress',
+            addressLocality: loc.city || '',
+            addressRegion: loc.region || '',
+            addressCountry: loc.countryCode || '',
+          },
+        }
+      : {}),
+    description: data.meta?.shortDescription || data.basics.summary,
   };
 
   const websiteNode = {
@@ -126,105 +149,94 @@ export function buildJsonLd(data) {
 }
 
 export function buildVCard(data) {
-  const nameParts = String(data.basics.name || '')
+  const endpoints = getSiteEndpoints(data);
+  const nameParts = String(data.basics?.name || '')
     .trim()
-    .split(/\s+/);
+    .split(/\s+/)
+    .filter(Boolean);
   const firstName = nameParts[0] || '';
   const lastName = nameParts.slice(1).join(' ');
   const org = (data.work?.find((job) => !job.endDate) || data.work?.[0])?.name || '';
-  const loc = data.basics.location || {};
+  const loc = data.basics?.location || {};
   const lines = [
     'BEGIN:VCARD',
     'VERSION:3.0',
-    `FN:${escapeVCardValue(data.basics.name)}`,
+    `FN:${escapeVCardValue(data.basics?.name || '')}`,
     `N:${escapeVCardValue(lastName)};${escapeVCardValue(firstName)};;;`,
     `ORG:${escapeVCardValue(org)}`,
-    `TITLE:${escapeVCardValue(data.meta.jobTitle)}`,
-    `EMAIL;TYPE=INTERNET:${escapeVCardValue(data.basics.email)}`,
-    `URL:${data.basics.url}`,
+    `TITLE:${escapeVCardValue(data.meta?.jobTitle || data.basics?.label || '')}`,
+    `EMAIL;TYPE=INTERNET:${escapeVCardValue(data.basics?.email || '')}`,
+    `URL:${escapeVCardValue(endpoints.baseUrl)}`,
     `ADR;TYPE=HOME:;;;${escapeVCardValue(loc.city || '')};${escapeVCardValue(loc.region || '')};;${escapeVCardValue(loc.countryCode || '')}`,
-    `NOTE:${escapeVCardValue(data.basics.label)}`,
+    `NOTE:${escapeVCardValue(data.basics?.label || '')}`,
     'END:VCARD',
     '',
   ];
   return lines.join('\r\n');
 }
 
-export function buildLlmsTxt(data) {
-  const baseUrl = String(data.basics.url || '').replace(/\/$/, '');
-  const years = computeYearsOfExperience(data);
+export function buildLlmsTxt(data, currentYear = resolveBuildYear(data)) {
+  const endpoints = getSiteEndpoints(data);
+  const years = computeYearsOfExperience(data, currentYear);
   const yearsLabel = years ? `${years}+ years` : 'extensive';
-  const workLines = data.work.flatMap((job) => [
+  const workLines = (data.work || []).flatMap((job) => [
     `- ${job.position} at ${job.name} (${job.displayDate}), ${job.location}`,
     ...(job.highlights || []).map((h) => `  - ${h}`),
     ...(job.keywords?.length ? [`  - Keywords: ${job.keywords.join(', ')}`] : []),
   ]);
   const projectLines = (data.projects || []).flatMap((proj) => [
-    `- [${proj.name} — ${proj.subtitle}](${proj.url})`,
+    `- [${proj.name}${proj.subtitle ? ` — ${proj.subtitle}` : ''}](${proj.url})`,
     `  - ${proj.description}`,
     ...(proj.highlights || []).map((h) => `  - ${h}`),
     ...(proj.keywords?.length ? [`  - Technologies: ${proj.keywords.join(', ')}`] : []),
   ]);
-  const skillsLine = data.skills.map((s) => s.name).join(', ');
-  const educationLines = data.education.map(
+  const skillsLine = (data.skills || []).map((s) => s.name).join(', ');
+  const educationLines = (data.education || []).map(
     (edu) =>
       `- ${edu.studyType}, ${edu.area} — ${edu.institution} (${edu.startDate}-${edu.endDate})`
   );
-  const publicationLines = data.publications.map(
+  const publicationLines = (data.publications || []).map(
     (pub) => `- [${pub.name}](${pub.url}) — ${pub.publisher}`
   );
-  const awardLines = data.awards.flatMap((award) => {
+  const awardLines = (data.awards || []).flatMap((award) => {
     const meta = [award.awarder, award.date].filter(Boolean).join(', ');
     const header = meta ? `- ${award.title} (${meta})` : `- ${award.title}`;
     return award.summary ? [header, `  - ${award.summary}`] : [header];
   });
-  const languageLines = (data.languages || []).map(
-    (lang) => `- ${lang.language} (${lang.fluency})`
+  const languageLines = (data.languages || []).map((lang) =>
+    lang.fluency ? `- ${lang.language} (${lang.fluency})` : `- ${lang.language}`
   );
-  const profileLines = data.basics.profiles.map(
+  const profileLines = (data.basics?.profiles || []).map(
     (profile) => `- [${profile.network}](${profile.url})`
   );
 
   return [
     `# ${data.basics.name} — Portfolio`,
     '',
-    `> This is the personal portfolio of ${data.basics.name}, a ${data.meta.jobTitle} with ${yearsLabel} of experience.`,
+    `> This is the personal portfolio of ${data.basics.name}, a ${data.meta?.jobTitle || data.basics.label} with ${yearsLabel} of experience.`,
     '',
-    '## Summary',
-    data.basics.summary,
-    '',
-    '## Experience',
-    ...workLines,
-    '',
-    '## Selected Projects',
-    ...projectLines,
-    '',
-    '## Core Skills',
-    skillsLine,
-    '',
-    '## Education',
-    ...educationLines,
+    ...(data.basics?.summary ? ['## Summary', data.basics.summary] : []),
+    ...(workLines.length ? ['', '## Experience', ...workLines] : []),
+    ...(projectLines.length ? ['', '## Selected Projects', ...projectLines] : []),
+    ...(skillsLine ? ['', '## Core Skills', skillsLine] : []),
+    ...(educationLines.length ? ['', '## Education', ...educationLines] : []),
     ...(languageLines.length ? ['', '## Languages', ...languageLines] : []),
-    '',
-    '## Publications',
-    ...publicationLines,
-    '',
-    '## Awards',
-    ...awardLines,
+    ...(publicationLines.length ? ['', '## Publications', ...publicationLines] : []),
+    ...(awardLines.length ? ['', '## Awards', ...awardLines] : []),
     '',
     '## Machine-Readable & Verification Endpoints',
-    `- [Resume PDF](${data.meta.resumePdfUrl}): Single-page A4 resume`,
-    `- [JSON Resume](${data.meta.resumeJsonUrl}): Canonical structured profile data`,
-    `- [Contact vCard](${data.meta.contactVcfUrl}): Downloadable vCard 3.0 contact`,
-    `- [Architecture Overview](${baseUrl}/architecture/): Build and verification pipeline overview`,
-    `- [Quality Report](${data.meta.qualityReportUrl}): Live CI quality, accessibility, and Web Vitals report`,
-    `- [Quality Telemetry JSON](${data.meta.qualityReportJsonUrl}): Machine-readable CI telemetry`,
-    `- [Security Policy](${data.meta.securityTxtUrl}): RFC 9116 vulnerability disclosure policy`,
+    `- [Resume PDF](${endpoints.resumePdfUrl}): Single-page A4 resume`,
+    `- [JSON Resume](${endpoints.resumeJsonUrl}): Canonical structured profile data`,
+    `- [Contact vCard](${endpoints.contactVcfUrl}): Downloadable vCard 3.0 contact`,
+    `- [Architecture Overview](${endpoints.architectureUrl}): Build and verification pipeline overview`,
+    `- [Quality Report](${endpoints.qualityReportUrl}): Live CI quality, accessibility, and Web Vitals report`,
+    `- [Quality Telemetry JSON](${endpoints.qualityReportJsonUrl}): Machine-readable CI telemetry`,
+    `- [Security Policy](${endpoints.securityTxtUrl}): RFC 9116 vulnerability disclosure policy`,
     '',
     '## Contact',
     `- Email: ${data.basics.email}`,
     ...profileLines,
-    `- [Website](${baseUrl}/)`,
+    `- [Website](${endpoints.baseUrl}/)`,
     '',
   ].join('\n');
 }
@@ -238,24 +250,23 @@ function renderTagList(items, extraClass = '') {
 }
 
 export function buildIndexMeta(data) {
-  const title = escapeHtml(data.meta.pageTitle || `${data.basics.name} - ${data.basics.label}`);
-  const metaDesc = escapeHtml(data.meta.metaDescription || data.basics.summary);
-  const ogDesc = escapeHtml(data.meta.ogDescription || data.meta.shortDescription);
-  const ogImageUrl = escapeHtml(data.meta.ogImageUrl || `${data.basics.url}/assets/og-card.png`);
-  const ogImageAlt = escapeHtml(data.meta.ogImageAlt || data.meta.pageTitle || data.basics.name);
-  const rawCanonical =
-    data.meta.canonical || `${String(data.basics.url || '').replace(/\/$/, '')}/`;
-  const canonical = escapeHtml(rawCanonical);
-  const nameParts = String(data.basics.name || '')
+  const endpoints = getSiteEndpoints(data);
+  const title = escapeHtml(data.meta?.pageTitle || `${data.basics.name} - ${data.basics.label}`);
+  const metaDesc = escapeHtml(data.meta?.metaDescription || data.basics.summary);
+  const ogDesc = escapeHtml(data.meta?.ogDescription || data.meta?.shortDescription || metaDesc);
+  const ogImageUrl = escapeHtml(endpoints.ogImageUrl);
+  const ogImageAlt = escapeHtml(data.meta?.ogImageAlt || data.meta?.pageTitle || data.basics.name);
+  const canonical = escapeHtml(data.meta?.canonical || `${endpoints.baseUrl}/`);
+  const nameParts = String(data.basics?.name || '')
     .trim()
-    .split(/\s+/);
+    .split(/\s+/)
+    .filter(Boolean);
   const firstName = escapeHtml(nameParts[0] || '');
   const lastName = escapeHtml(nameParts.slice(1).join(' '));
 
   return [
     `<title>${title}</title>`,
     `<meta name="description" content="${metaDesc}">`,
-    `<link rel="canonical" href="${canonical}">`,
     '',
     '<!-- Open Graph / Social Media -->',
     `<meta property="og:title" content="${title}">`,
@@ -281,20 +292,61 @@ export function buildIndexMeta(data) {
 }
 
 export function buildCvContentHtml(data) {
-  const domain = String(data.basics.url || '').replace(/^https?:\/\//, '');
-  const city = data.basics.location?.city || '';
-  const region = data.basics.location?.region || '';
-  const locationText = region ? `${city}, ${region}` : city;
-  const linkedin = data.basics.profiles.find((p) => p.network.toLowerCase() === 'linkedin');
-  const github = data.basics.profiles.find((p) => p.network.toLowerCase() === 'github');
-  const linkedinDisplay = linkedin ? linkedin.url.replace(/^https?:\/\/(www\.)?/, '') : '';
-  const githubDisplay = github ? github.url.replace(/^https?:\/\//, '') : '';
+  const endpoints = getSiteEndpoints(data);
+  const city = data.basics?.location?.city || '';
+  const region = data.basics?.location?.region || '';
+  const locationText = [city, region].filter(Boolean).join(', ');
+  const profiles = (data.basics?.profiles || []).filter((p) => p?.network && sanitizeHref(p.url));
 
-  const workHtml = data.work
+  // Keep Print Contact deterministic: website, email, then ordered social profiles (GitHub/LinkedIn etc.)
+  const orderedPrintProfiles = [
+    ...profiles.filter((p) => p.network.toLowerCase() === 'github'),
+    ...profiles.filter((p) => p.network.toLowerCase() !== 'github'),
+  ];
+  const printContactEntries = [
+    endpoints.baseUrl
+      ? `<a href="${escapeHtml(endpoints.baseUrl)}">${escapeHtml(endpoints.domain)}</a>`
+      : '',
+    data.basics?.email
+      ? `<a href="mailto:${escapeHtml(data.basics.email)}">${escapeHtml(data.basics.email)}</a>`
+      : '',
+    ...orderedPrintProfiles.map((p) => {
+      const safeUrl = sanitizeHref(p.url);
+      return `<a href="${escapeHtml(safeUrl)}">${escapeHtml(formatProfileDisplay(safeUrl))}</a>`;
+    }),
+  ].filter(Boolean);
+
+  const orderedHeaderProfiles = orderedPrintProfiles;
+  const headerSocialItems = [
+    ...(data.basics?.email
+      ? [
+          `                            <li>
+                                <a href="mailto:${escapeHtml(data.basics.email)}" class="icon-btn" aria-label="Email">
+                                    ${ICONS.email}
+                                    <span class="sr-only">Email</span>
+                                </a>
+                            </li>`,
+        ]
+      : []),
+    ...orderedHeaderProfiles.map((p) => {
+      const safeUrl = sanitizeHref(p.url);
+      return `                            <li>
+                                <a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" class="icon-btn" aria-label="${escapeHtml(p.network)} Profile (opens in a new tab)">
+                                    ${getProfileIcon(p.network)}
+                                    <span class="sr-only">${escapeHtml(p.network)}</span>
+                                </a>
+                            </li>`;
+    }),
+  ].join('\n');
+
+  const workHtml = (data.work || [])
     .map((job) => {
       const highlights = (job.highlights || [])
         .map((h) => `                            <li>${escapeHtml(h)}</li>`)
         .join('\n');
+      const highlightsBlock = highlights
+        ? `\n                        <ul class="work-highlights">\n${highlights}\n                        </ul>`
+        : '';
       const tags = job.keywords?.length
         ? `\n${renderTagList(job.keywords, 'tag-list--spaced')}`
         : '';
@@ -308,10 +360,7 @@ export function buildCvContentHtml(data) {
                                 <div class="date-range">${escapeHtml(job.displayDate)}</div>
                             </div>
                             ${roleRow}
-                        </div>
-                        <ul class="work-highlights">
-${highlights}
-                        </ul>${tags}
+                        </div>${highlightsBlock}${tags}
                     </article>`;
     })
     .join('\n\n');
@@ -323,12 +372,24 @@ ${highlights}
       const articleClass =
         proj.showInPrint === false && !allProjectsNoPrint ? ' class="no-print"' : '';
       const dateText = proj.displayDate || proj.startDate || '';
-      const extraLinks = (proj.links || [])
-        .map(
-          (l) =>
-            ` <span aria-hidden="true">&middot;</span> <a href="${escapeHtml(l.url)}" class="inline-link">${escapeHtml(l.label)}</a>`
-        )
-        .join('');
+      const safeProjUrl = sanitizeHref(proj.url);
+      const projHeadingHtml = safeProjUrl
+        ? `<a href="${escapeHtml(safeProjUrl)}" target="_blank" rel="noopener noreferrer" class="inline-link">${escapeHtml(proj.name)}<span class="ext-arrow" aria-hidden="true">&nbsp;&#8599;</span><span class="sr-only"> (opens in a new tab)</span></a>`
+        : escapeHtml(proj.name);
+
+      const roleParts = [
+        proj.subtitle ? escapeHtml(proj.subtitle) : '',
+        ...(proj.links || [])
+          .filter((l) => l?.label && sanitizeHref(l.url))
+          .map(
+            (l) =>
+              `<a href="${escapeHtml(sanitizeHref(l.url))}" class="inline-link">${escapeHtml(l.label)}</a>`
+          ),
+      ].filter(Boolean);
+      const roleBlock = roleParts.length
+        ? `\n                            <p class="entry-role">${roleParts.join(' <span aria-hidden="true">&middot;</span> ')}</p>`
+        : '';
+
       const highlights = proj.highlights?.length
         ? `\n                        <ul class="work-highlights">\n${proj.highlights
             .map((h) => `                            <li>${escapeHtml(h)}</li>`)
@@ -342,30 +403,33 @@ ${highlights}
                         <div class="entry-header">
                             <div class="entry-top">
                                 <h3 class="entry-heading">
-                                    <a href="${escapeHtml(proj.url)}" target="_blank" rel="noopener noreferrer" class="inline-link">${escapeHtml(proj.name)}<span class="ext-arrow" aria-hidden="true">&nbsp;&#8599;</span><span class="sr-only"> (opens in a new tab)</span></a>
+                                    ${projHeadingHtml}
                                 </h3>
                                 <div class="date-range">${escapeHtml(dateText)}</div>
-                            </div>
-                            <p class="entry-role">${escapeHtml(proj.subtitle || '')}${extraLinks}</p>
+                            </div>${roleBlock}
                         </div>
                         <p class="project-desc">${escapeHtml(proj.description)}</p>${highlights}${tags}
                     </article>`;
     })
     .join('\n\n');
 
-  const skillsItems = data.skills
+  const skillsItems = (data.skills || [])
     .map((s) => `                    <li class="tag-item">${escapeHtml(s.name)}</li>`)
     .join('\n');
 
-  const pubHtml = data.publications
-    .map(
-      (pub) => `                    <article>
+  const pubHtml = (data.publications || [])
+    .map((pub) => {
+      const safePubUrl = sanitizeHref(pub.url);
+      const heading = safePubUrl
+        ? `<a href="${escapeHtml(safePubUrl)}" target="_blank" rel="noopener noreferrer" class="inline-link">${escapeHtml(pub.name)}<span class="ext-arrow" aria-hidden="true">&nbsp;&#8599;</span><span class="sr-only"> (opens in a new tab)</span></a>`
+        : escapeHtml(pub.name);
+      return `                    <article>
                         <h3 class="entry-heading">
-                            <a href="${escapeHtml(pub.url)}" target="_blank" rel="noopener noreferrer" class="inline-link">${escapeHtml(pub.name)}<span class="ext-arrow" aria-hidden="true">&nbsp;&#8599;</span><span class="sr-only"> (opens in a new tab)</span></a>
+                            ${heading}
                         </h3>
                         <p class="entry-sub">Publication <span aria-hidden="true">&middot;</span> ${escapeHtml(pub.publisher)}</p>
-                    </article>`
-    )
+                    </article>`;
+    })
     .join('\n\n');
 
   const formatAwardDate = (iso) => {
@@ -375,7 +439,7 @@ ${highlights}
     return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
   };
 
-  const awardHtml = data.awards
+  const awardHtml = (data.awards || [])
     .map((award) => {
       const dateStr = award.date ? formatAwardDate(award.date) : '';
       const headingRow = dateStr
@@ -398,7 +462,7 @@ ${highlights}
     .map((lang) => escapeHtml(lang.fluency ? `${lang.language} (${lang.fluency})` : lang.language))
     .join(' &middot; ');
 
-  const eduHtml = data.education
+  const eduHtml = (data.education || [])
     .map(
       (edu) => `                    <article>
                         <div class="entry-top">
@@ -410,27 +474,85 @@ ${highlights}
     )
     .join('\n\n');
 
+  const sections = [
+    data.basics?.summary
+      ? `            <section id="about" tabindex="-1" aria-labelledby="about-heading" class="cv-section animate-fade-in delay-1">
+                <h2 id="about-heading" class="section-title">Summary</h2>
+                <p class="summary-copy">
+                    ${escapeHtml(data.basics.summary)}
+                </p>
+            </section>`
+      : '',
+    workHtml
+      ? `            <section id="experience" aria-labelledby="experience-heading" class="cv-section animate-fade-in delay-2">
+                <h2 id="experience-heading" class="section-title">Professional Experience</h2>
+                <div class="work-list">
+
+${workHtml}
+
+                </div>
+            </section>`
+      : '',
+    projectsHtml
+      ? `            <section id="projects" aria-labelledby="projects-heading" class="cv-section animate-fade-in delay-3${allProjectsNoPrint ? ' no-print' : ''}">
+                <h2 id="projects-heading" class="section-title">Selected Projects</h2>
+                <div class="work-list">
+
+${projectsHtml}
+
+                </div>
+            </section>`
+      : '',
+    skillsItems
+      ? `            <section id="skills" aria-labelledby="skills-heading" class="cv-section animate-fade-in delay-4">
+                <h2 id="skills-heading" class="section-title">Skills</h2>
+                <ul class="tag-list tag-list--skills">
+${skillsItems}
+                </ul>
+            </section>`
+      : '',
+    pubHtml || awardHtml
+      ? `            <section id="publications" aria-labelledby="publications-heading" class="cv-section animate-fade-in delay-5">
+                <h2 id="publications-heading" class="section-title">Publications &amp; Awards</h2>
+                <div class="stack-list">
+${[pubHtml, awardHtml].filter(Boolean).join('\n\n')}
+                </div>
+            </section>`
+      : '',
+    eduHtml
+      ? `            <section id="education" aria-labelledby="education-heading" class="cv-section animate-fade-in delay-6">
+                <h2 id="education-heading" class="section-title">Education</h2>
+                <div class="stack-list stack-list--compact">
+${eduHtml}
+                </div>
+            </section>`
+      : '',
+    languagesText
+      ? `            <section id="languages" aria-labelledby="languages-heading" class="cv-section">
+                <h2 id="languages-heading" class="section-title">Languages</h2>
+                <p class="edu-degree">${languagesText}</p>
+            </section>`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  const locationBlock = locationText
+    ? `
+                    <p class="cv-location">
+                        <span class="location-label">
+                            ${ICONS.pin}
+                            ${escapeHtml(locationText)}
+                        </span>
+                    </p>`
+    : '';
+
   return `            <header class="cv-header animate-fade-in">
                 <div class="header-info">
                     <h1 class="cv-name" id="resume-name">${escapeHtml(data.basics.name)}</h1>
-                    <p class="cv-tagline">${escapeHtml(data.basics.label)}</p>
-                    <p class="cv-location">
-                        <span class="location-label">
-                            <svg class="icon-pin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                                <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path>
-                                <circle cx="12" cy="10" r="3"></circle>
-                            </svg>
-                            ${escapeHtml(locationText)}
-                        </span>
-                    </p>
+                    <p class="cv-tagline">${escapeHtml(data.basics.label)}</p>${locationBlock}
                     <div class="print-contact">
-                        <a href="${escapeHtml(data.basics.url)}">${escapeHtml(domain)}</a>
-                        <span aria-hidden="true">/</span>
-                        <a href="mailto:${escapeHtml(data.basics.email)}">${escapeHtml(data.basics.email)}</a>
-                        <span aria-hidden="true">/</span>
-                        <a href="${escapeHtml(github?.url || '')}">${escapeHtml(githubDisplay)}</a>
-                        <span aria-hidden="true">/</span>
-                        <a href="${escapeHtml(linkedin?.url || '')}">${escapeHtml(linkedinDisplay)}</a>
+                        ${printContactEntries.join('\n                        <span aria-hidden="true">/</span>\n                        ')}
                     </div>
                 </div>
                 <picture class="avatar-picture">
@@ -441,141 +563,87 @@ ${highlights}
                 <div class="header-actions no-print">
                     <nav aria-label="Social links">
                         <ul class="contact-list">
-                            <li>
-                                <a href="mailto:${escapeHtml(data.basics.email)}" class="icon-btn" aria-label="Email">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                                        <rect width="20" height="16" x="2" y="4" rx="2"></rect>
-                                        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
-                                    </svg>
-                                    <span class="sr-only">Email</span>
-                                </a>
-                            </li>
-                            <li>
-                                <a href="${escapeHtml(github?.url || '')}" target="_blank" rel="noopener noreferrer" class="icon-btn" aria-label="GitHub Profile (opens in a new tab)">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
-                                        <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"></path>
-                                    </svg>
-                                    <span class="sr-only">GitHub</span>
-                                </a>
-                            </li>
-                            <li>
-                                <a href="${escapeHtml(linkedin?.url || '')}" target="_blank" rel="noopener noreferrer" class="icon-btn" aria-label="LinkedIn Profile (opens in a new tab)">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
-                                        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"></path>
-                                    </svg>
-                                    <span class="sr-only">LinkedIn</span>
-                                </a>
-                            </li>
+${headerSocialItems}
                         </ul>
                     </nav>
-                    <a href="${escapeHtml(data.meta.resumePdf)}" class="icon-btn" aria-label="Download My Resume (PDF)">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                            <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path>
-                            <path d="M14 2v4a2 2 0 0 0 2 2h4"></path>
-                            <path d="M12 18v-6"></path>
-                            <path d="m9 15 3 3 3-3"></path>
-                        </svg>
+                    <a href="${escapeHtml(endpoints.resumePdfPath)}" class="icon-btn" aria-label="Download My Resume (PDF)">
+                        ${ICONS.download}
                         <span class="sr-only">Download My Resume</span>
                     </a>
                     <button id="theme-toggle" type="button" class="icon-btn" aria-label="Switch to dark theme" aria-pressed="false">
-                        <svg class="theme-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                            <circle cx="12" cy="12" r="4"></circle>
-                            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
-                        </svg>
-                        <svg class="theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                        </svg>
+                        ${ICONS.sun}
+                        ${ICONS.moon}
                     </button>
                     <button id="command-trigger-mobile" type="button" class="icon-btn mobile-only-btn" aria-label="Open command menu" aria-haspopup="dialog" aria-controls="command-dialog" aria-expanded="false">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <path d="m21 21-4.3-4.3"></path>
-                        </svg>
+                        ${ICONS.search}
                     </button>
                 </div>
             </header>
 
-            <main id="main-content" class="cv-main" tabindex="-1">
-            <section id="about" tabindex="-1" aria-labelledby="about-heading" class="cv-section animate-fade-in delay-1">
-                <h2 id="about-heading" class="section-title">Summary</h2>
-                <p class="summary-copy">
-                    ${escapeHtml(data.basics.summary)}
-                </p>
-            </section>
-
-            <section id="experience" aria-labelledby="experience-heading" class="cv-section animate-fade-in delay-2">
-                <h2 id="experience-heading" class="section-title">Professional Experience</h2>
-                <div class="work-list">
-
-${workHtml}
-
-                </div>
-            </section>
-
-            <section id="projects" aria-labelledby="projects-heading" class="cv-section animate-fade-in delay-3${allProjectsNoPrint ? ' no-print' : ''}">
-                <h2 id="projects-heading" class="section-title">Selected Projects</h2>
-                <div class="work-list">
-
-${projectsHtml}
-
-                </div>
-            </section>
-
-            <section id="skills" aria-labelledby="skills-heading" class="cv-section animate-fade-in delay-4">
-                <h2 id="skills-heading" class="section-title">Skills</h2>
-                <ul class="tag-list tag-list--skills">
-${skillsItems}
-                </ul>
-            </section>
-
-            <section id="publications" aria-labelledby="publications-heading" class="cv-section animate-fade-in delay-5">
-                <h2 id="publications-heading" class="section-title">Publications &amp; Awards</h2>
-                <div class="stack-list">
-${pubHtml}
-
-${awardHtml}
-                </div>
-            </section>
-
-            <section id="education" aria-labelledby="education-heading" class="cv-section animate-fade-in delay-6">
-                <h2 id="education-heading" class="section-title">Education</h2>
-                <div class="stack-list stack-list--compact">
-${eduHtml}
-                </div>
-            </section>${
-              languagesText
-                ? `
-
-            <section id="languages" aria-labelledby="languages-heading" class="cv-section">
-                <h2 id="languages-heading" class="section-title">Languages</h2>
-                <p class="edu-degree">${languagesText}</p>
-            </section>`
-                : ''
-            }
-            </main>`;
+${sections}`;
 }
 
-export function buildCommandMenuMeta(data) {
-  const siteUrl = String(data.basics.url || '').replace(/\/$/, '');
-  const host = siteUrl.replace(/^https?:\/\//, '');
-  const github = data.basics.profiles.find((p) => p.network.toLowerCase() === 'github');
-  const linkedin = data.basics.profiles.find((p) => p.network.toLowerCase() === 'linkedin');
-  const meta = {
-    email: data.basics.email,
-    siteUrl,
-    host,
-    githubUrl: github?.url || '',
-    linkedinUrl: linkedin?.url || '',
-    hasLanguages: Boolean(data.languages?.length),
+function resolveTemplatePath(rootDir) {
+  const candidate = path.join(rootDir, 'src', 'templates', 'index.html');
+  return fs.existsSync(candidate) ? candidate : path.join(TEMPLATES_DIR, 'index.html');
+}
+
+export function buildIndexHtml(
+  data,
+  { rootDir = ROOT, year = resolveBuildYear(data, rootDir) } = {}
+) {
+  const endpoints = getSiteEndpoints(data);
+  const template = fs.readFileSync(resolveTemplatePath(rootDir), 'utf8');
+  const formattedJsonLd = JSON.stringify(buildJsonLd(data), null, 2)
+    .replace(/<\//g, '<\\/')
+    .split('\n')
+    .map((line) => `    ${line}`)
+    .join('\n');
+  const jsonLdBlock = `<script type="application/ld+json">\n${formattedJsonLd}\n    </script>`;
+
+  const canonicalUrl = data.meta?.canonical || `${endpoints.baseUrl}/`;
+  const headLinks = [
+    `<link rel="canonical" href="${escapeHtml(canonicalUrl)}">`,
+    `<link rel="alternate" type="application/json" href="${escapeHtml(endpoints.resumeJsonPath)}" title="JSON Resume">`,
+    `<link rel="alternate" type="text/plain" href="${escapeHtml(endpoints.llmsTxtPath)}" title="LLMs.txt">`,
+  ].join('\n    ');
+
+  const skipLinkHref = data.basics?.summary
+    ? '#about'
+    : data.work?.length
+      ? '#experience'
+      : '#main-content';
+
+  const footerLinks = [
+    { href: endpoints.architecturePath, label: 'Architecture' },
+    { href: endpoints.qualityPath, label: 'Quality Report' },
+    { href: endpoints.resumeJsonPath, label: 'JSON Resume' },
+    { href: endpoints.llmsTxtPath, label: 'llms.txt' },
+  ];
+
+  const replacements = {
+    '{{META}}': buildIndexMeta(data),
+    '{{THEME_COLOR_METAS}}': renderThemeColorMetas('    '),
+    '{{CSP_META}}': renderCspMeta(),
+    '{{HEAD_LINKS}}': headLinks,
+    '{{JSONLD}}': jsonLdBlock,
+    '{{SKIP_LINK_HREF}}': escapeHtml(skipLinkHref),
+    '{{CV_CONTENT}}': buildCvContentHtml(data),
+    '{{COPYRIGHT}}': `<span>&copy; ${escapeHtml(String(year))} ${escapeHtml(data.basics.name)}</span>`,
+    '{{FOOTER_LINKS}}': renderFooterLinks(footerLinks),
+    '{{COMMAND_BAR}}': renderCommandBarHtml(),
   };
-  return `const RESUME_META = {\n  email: '${meta.email}',\n  siteUrl: '${meta.siteUrl}',\n  host: '${meta.host}',\n  githubUrl: '${meta.githubUrl}',\n  linkedinUrl: '${meta.linkedinUrl}',\n  hasLanguages: ${meta.hasLanguages},\n};`;
+
+  let html = template;
+  for (const [token, value] of Object.entries(replacements)) {
+    html = html.replace(token, () => value);
+  }
+  return html;
 }
 
-export function buildNotFoundHtml(data, year = new Date().getUTCFullYear()) {
-  const domain = String(data.basics.url || '').replace(/^https?:\/\//, '');
-  const copyrightHtml = `<!-- COPYRIGHT_START --><span>&copy; ${year} ${escapeHtml(data.basics.name)}</span><!-- COPYRIGHT_END -->`;
-  const subtitleHtml = `<!-- SUBTITLE_START --><p class="entry-sub">${escapeHtml(data.basics.label)}</p><!-- SUBTITLE_END -->`;
-  const mainSectionsHtml = `            <section class="panel-card panel-card--spacious">
+export function build404Html(data, { year = resolveBuildYear(data) } = {}) {
+  const endpoints = getSiteEndpoints(data);
+  const mainHtml = `            <section class="panel-card panel-card--spacious">
                 <p class="section-title">error 404</p>
                 <h1 class="cv-name error-title">Page Not Found</h1>
                 <p class="summary-copy error-copy">
@@ -583,52 +651,28 @@ export function buildNotFoundHtml(data, year = new Date().getUTCFullYear()) {
                 </p>
                 <div class="error-actions">
                     <a href="/" class="primary-link">Back to Portfolio</a>
-                    <a href="/resume.pdf" class="ghost-link">Download Resume (PDF)</a>
-                    <a href="/quality/" class="ghost-link">Quality Report</a>
+                    <a href="${escapeHtml(endpoints.resumePdfPath)}" class="ghost-link">Download Resume (PDF)</a>
+                    <a href="${escapeHtml(endpoints.qualityPath)}" class="ghost-link">Quality Report</a>
                 </div>
             </section>`;
 
-  return renderSubpageDocument({
+  return renderSubpageLayout({
     title: `Page Not Found (404) - ${data.basics.name}`,
-    description: `The requested page could not be found on ${domain}.`,
+    description: `The requested page could not be found on ${endpoints.domain}.`,
     robots: 'noindex',
     ownerName: data.basics.name,
-    subtitleHtml,
+    subtitleHtml: `<p class="entry-sub">${escapeHtml(data.basics.label)}</p>`,
     navLinks: [{ href: '/', label: 'Portfolio' }],
-    mainSectionsHtml,
+    mainHtml,
     footerLinks: [
       { href: '/', label: 'Portfolio' },
-      { href: '/architecture/', label: 'Architecture' },
-      { href: '/quality/', label: 'Quality Report' },
-      { href: '/resume.json', label: 'JSON Resume' },
-      { href: '/llms.txt', label: 'llms.txt' },
+      { href: endpoints.architecturePath, label: 'Architecture' },
+      { href: endpoints.qualityPath, label: 'Quality Report' },
+      { href: endpoints.resumeJsonPath, label: 'JSON Resume' },
+      { href: endpoints.llmsTxtPath, label: 'llms.txt' },
     ],
-    copyrightHtml,
-    assetUrls: getAssetUrls(path.join(ROOT, '.ci-reports'), false),
+    copyrightYear: year,
   });
-}
-
-function replaceMarkedSection(content, startMarker, endMarker, innerBlock, fileName, indent = '') {
-  const startIdx = content.indexOf(startMarker);
-  const endIdx = content.indexOf(endMarker);
-  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
-    throw new Error(`Could not find ${startMarker} / ${endMarker} markers in ${fileName}`);
-  }
-  const replacement = `${startMarker}\n${indent}${innerBlock}\n${indent}${endMarker}`;
-  return content.slice(0, startIdx) + replacement + content.slice(endIdx + endMarker.length);
-}
-
-function replaceInlineMarkers(content, startMarker, endMarker, innerText, fileName) {
-  const startIdx = content.indexOf(startMarker);
-  const endIdx = content.indexOf(endMarker);
-  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
-    throw new Error(`Could not find ${startMarker} / ${endMarker} markers in ${fileName}`);
-  }
-  return (
-    content.slice(0, startIdx) +
-    `${startMarker}${innerText}${endMarker}` +
-    content.slice(endIdx + endMarker.length)
-  );
 }
 
 export function buildSiteWebmanifest(data, currentManifest = {}) {
@@ -636,8 +680,10 @@ export function buildSiteWebmanifest(data, currentManifest = {}) {
     {
       ...currentManifest,
       name: data.basics.name,
-      short_name: data.meta.shortName || currentManifest.short_name || data.basics.name,
-      description: data.meta.manifestDescription || data.basics.label,
+      short_name: data.meta?.shortName || currentManifest.short_name || data.basics.name,
+      description: data.meta?.manifestDescription || data.basics.label,
+      background_color: THEME_COLORS.light,
+      theme_color: THEME_COLORS.light,
     },
     null,
     2
@@ -645,12 +691,12 @@ export function buildSiteWebmanifest(data, currentManifest = {}) {
 }
 
 export function buildSitemapXml(data) {
-  const base = String(data.basics.url || '').replace(/\/$/, '');
+  const endpoints = getSiteEndpoints(data);
   const entries = [
-    { loc: `${base}/`, changefreq: 'monthly', priority: '1.0' },
-    { loc: `${base}/resume.pdf`, changefreq: 'monthly', priority: '0.8' },
-    { loc: `${base}/architecture/`, changefreq: 'monthly', priority: '0.6' },
-    { loc: `${base}/quality/`, changefreq: 'weekly', priority: '0.6' },
+    { loc: `${endpoints.baseUrl}/`, changefreq: 'monthly', priority: '1.0' },
+    { loc: endpoints.resumePdfUrl, changefreq: 'monthly', priority: '0.8' },
+    { loc: endpoints.architectureUrl, changefreq: 'monthly', priority: '0.6' },
+    { loc: endpoints.qualityReportUrl, changefreq: 'weekly', priority: '0.6' },
   ];
   const urls = entries
     .map(
@@ -666,14 +712,19 @@ export function buildSitemapXml(data) {
 }
 
 export function buildRobotsTxt(data) {
-  const base = String(data.basics.url || '').replace(/\/$/, '');
-  return `User-agent: *\nAllow: /\n\nSitemap: ${base}/sitemap.xml\n`;
+  const endpoints = getSiteEndpoints(data);
+  return `User-agent: *\nAllow: /\n\nSitemap: ${endpoints.sitemapUrl}\n`;
+}
+
+export function buildCname(data) {
+  const endpoints = getSiteEndpoints(data);
+  return `${endpoints.domain}\n`;
 }
 
 export function syncSecurityTxt(currentContent, data) {
-  const base = String(data.basics.url || '').replace(/\/$/, '');
+  const endpoints = getSiteEndpoints(data);
   const nextContact = `Contact: mailto:${data.basics.email}`;
-  const nextCanonical = `Canonical: ${base}/.well-known/security.txt`;
+  const nextCanonical = `Canonical: ${endpoints.securityTxtUrl}`;
   return currentContent
     .replace(/^Contact:.*$/m, nextContact)
     .replace(/^Canonical:.*$/m, nextCanonical);
@@ -687,137 +738,63 @@ export function syncAllFromResume(rootDir = ROOT) {
   const manifestPath = path.join(rootDir, 'site.webmanifest');
   const sitemapPath = path.join(rootDir, 'sitemap.xml');
   const robotsPath = path.join(rootDir, 'robots.txt');
+  const cnamePath = path.join(rootDir, 'CNAME');
   const securityTxtPath = path.join(rootDir, '.well-known', 'security.txt');
-  const commandPanelPath = path.join(rootDir, 'assets', 'js', 'command-menu-panel.js');
 
-  const data = JSON.parse(fs.readFileSync(resumePath, 'utf8'));
-  const year = new Date().getUTCFullYear();
-  const copyrightHtml = `<span>&copy; ${year} ${escapeHtml(data.basics.name)}</span>`;
+  const data = readJson(resumePath);
+  const year = resolveBuildYear(data, rootDir);
 
-  // 1. Sync index.html
-  let indexHtml = fs.readFileSync(indexPath, 'utf8');
-  const prevIndexHtml = indexHtml;
-  indexHtml = replaceMarkedSection(
-    indexHtml,
-    '<!-- META_START -->',
-    '<!-- META_END -->',
-    buildIndexMeta(data),
-    'index.html',
-    '    '
-  );
-
-  const formattedJsonLd = JSON.stringify(buildJsonLd(data), null, 2)
-    .replace(/<\//g, '<\\/')
-    .split('\n')
-    .map((line) => `    ${line}`)
-    .join('\n');
-  indexHtml = replaceMarkedSection(
-    indexHtml,
-    '<!-- JSONLD_START -->',
-    '<!-- JSONLD_END -->',
-    `<script type="application/ld+json">\n${formattedJsonLd}\n    </script>`,
-    'index.html',
-    '    '
-  );
-  indexHtml = replaceMarkedSection(
-    indexHtml,
-    '<!-- CV_CONTENT_START -->',
-    '<!-- CV_CONTENT_END -->',
-    buildCvContentHtml(data),
-    'index.html',
-    ''
-  );
-  indexHtml = replaceInlineMarkers(
-    indexHtml,
-    '<!-- COPYRIGHT_START -->',
-    '<!-- COPYRIGHT_END -->',
-    copyrightHtml,
-    'index.html'
-  );
-  if (indexHtml !== prevIndexHtml) {
-    fs.writeFileSync(indexPath, indexHtml, 'utf8');
-    console.log('Updated index.html (meta, JSON-LD, CV DOM, copyright) from resume.json');
+  if (writeTextIfChanged(indexPath, buildIndexHtml(data, { rootDir, year }))) {
+    console.log('Updated index.html from resume.json + src/templates/index.html');
   } else {
     console.log('index.html is already in sync with resume.json');
   }
 
-  // 2. Sync 404.html via shared subpage layout
-  const prevNotFoundHtml = fs.existsSync(notFoundPath) ? fs.readFileSync(notFoundPath, 'utf8') : '';
-  const nextNotFoundHtml = buildNotFoundHtml(data, year);
-  if (nextNotFoundHtml !== prevNotFoundHtml) {
-    fs.writeFileSync(notFoundPath, nextNotFoundHtml, 'utf8');
+  if (writeTextIfChanged(notFoundPath, build404Html(data, { year }))) {
     console.log('Updated 404.html from resume.json');
   } else {
     console.log('404.html is already in sync with resume.json');
   }
 
-  // 3. Sync command-menu-panel.js metadata
-  if (fs.existsSync(commandPanelPath)) {
-    const prevPanel = fs.readFileSync(commandPanelPath, 'utf8');
-    const nextPanel = replaceMarkedSection(
-      prevPanel,
-      '/* RESUME_META_START */',
-      '/* RESUME_META_END */',
-      buildCommandMenuMeta(data),
-      'assets/js/command-menu-panel.js'
-    );
-    if (nextPanel !== prevPanel) {
-      fs.writeFileSync(commandPanelPath, nextPanel, 'utf8');
-      console.log('Updated assets/js/command-menu-panel.js from resume.json');
-    } else {
-      console.log('assets/js/command-menu-panel.js is already in sync with resume.json');
-    }
-  }
-
-  // 4. Sync llms.txt
-  const nextLlms = buildLlmsTxt(data);
-  const prevLlms = fs.existsSync(llmsPath) ? fs.readFileSync(llmsPath, 'utf8') : '';
-  if (nextLlms !== prevLlms) {
-    fs.writeFileSync(llmsPath, nextLlms, 'utf8');
+  if (writeTextIfChanged(llmsPath, buildLlmsTxt(data, year))) {
     console.log('Updated llms.txt from resume.json');
   } else {
     console.log('llms.txt is already in sync with resume.json');
   }
 
-  // 5. Sync site.webmanifest
   const prevManifestRaw = fs.existsSync(manifestPath)
     ? fs.readFileSync(manifestPath, 'utf8')
     : '{}';
   const prevManifest = JSON.parse(prevManifestRaw);
   const nextManifestRaw = buildSiteWebmanifest(data, prevManifest);
-  if (nextManifestRaw !== prevManifestRaw) {
-    fs.writeFileSync(manifestPath, nextManifestRaw, 'utf8');
+  if (writeTextIfChanged(manifestPath, nextManifestRaw)) {
     console.log('Updated site.webmanifest from resume.json');
   } else {
     console.log('site.webmanifest is already in sync with resume.json');
   }
 
-  // 6. Sync sitemap.xml
-  const prevSitemap = fs.existsSync(sitemapPath) ? fs.readFileSync(sitemapPath, 'utf8') : '';
-  const nextSitemap = buildSitemapXml(data);
-  if (nextSitemap !== prevSitemap) {
-    fs.writeFileSync(sitemapPath, nextSitemap, 'utf8');
+  if (writeTextIfChanged(sitemapPath, buildSitemapXml(data))) {
     console.log('Updated sitemap.xml from resume.json');
   } else {
     console.log('sitemap.xml is already in sync with resume.json');
   }
 
-  // 7. Sync robots.txt
-  const prevRobots = fs.existsSync(robotsPath) ? fs.readFileSync(robotsPath, 'utf8') : '';
-  const nextRobots = buildRobotsTxt(data);
-  if (nextRobots !== prevRobots) {
-    fs.writeFileSync(robotsPath, nextRobots, 'utf8');
+  if (writeTextIfChanged(robotsPath, buildRobotsTxt(data))) {
     console.log('Updated robots.txt from resume.json');
   } else {
     console.log('robots.txt is already in sync with resume.json');
   }
 
-  // 8. Sync .well-known/security.txt Contact & Canonical
+  if (writeTextIfChanged(cnamePath, buildCname(data))) {
+    console.log('Updated CNAME from resume.json');
+  } else {
+    console.log('CNAME is already in sync with resume.json');
+  }
+
   if (fs.existsSync(securityTxtPath)) {
     const prevSec = fs.readFileSync(securityTxtPath, 'utf8');
     const nextSec = syncSecurityTxt(prevSec, data);
-    if (nextSec !== prevSec) {
-      fs.writeFileSync(securityTxtPath, nextSec, 'utf8');
+    if (writeTextIfChanged(securityTxtPath, nextSec)) {
       console.log('Updated .well-known/security.txt from resume.json');
     } else {
       console.log('.well-known/security.txt is already in sync with resume.json');
@@ -825,10 +802,6 @@ export function syncAllFromResume(rootDir = ROOT) {
   }
 }
 
-const isEntrypoint =
-  Boolean(process.argv[1]) &&
-  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
-
-if (isEntrypoint) {
+if (isEntrypoint(import.meta.url)) {
   syncAllFromResume();
 }

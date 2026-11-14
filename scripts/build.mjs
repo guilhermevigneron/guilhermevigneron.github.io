@@ -1,104 +1,53 @@
-import { execFileSync, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { atomicWriteFileSync, rewriteAssetRefs } from './lib/chrome.mjs';
+import { buildArchitecturePage } from './generate-architecture.mjs';
+import { generateOgCard } from './generate-og-card.mjs';
+import { generatePdf } from './generate-pdf.mjs';
+import { buildQualityPage } from './generate-quality-report.mjs';
+import { withBrowser, withStaticServer } from './lib/browser.mjs';
+import { rewriteAssetRefs } from './lib/html.mjs';
+import { readJson, writeReportJson } from './lib/io.mjs';
+import { isEntrypoint, REPORTS_DIR, RESUME_PATH, ROOT, SITE_DIR } from './lib/paths.mjs';
+import { getSiteEndpoints } from './lib/site-config.mjs';
 import { minifyCssFiles, minifyJsFiles } from './minify-assets.mjs';
 import { minifyHtml } from './minify-html.mjs';
-import { buildVCard } from './sync-resume.mjs';
+import { buildVCard, syncAllFromResume } from './sync-resume.mjs';
+import { validateAllFromRoot } from './validate-sync.mjs';
 
-const ROOT = process.cwd();
-const siteDir = path.join(ROOT, '_site');
-const reportsDir = path.join(ROOT, '.ci-reports');
-const skipSync = process.argv.includes('--no-sync');
-const activeChildren = new Set();
+export { rewriteAssetRefs };
 
-function runNodeScript(relScript) {
-  execFileSync(process.execPath, [path.join(ROOT, relScript)], {
-    stdio: 'inherit',
-  });
-}
-
-function terminateChildren(signal = 'SIGTERM') {
-  for (const child of activeChildren) {
-    if (child.exitCode === null && child.signalCode === null) {
-      try {
-        child.kill(signal);
-      } catch {
-        // Ignore already-exited child processes
-      }
-    }
-  }
-}
-
-function runNodeScriptAsync(relScript) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [path.join(ROOT, relScript)], {
-      stdio: 'inherit',
-    });
-    activeChildren.add(child);
-    child.on('error', (err) => {
-      activeChildren.delete(child);
-      reject(err);
-    });
-    child.on('close', (code, signal) => {
-      activeChildren.delete(child);
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(
-          new Error(
-            `${relScript} exited with code ${code ?? 'null'}${signal ? ` (signal ${signal})` : ''}`
-          )
-        );
-      }
-    });
-  });
-}
-
-async function runParallelGeneration() {
-  const tasks = [
-    runNodeScriptAsync('scripts/generate-pdf.mjs'),
-    runNodeScriptAsync('scripts/generate-og-card.mjs'),
-  ];
-  try {
-    await Promise.all(tasks);
-  } catch (err) {
-    terminateChildren('SIGTERM');
-    let forceKillTimer;
-    try {
-      await Promise.race([
-        Promise.allSettled(tasks),
-        new Promise((resolve) => {
-          forceKillTimer = setTimeout(resolve, 3000);
-          forceKillTimer.unref?.();
-        }),
-      ]);
-    } finally {
-      clearTimeout(forceKillTimer);
-    }
-    terminateChildren('SIGKILL');
-    throw err;
-  }
-}
+// Preserve upstream gate reports (lint, unit, security) that run before build
+const DOWNSTREAM_REPORTS = [
+  'html-validate.json',
+  'cypress-results.json',
+  'perf-report.json',
+  'og-report.json',
+  'pdf-report.json',
+  'asset-manifest.json',
+  'sync-validation.json',
+];
 
 function copyFile(srcRel, destRel = srcRel) {
   const src = path.join(ROOT, srcRel);
-  const dest = path.join(siteDir, destRel);
+  const dest = path.join(SITE_DIR, destRel);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.copyFileSync(src, dest);
 }
 
-function copyDir(srcRel, destRel = srcRel) {
-  const src = path.join(ROOT, srcRel);
-  const dest = path.join(siteDir, destRel);
-  if (!fs.existsSync(src)) return;
-  fs.cpSync(src, dest, { recursive: true });
+function copyStaticAssets() {
+  const srcAssets = path.join(ROOT, 'assets');
+  const destAssets = path.join(SITE_DIR, 'assets');
+  const srcJsDir = path.join(srcAssets, 'js');
+  if (!fs.existsSync(srcAssets)) return;
+  fs.cpSync(srcAssets, destAssets, {
+    recursive: true,
+    filter: (src) => src !== srcJsDir && !src.startsWith(`${srcJsDir}${path.sep}`),
+  });
 }
 
 function fingerprintAsset(relPath) {
-  const fullPath = path.join(siteDir, relPath);
+  const fullPath = path.join(SITE_DIR, relPath);
   if (!fs.existsSync(fullPath)) return `/${relPath}`;
   const hash = crypto
     .createHash('sha256')
@@ -107,43 +56,46 @@ function fingerprintAsset(relPath) {
     .slice(0, 8);
   const parsed = path.posix.parse(relPath);
   const hashedRel = path.posix.join(parsed.dir, `${parsed.name}.${hash}${parsed.ext}`);
-  fs.copyFileSync(fullPath, path.join(siteDir, hashedRel));
+  fs.copyFileSync(fullPath, path.join(SITE_DIR, hashedRel));
   return `/${hashedRel}`;
 }
 
 function rewriteTextFile(relPath, replacements) {
-  const target = path.join(siteDir, relPath);
+  const target = path.join(SITE_DIR, relPath);
   if (!fs.existsSync(target)) return;
   const content = fs.readFileSync(target, 'utf8');
   fs.writeFileSync(target, rewriteAssetRefs(content, replacements), 'utf8');
 }
 
-export { rewriteAssetRefs };
+function cleanDownstreamReports() {
+  if (!fs.existsSync(REPORTS_DIR)) return;
+  for (const reportFile of DOWNSTREAM_REPORTS) {
+    fs.rmSync(path.join(REPORTS_DIR, reportFile), { force: true });
+  }
+}
 
-export async function buildSite() {
+export async function runBuild({ skipSync = process.argv.includes('--no-sync') } = {}) {
+  console.log('0. Clearing stale downstream build & verification telemetry...');
+  cleanDownstreamReports();
+
   if (!skipSync) {
-    console.log('1. Syncing resume.json -> index.html, 404.html, llms.txt, manifest, sitemap...');
-    runNodeScript('scripts/sync-resume.mjs');
+    console.log(
+      '1. Syncing resume.json -> index.html, 404.html, llms.txt, manifest, sitemap, robots, CNAME...'
+    );
+    syncAllFromResume(ROOT);
   } else {
     console.log('1. Skipping sync (--no-sync); validating committed repository parity...');
   }
 
   console.log('2. Validating single-source-of-truth parity...');
-  runNodeScript('scripts/validate-sync.mjs');
+  validateAllFromRoot(ROOT);
 
   console.log('3. Preparing clean _site/ directory...');
-  fs.rmSync(siteDir, { recursive: true, force: true });
-  fs.mkdirSync(siteDir, { recursive: true });
-  for (const staleReport of [
-    'html-validate.json',
-    'cypress-results.json',
-    'perf-report.json',
-    'og-report.json',
-    'pdf-report.json',
-    'asset-manifest.json',
-  ]) {
-    fs.rmSync(path.join(reportsDir, staleReport), { force: true });
-  }
+  fs.rmSync(SITE_DIR, { recursive: true, force: true });
+  fs.mkdirSync(SITE_DIR, { recursive: true });
+
+  const resume = readJson(RESUME_PATH);
+  const endpoints = getSiteEndpoints(resume);
 
   const rootFiles = [
     'index.html',
@@ -162,14 +114,15 @@ export async function buildSite() {
     copyFile(file);
   }
   copyFile('.well-known/security.txt');
-  copyDir('assets');
+  copyStaticAssets();
 
-  const resume = JSON.parse(fs.readFileSync(path.join(ROOT, 'resume.json'), 'utf8'));
-  fs.writeFileSync(path.join(siteDir, 'contact.vcf'), buildVCard(resume), 'utf8');
+  const vcfPath = path.join(SITE_DIR, endpoints.contactVcfPath.replace(/^\/+/, ''));
+  fs.mkdirSync(path.dirname(vcfPath), { recursive: true });
+  fs.writeFileSync(vcfPath, buildVCard(resume), 'utf8');
 
-  console.log('4. Minifying split CSS and JS bundles via esbuild...');
-  await minifyCssFiles(siteDir);
-  await minifyJsFiles(siteDir);
+  console.log('4. Minifying & bundling split CSS and JS via esbuild...');
+  await minifyCssFiles(SITE_DIR);
+  await minifyJsFiles(SITE_DIR, resume);
 
   console.log('4b. Fingerprinting fonts, CSS, JS, icons, and avatar assets...');
   const monoFontUrl = fingerprintAsset('assets/fonts/GeistMono-Variable.woff2');
@@ -239,7 +192,7 @@ export async function buildSite() {
 
   console.log('4c. Minifying built HTML documents...');
   for (const htmlFile of ['index.html', '404.html']) {
-    const full = path.join(siteDir, htmlFile);
+    const full = path.join(SITE_DIR, htmlFile);
     fs.writeFileSync(full, minifyHtml(fs.readFileSync(full, 'utf8')), 'utf8');
   }
 
@@ -256,58 +209,62 @@ export async function buildSite() {
     commandMenuPanelJsUrl,
     faviconSvgUrl,
     appleTouchIconUrl,
+    icon192Url,
+    icon512Url,
+    icon512MaskableUrl,
     avatarReplacements,
   };
+  writeReportJson('asset-manifest.json', assetManifest);
 
-  fs.mkdirSync(reportsDir, { recursive: true });
-  atomicWriteFileSync(
-    path.join(reportsDir, 'asset-manifest.json'),
-    JSON.stringify(assetManifest, null, 2),
-    'utf8'
+  console.log(
+    `5. Generating ${endpoints.resumePdfPath} and ${endpoints.ogImagePath} (1200x630) via shared Chromium session...`
   );
-
-  console.log('5. Generating /resume.pdf and /assets/og-card.png (1200x630) in parallel...');
-  await runParallelGeneration();
+  await withStaticServer(SITE_DIR, async ({ baseUrl }) =>
+    withBrowser(async (browser, executablePath) => {
+      await Promise.all([
+        generatePdf({
+          browser,
+          baseUrl,
+          executablePath,
+          rootDir: ROOT,
+          siteDir: SITE_DIR,
+          reportsDir: REPORTS_DIR,
+          resume,
+        }),
+        generateOgCard({
+          browser,
+          baseUrl,
+          rootDir: ROOT,
+          siteDir: SITE_DIR,
+          reportsDir: REPORTS_DIR,
+          resume,
+        }),
+      ]);
+    })
+  );
 
   console.log('5b. Fingerprinting generated /assets/og-card.png for social cache busting...');
   const ogCardUrl = fingerprintAsset('assets/og-card.png');
-  const baseUrl = String(resume.basics.url || '').replace(/\/$/, '');
-  const rawOgUrl = resume.meta?.ogImageUrl || `${baseUrl}/assets/og-card.png`;
-  const hashedOgUrl = `${baseUrl}${ogCardUrl}`;
+  const rawOgUrl = endpoints.ogImageUrl;
+  const hashedOgUrl = `${endpoints.baseUrl}${ogCardUrl}`;
   rewriteTextFile('index.html', { [rawOgUrl]: hashedOgUrl });
-
   assetManifest.ogCardUrl = ogCardUrl;
-  atomicWriteFileSync(
-    path.join(reportsDir, 'asset-manifest.json'),
-    JSON.stringify(assetManifest, null, 2),
-    'utf8'
-  );
+  writeReportJson('asset-manifest.json', assetManifest);
 
-  console.log('6. Generating initial /quality/index.html & /quality/report.json...');
-  runNodeScript('scripts/generate-quality-report.mjs');
+  console.log(`6. Generating initial ${endpoints.qualityPath} & ${endpoints.qualityJsonPath}...`);
+  buildQualityPage({ rootDir: ROOT, siteDir: SITE_DIR, reportsDir: REPORTS_DIR, resume });
 
-  console.log('7. Generating /architecture/index.html...');
-  runNodeScript('scripts/generate-architecture.mjs');
+  console.log(`7. Generating ${endpoints.architecturePath}...`);
+  buildArchitecturePage({ rootDir: ROOT, siteDir: SITE_DIR, reportsDir: REPORTS_DIR, resume });
 
   console.log('Build complete: _site/ ready.');
 }
 
-const isEntrypoint =
-  Boolean(process.argv[1]) &&
-  import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
+export const buildSite = runBuild;
 
-if (isEntrypoint) {
-  const handleSignal = (signal) => {
-    console.error(`\nBuild interrupted by ${signal}; terminating child processes...`);
-    terminateChildren(signal);
-    const timer = setTimeout(() => {
-      terminateChildren('SIGKILL');
-      process.exit(signal === 'SIGINT' ? 130 : 143);
-    }, 3000);
-    timer.unref?.();
-  };
-  process.once('SIGINT', () => handleSignal('SIGINT'));
-  process.once('SIGTERM', () => handleSignal('SIGTERM'));
-
-  await buildSite();
+if (isEntrypoint(import.meta.url)) {
+  runBuild().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
 }
