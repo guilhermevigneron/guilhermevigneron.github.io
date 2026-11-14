@@ -188,10 +188,14 @@ export function evaluateQualityGates({
       title: 'Static Lint, Unit Tests & Dependency Audit',
       status: codeQualityStatus,
       summary:
-        'Biome code formatting & lint rules across JS/CSS/JSON, Node.js built-in unit tests for generators & HTTP path safety, and npm audit dependency checks.',
+        'Biome code formatting & lint rules across JS/CSS/JSON, Node.js built-in unit tests with enforced coverage thresholds, and npm audit dependency checks.',
       metric:
         lintReport && unitReport && securityReport
-          ? `Biome lint: ${lintStatus} · Unit tests: ${unitStatus} · npm audit: ${auditStatus}`
+          ? `Biome lint: ${lintStatus} · Unit tests: ${unitStatus}${
+              unitReport.coverage?.coverage
+                ? ` (${unitReport.coverage.coverage.lines.toFixed(1)}% lines, ${unitReport.coverage.coverage.functions.toFixed(1)}% funcs)`
+                : ''
+            } · npm audit: ${auditStatus}`
           : 'Pending npm run lint, test:unit & test:security',
     },
     {
@@ -380,6 +384,7 @@ export function buildQualityPage({
       ogCardBytes,
       contactVcfBytes,
     },
+    unitCoverage: unitReport?.coverage || null,
     aiEvaluation,
     flakyTriage,
     gates: cards,

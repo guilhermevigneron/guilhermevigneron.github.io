@@ -41,6 +41,11 @@ import { normalizePng } from '../scripts/lib/png.mjs';
 import { buildCommandMenuConfig, buildResumeEvidence } from '../scripts/lib/site-config.mjs';
 import { minifyCssFiles, minifyJsFiles } from '../scripts/minify-assets.mjs';
 import { minifyHtml } from '../scripts/minify-html.mjs';
+import {
+  COVERAGE_THRESHOLDS,
+  evaluateCoverageThresholds,
+  parseNodeCoverageReport,
+} from '../scripts/run-gate.mjs';
 import { validateHtmlFiles } from '../scripts/run-html-validate.mjs';
 import { createStaticServer, startStaticServer, stopStaticServer } from '../scripts/serve.mjs';
 import {
@@ -1523,6 +1528,26 @@ describe('grounded resume search & AI retrieval evaluation gate', () => {
     assert.equal(triage.flakyClusters, 2);
     assert.equal(triage.regressionClusters, 3);
     assert.equal(triage.envClusters, 1);
+  });
+
+  it('parses node --test coverage tables and enforces minimum line, function, and branch thresholds', () => {
+    const sampleOutput =
+      'ℹ all files                     |  81.82 |    73.46 |   87.31 | \nℹ end of coverage report';
+    const parsed = parseNodeCoverageReport(sampleOutput);
+    assert.deepEqual(parsed, { lines: 81.82, branches: 73.46, functions: 87.31 });
+
+    const passEval = evaluateCoverageThresholds(parsed, COVERAGE_THRESHOLDS);
+    assert.equal(passEval.passed, true);
+    assert.deepEqual(passEval.failures, []);
+
+    const failEval = evaluateCoverageThresholds(
+      { lines: 75, branches: 65, functions: 80 },
+      COVERAGE_THRESHOLDS
+    );
+    assert.equal(failEval.passed, false);
+    assert.equal(failEval.failures.length, 3);
+    assert.equal(parseNodeCoverageReport('no table here'), null);
+    assert.equal(evaluateCoverageThresholds(null).passed, false);
   });
 });
 

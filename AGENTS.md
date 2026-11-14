@@ -42,8 +42,9 @@ Zero-third-party-runtime-dependency personal portfolio & resume static site buil
    - All built HTML (`_site/index.html`, `_site/404.html`, `_site/quality/index.html`, `_site/architecture/index.html`) must pass `html-validate`.
    - Inline `<svg>` icons must include explicit dimensions, `aria-hidden="true"`, and `focusable="false"`.
    - External links must use `rel="noopener noreferrer"`.
-4. **Code Style:**
+4. **Code Style & Coverage Thresholds:**
    - Managed by Biome (`biome.json`): 2-space indentation, single quotes, ES5 trailing commas, 100-char line width.
+   - Unit test coverage (`scripts/run-gate.mjs` via `node --test --experimental-test-coverage`) enforces `>= 80%` line coverage, `>= 85%` function coverage, and `>= 70%` branch coverage.
 
 ## Verification Commands
 
@@ -57,7 +58,7 @@ Or run targeted checks as needed:
 
 - `npm run lint` — Biome check (lint + format) across JS, CSS, JSON, and HTML (records telemetry)
 - `npm run lint:fix` — Auto-fix Biome lint and formatting issues
-- `npm run test:unit` — Unit tests (`tests/unit.test.mjs`, records telemetry)
+- `npm run test:unit` — Unit tests + coverage threshold gate (`tests/unit.test.mjs`, records telemetry)
 - `npm run test:security` — `npm audit --audit-level=moderate` (records telemetry)
 - `npm run test:sync` — Validate `resume.json` parity across synced files
 - `npm run build` — Sync (skip with `-- --no-sync`), validate, bundle/fingerprint assets, generate `/resume.pdf`, OG card, `/quality/`, and `/architecture/`
