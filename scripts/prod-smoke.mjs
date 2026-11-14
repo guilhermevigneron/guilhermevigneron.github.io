@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validatePdfBuffer } from './lib/pdf.mjs';
+import { startStaticServer, stopStaticServer } from './serve.mjs';
 
 const ROOT = process.cwd();
 const DEFAULT_BASE_URL = 'https://guilhermevigneron.dev';
@@ -619,7 +620,6 @@ async function main() {
     );
   }
 
-  const { startStaticServer, stopStaticServer } = await import('./lib/browser.mjs');
   const { server, baseUrl } = await startStaticServer(siteDir);
   try {
     await runSmokeTests({
