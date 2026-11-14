@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { startStaticServer, stopStaticServer } from './lib/browser.mjs';
 import { validatePdfBuffer } from './lib/pdf.mjs';
 
 const ROOT = process.cwd();
@@ -620,6 +619,7 @@ async function main() {
     );
   }
 
+  const { startStaticServer, stopStaticServer } = await import('./lib/browser.mjs');
   const { server, baseUrl } = await startStaticServer(siteDir);
   try {
     await runSmokeTests({
