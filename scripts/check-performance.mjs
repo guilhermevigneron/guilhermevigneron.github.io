@@ -35,7 +35,7 @@ export const BUDGETS = {
   maxLongTaskMs: 100,
 };
 
-function readAssetManifest(rootDir = ROOT) {
+export function readAssetManifest(rootDir = ROOT) {
   const manifestPath = path.join(rootDir, '.ci-reports', 'asset-manifest.json');
   if (!fs.existsSync(manifestPath)) return null;
   try {
@@ -45,7 +45,7 @@ function readAssetManifest(rootDir = ROOT) {
   }
 }
 
-function resolveAvatarPath(manifest, relPath) {
+export function resolveAvatarPath(manifest, relPath) {
   return (
     manifest?.avatarReplacements?.[`/${relPath}`] ||
     manifest?.avatarReplacements?.[relPath] ||
@@ -53,7 +53,7 @@ function resolveAvatarPath(manifest, relPath) {
   );
 }
 
-function fileSize(targetSiteDir, relPath) {
+export function fileSize(targetSiteDir, relPath) {
   const normalized = String(relPath).replace(/^\//, '');
   const full = path.join(targetSiteDir, normalized);
   if (!fs.existsSync(full)) {
@@ -62,7 +62,7 @@ function fileSize(targetSiteDir, relPath) {
   return fs.statSync(full).size;
 }
 
-async function waitForFontsReady(page) {
+export async function waitForFontsReady(page) {
   await page.evaluate(() =>
     Promise.race([
       document.fonts.ready,
@@ -73,7 +73,7 @@ async function waitForFontsReady(page) {
   );
 }
 
-function brotliSize(targetSiteDir, relPath) {
+export function brotliSize(targetSiteDir, relPath) {
   const full = path.join(targetSiteDir, String(relPath).replace(/^\//, ''));
   return zlib.brotliCompressSync(fs.readFileSync(full)).length;
 }
@@ -228,7 +228,7 @@ export function evaluateVitalsBudgets(vitals, budgets = BUDGETS, overflowChecks 
   }
 }
 
-async function attachRouteInterceptor(page, baseOrigin, blockedExternalRequests, axeSource) {
+export async function attachRouteInterceptor(page, baseOrigin, blockedExternalRequests, axeSource) {
   await page.route('**/*', (route) => {
     const url = route.request().url();
     if (axeSource) {
@@ -260,7 +260,7 @@ async function attachRouteInterceptor(page, baseOrigin, blockedExternalRequests,
   });
 }
 
-async function measureOverflowAtWidths(page, baseUrl, route, widths) {
+export async function measureOverflowAtWidths(page, baseUrl, route, widths) {
   await page.goto(`${baseUrl}${route}`, { waitUntil: 'load' });
   await page.evaluate(() => document.fonts.ready);
   const results = [];
@@ -288,7 +288,7 @@ async function measureOverflowAtWidths(page, baseUrl, route, widths) {
   return results;
 }
 
-async function verifyQualityReportArtifacts(targetSiteDir, baseUrl) {
+export async function verifyQualityReportArtifacts(targetSiteDir, baseUrl) {
   const reportPath = path.join(targetSiteDir, 'quality', 'report.json');
   assert.ok(fs.existsSync(reportPath), 'Missing _site/quality/report.json');
   const reportJson = JSON.parse(fs.readFileSync(reportPath, 'utf8'));

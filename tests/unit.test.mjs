@@ -10,9 +10,17 @@ import vm from 'node:vm';
 import zlib from 'node:zlib';
 import * as esbuild from 'esbuild';
 import {
+  attachRouteInterceptor,
   BUDGETS,
+  brotliSize,
   evaluateAssetBudgets,
   evaluateVitalsBudgets,
+  fileSize,
+  measureOverflowAtWidths,
+  readAssetManifest,
+  resolveAvatarPath,
+  verifyQualityReportArtifacts,
+  waitForFontsReady,
 } from '../scripts/check-performance.mjs';
 import { buildArchitecturePage } from '../scripts/generate-architecture.mjs';
 import { buildBlogPages, loadBlogPosts } from '../scripts/generate-blog.mjs';
@@ -21,14 +29,30 @@ import { evaluateAiReadiness, GOLDEN_RECRUITER_QUERIES } from '../scripts/lib/ai
 import {
   startStaticServer as browserStartStaticServer,
   stopStaticServer as browserStopStaticServer,
+  closeBrowserSafely,
+  enforceLocalRouting,
+  findBrowserExecutable,
+  registerCleanupSignals,
+  withStaticServer,
 } from '../scripts/lib/browser.mjs';
 import {
+  classifyFailureCluster,
   evaluateFlakyTriage,
   GOLDEN_TRIAGE_RUNS,
   normalizeFailureSignature,
 } from '../scripts/lib/flaky-triage.mjs';
 import { escapeHtml, rewriteAssetRefs, sanitizeHref } from '../scripts/lib/html.mjs';
-import { normalizeBaseUrl, toPathname } from '../scripts/lib/io.mjs';
+import {
+  getCombinedSizeBytes,
+  getFileSizeBytes,
+  normalizeBaseUrl,
+  readJsonIfExists,
+  resolveBuildTimestampMs,
+  resolveBuildYear,
+  runCommandAsync,
+  toPathname,
+  writeReportJson,
+} from '../scripts/lib/io.mjs';
 import { estimateReadingTime, parseFrontmatter, renderMarkdown } from '../scripts/lib/markdown.mjs';
 import { ROOT } from '../scripts/lib/paths.mjs';
 import {
@@ -38,7 +62,12 @@ import {
   validatePdfBuffer,
 } from '../scripts/lib/pdf.mjs';
 import { normalizePng } from '../scripts/lib/png.mjs';
-import { buildCommandMenuConfig, buildResumeEvidence } from '../scripts/lib/site-config.mjs';
+import {
+  buildCommandMenuConfig,
+  buildResumeEvidence,
+  getRepoUrl,
+  getSiteEndpoints,
+} from '../scripts/lib/site-config.mjs';
 import { minifyCssFiles, minifyJsFiles } from '../scripts/minify-assets.mjs';
 import { minifyHtml } from '../scripts/minify-html.mjs';
 import {
@@ -1532,16 +1561,16 @@ describe('grounded resume search & AI retrieval evaluation gate', () => {
 
   it('parses node --test coverage tables and enforces minimum line, function, and branch thresholds', () => {
     const sampleOutput =
-      'ℹ all files                     |  81.82 |    73.46 |   87.31 | \nℹ end of coverage report';
+      'ℹ all files                     |  88.50 |    86.20 |   91.14 | \nℹ end of coverage report';
     const parsed = parseNodeCoverageReport(sampleOutput);
-    assert.deepEqual(parsed, { lines: 81.82, branches: 73.46, functions: 87.31 });
+    assert.deepEqual(parsed, { lines: 88.5, branches: 86.2, functions: 91.14 });
 
     const passEval = evaluateCoverageThresholds(parsed, COVERAGE_THRESHOLDS);
     assert.equal(passEval.passed, true);
     assert.deepEqual(passEval.failures, []);
 
     const failEval = evaluateCoverageThresholds(
-      { lines: 75, branches: 65, functions: 80 },
+      { lines: 80, branches: 75, functions: 80 },
       COVERAGE_THRESHOLDS
     );
     assert.equal(failEval.passed, false);
@@ -1620,5 +1649,629 @@ Read [the docs](https://example.com) and \`code()\`.
       assert.ok(feedXml.includes('<rss version="2.0"'));
       assert.ok(feedXml.includes('Published Post'));
     });
+  });
+
+  it('covers frontmatter lists, quotes, code fences, blockquotes, ordered lists, horizontal rules, and empty/edge-case blog builds', () => {
+    assert.deepEqual(parseFrontmatter('No frontmatter here'), {
+      data: {},
+      content: 'No frontmatter here',
+    });
+    assert.deepEqual(parseFrontmatter('---\ntitle: Unclosed'), {
+      data: {},
+      content: '---\ntitle: Unclosed',
+    });
+
+    const complexMd = `---
+title: 'Quoted Title'
+summary: "Double Quoted"
+tags:
+  - 'alpha'
+  - "beta"
+draft: true
+# comment line
+invalidline
+---
+
+# H1 Heading
+
+***
+
+> Blockquote line 1
+> Blockquote line 2
+
+1. First ordered
+2. Second ordered
+
+\`\`\`js
+const x = 1 < 2 && 3 > 1;
+\`\`\`
+
+\`\`\`
+plain code block
+\`\`\`
+
+Paragraph with **bold**, *italic*, [unsafe](javascript:alert(1)), and [internal](/blog/).
+`;
+    const parsed = parseFrontmatter(complexMd);
+    assert.equal(parsed.data.title, 'Quoted Title');
+    assert.equal(parsed.data.summary, 'Double Quoted');
+    assert.deepEqual(parsed.data.tags, ['alpha', 'beta']);
+    assert.equal(parsed.data.draft, true);
+    assert.equal(estimateReadingTime(''), 1);
+
+    const rendered = renderMarkdown(parsed.content);
+    assert.ok(rendered.includes('<h2>H1 Heading</h2>'));
+    assert.ok(rendered.includes('<hr>'));
+    assert.ok(
+      rendered.includes('<blockquote><p>Blockquote line 1 Blockquote line 2</p></blockquote>')
+    );
+    assert.ok(rendered.includes('<ol>\n<li>First ordered</li>\n<li>Second ordered</li>\n</ol>'));
+    assert.ok(rendered.includes('<pre><code class="language-js">'));
+    assert.ok(rendered.includes('<pre><code>plain code block</code></pre>'));
+    assert.ok(rendered.includes('<strong>bold</strong>'));
+    assert.ok(rendered.includes('<em>italic</em>'));
+    assert.ok(rendered.includes('unsafe'));
+    assert.ok(!rendered.includes('javascript:alert'));
+    assert.ok(rendered.includes('<a href="/blog/">internal</a>'));
+
+    // Unclosed code block and trailing blockquote/list
+    const unclosedCode = renderMarkdown('```ts\nconst a = 1;');
+    assert.ok(unclosedCode.includes('<pre><code class="language-ts">const a = 1;</code></pre>'));
+    const trailingQuote = renderMarkdown('> trailing quote');
+    assert.ok(trailingQuote.includes('<blockquote><p>trailing quote</p></blockquote>'));
+    const trailingOl = renderMarkdown('1. trailing item');
+    assert.ok(trailingOl.includes('<ol>\n<li>trailing item</li>\n</ol>'));
+
+    withTempDir('blog-edge-', (tmpDir) => {
+      // Missing content/blog directory
+      assert.deepEqual(loadBlogPosts(tmpDir), []);
+      const siteDir = path.join(tmpDir, '_site');
+      const reportsDir = path.join(tmpDir, '.ci-reports');
+      fs.mkdirSync(siteDir, { recursive: true });
+      fs.mkdirSync(reportsDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(reportsDir, 'asset-manifest.json'),
+        JSON.stringify({
+          themeInitUrl: '/assets/js/theme-init.1111.js',
+          themeJsUrl: '/assets/js/theme.2222.js',
+          subpageCssUrl: '/assets/css/subpage.3333.css',
+        }),
+        'utf8'
+      );
+
+      // Empty blog build
+      buildBlogPages({ rootDir: tmpDir, siteDir, reportsDir, resume });
+      const emptyIndex = fs.readFileSync(path.join(siteDir, 'blog', 'index.html'), 'utf8');
+      assert.ok(emptyIndex.includes('No posts published yet.'));
+      assert.ok(emptyIndex.includes('/assets/css/subpage.3333.css'));
+
+      // Edge-case posts: medium title (<=70 chars but fullTitle >70), very long title (>70 chars), invalid date format, no summary, no tags
+      const blogDir = path.join(tmpDir, 'content', 'blog');
+      fs.mkdirSync(blogDir, { recursive: true });
+      fs.writeFileSync(path.join(blogDir, 'ignore.txt'), 'not markdown', 'utf8');
+      fs.writeFileSync(
+        path.join(blogDir, 'medium-slug.md'),
+        `---\ntitle: ${'B'.repeat(60)}\ndate: 2026-11-10\n---\n\nMedium title body.`,
+        'utf8'
+      );
+      fs.writeFileSync(
+        path.join(blogDir, 'custom-slug.md'),
+        `---\ntitle: ${'A'.repeat(80)}\ndate: invalid-date\n---\n\nBody text.`,
+        'utf8'
+      );
+      const edgePosts = loadBlogPosts(tmpDir);
+      assert.equal(edgePosts.length, 2);
+      buildBlogPages({
+        rootDir: tmpDir,
+        siteDir,
+        reportsDir,
+        resume: {
+          basics: { name: 'Author Name', url: 'https://example.com' },
+          meta: {},
+        },
+      });
+      const longTitleHtml = fs.readFileSync(
+        path.join(siteDir, 'blog', 'custom-slug', 'index.html'),
+        'utf8'
+      );
+      assert.ok(longTitleHtml.includes('invalid-da'));
+    });
+  });
+});
+
+describe('io.mjs, browser.mjs, check-performance.mjs, and sparse resume edge cases', () => {
+  it('covers io.mjs file, JSON, timestamp, and async command helpers', async () => {
+    withTempDir('io-helpers-', (tmpDir) => {
+      const missingJson = path.join(tmpDir, 'missing.json');
+      assert.equal(readJsonIfExists(missingJson), null);
+
+      const badJson = path.join(tmpDir, 'bad.json');
+      fs.writeFileSync(badJson, '{corrupt', 'utf8');
+      assert.equal(readJsonIfExists(badJson), null);
+
+      writeReportJson('sub/test.json', { ok: true }, tmpDir);
+      const reportPath = path.join(tmpDir, 'sub', 'test.json');
+      assert.deepEqual(readJsonIfExists(reportPath), { ok: true });
+
+      assert.equal(getFileSizeBytes(missingJson), null);
+      assert.ok(getFileSizeBytes(reportPath) > 0);
+
+      assert.equal(getCombinedSizeBytes([reportPath, missingJson]), getFileSizeBytes(reportPath));
+      assert.equal(getCombinedSizeBytes([missingJson]), null);
+
+      assert.equal(
+        toPathname('https://guilhermevigneron.dev/resume.pdf', '/fallback'),
+        '/resume.pdf'
+      );
+      assert.equal(toPathname('/local/path', '/fallback'), '/local/path');
+      assert.equal(toPathname('', '/fallback'), '/fallback');
+      assert.equal(toPathname('http://[invalid', '/fallback'), '/fallback');
+      assert.equal(normalizeBaseUrl('https://example.com///'), 'https://example.com');
+      assert.equal(normalizeBaseUrl(''), '');
+
+      const prevEpoch = process.env.SOURCE_DATE_EPOCH;
+      try {
+        process.env.SOURCE_DATE_EPOCH = '1700000000';
+        assert.equal(resolveBuildTimestampMs(tmpDir), 1700000000 * 1000);
+        assert.equal(resolveBuildYear({}, tmpDir), 2023);
+
+        delete process.env.SOURCE_DATE_EPOCH;
+        assert.equal(resolveBuildYear({ meta: { copyrightYear: 2028 } }, tmpDir), 2028);
+        const fallbackTs = resolveBuildTimestampMs(tmpDir);
+        assert.ok(Number.isFinite(fallbackTs) && fallbackTs > 0);
+        const yearFromGit = resolveBuildYear({}, ROOT);
+        assert.ok(yearFromGit >= 2020);
+      } finally {
+        if (prevEpoch === undefined) delete process.env.SOURCE_DATE_EPOCH;
+        else process.env.SOURCE_DATE_EPOCH = prevEpoch;
+      }
+    });
+
+    const okCmd = await runCommandAsync(process.execPath, ['-e', 'process.exit(0)']);
+    assert.equal(okCmd.status, 0);
+
+    const failCmd = await runCommandAsync(process.execPath, ['-e', 'process.exit(2)']);
+    assert.equal(failCmd.status, 2);
+
+    await assert.rejects(() => runCommandAsync('/nonexistent-binary-path-xyz', []));
+  });
+
+  it('covers browser.mjs executable detection, cleanup signals, static server wrapper, and local routing', async () => {
+    const exe = findBrowserExecutable();
+    assert.equal(typeof exe, 'string');
+
+    await closeBrowserSafely(null);
+    let closed = false;
+    let killed = false;
+    await closeBrowserSafely({
+      process: () => ({
+        exitCode: null,
+        signalCode: null,
+        kill() {
+          killed = true;
+        },
+      }),
+      async close() {
+        closed = true;
+      },
+    });
+    assert.equal(closed, true);
+    assert.equal(killed, true);
+
+    let killedOnError = false;
+    await closeBrowserSafely({
+      process: () => ({
+        exitCode: null,
+        signalCode: null,
+        kill() {
+          killedOnError = true;
+        },
+      }),
+      async close() {
+        throw new Error('close failed');
+      },
+    });
+    assert.equal(killedOnError, true);
+
+    const unregister = registerCleanupSignals(() => {});
+    assert.equal(typeof unregister, 'function');
+    unregister();
+
+    await withTempDirAsync('browser-with-server-', async (tmpDir) => {
+      fs.writeFileSync(path.join(tmpDir, 'index.html'), '<h1>Server Wrap</h1>', 'utf8');
+      const body = await withStaticServer(tmpDir, async ({ baseUrl }) => {
+        const res = await fetch(`${baseUrl}/`);
+        return res.text();
+      });
+      assert.equal(body, '<h1>Server Wrap</h1>');
+    });
+
+    let routeHandler = null;
+    const mockPage = {
+      async route(_pattern, handler) {
+        routeHandler = handler;
+      },
+    };
+    const blocked = [];
+    await enforceLocalRouting(mockPage, 'http://127.0.0.1:4000', blocked, {
+      'http://127.0.0.1:4000/__virtual__': { body: 'virtual-ok' },
+    });
+
+    const makeRoute = (url) => {
+      let action = null;
+      return {
+        request: () => ({ url: () => url }),
+        fulfill: (opts) => {
+          action = opts.body;
+          return action;
+        },
+        continue: () => {
+          action = 'continue';
+          return action;
+        },
+        abort: () => {
+          action = 'abort';
+          return action;
+        },
+        getAction: () => action,
+      };
+    };
+
+    const rVirtual = makeRoute('http://127.0.0.1:4000/__virtual__');
+    routeHandler(rVirtual);
+    assert.equal(rVirtual.getAction(), 'virtual-ok');
+
+    const rData = makeRoute('data:image/png;base64,AAAA');
+    routeHandler(rData);
+    assert.equal(rData.getAction(), 'continue');
+
+    const rLocal = makeRoute('http://127.0.0.1:4000/assets/css/styles.css');
+    routeHandler(rLocal);
+    assert.equal(rLocal.getAction(), 'continue');
+
+    const rExternal = makeRoute('https://evil.example.com/tracker.js');
+    routeHandler(rExternal);
+    assert.equal(rExternal.getAction(), 'abort');
+    assert.deepEqual(blocked, ['https://evil.example.com/tracker.js']);
+
+    const rInvalid = makeRoute('http://[invalid-url');
+    routeHandler(rInvalid);
+    assert.equal(rInvalid.getAction(), 'abort');
+  });
+
+  it('covers check-performance.mjs helpers, route interceptor, overflow measurement, and quality artifact verifier', async () => {
+    await withTempDirAsync('perf-helpers-', async (tmpDir) => {
+      const siteDir = path.join(tmpDir, '_site');
+      const reportsDir = path.join(tmpDir, '.ci-reports');
+      fs.mkdirSync(path.join(siteDir, 'assets', 'img'), { recursive: true });
+      fs.mkdirSync(reportsDir, { recursive: true });
+
+      assert.equal(readAssetManifest(tmpDir), null);
+      fs.writeFileSync(path.join(reportsDir, 'asset-manifest.json'), '{bad', 'utf8');
+      assert.equal(readAssetManifest(tmpDir), null);
+
+      const validManifest = {
+        screenCss: 'assets/css/styles.1234.css',
+        avatarReplacements: { '/assets/img/profile.webp': '/assets/img/profile.abcd1234.webp' },
+      };
+      fs.writeFileSync(
+        path.join(reportsDir, 'asset-manifest.json'),
+        JSON.stringify(validManifest),
+        'utf8'
+      );
+      assert.deepEqual(readAssetManifest(tmpDir), validManifest);
+
+      assert.equal(resolveAvatarPath(null, 'assets/img/profile.webp'), 'assets/img/profile.webp');
+      assert.equal(
+        resolveAvatarPath(validManifest, 'assets/img/profile.webp'),
+        '/assets/img/profile.abcd1234.webp'
+      );
+
+      const hashedAvatar = path.join(siteDir, 'assets', 'img', 'profile.abcd1234.webp');
+      fs.writeFileSync(hashedAvatar, 'webp-bytes', 'utf8');
+      assert.equal(fileSize(siteDir, '/assets/img/profile.abcd1234.webp'), 10);
+      assert.throws(
+        () => fileSize(siteDir, '/assets/img/missing.webp'),
+        /Expected built asset missing/
+      );
+      assert.ok(brotliSize(siteDir, '/assets/img/profile.abcd1234.webp') > 0);
+
+      let fontEvalCount = 0;
+      await waitForFontsReady({
+        async evaluate(fn) {
+          fontEvalCount++;
+          const prevDoc = globalThis.document;
+          const prevSetTimeout = globalThis.setTimeout;
+          globalThis.document = { fonts: { ready: Promise.resolve('ok') } };
+          globalThis.setTimeout = () => 0;
+          try {
+            return await fn();
+          } finally {
+            globalThis.document = prevDoc;
+            globalThis.setTimeout = prevSetTimeout;
+          }
+        },
+      });
+      assert.equal(fontEvalCount, 1);
+
+      // Route interceptor with axeSource
+      let handler = null;
+      const blockedReqs = [];
+      await attachRouteInterceptor(
+        {
+          async route(_pat, fn) {
+            handler = fn;
+          },
+        },
+        'http://127.0.0.1:4000',
+        blockedReqs,
+        'window.axe = {};'
+      );
+
+      let fulfilled = null;
+      handler({
+        request: () => ({ url: () => 'http://127.0.0.1:4000/__pw_axe__/axe.min.js' }),
+        fulfill: (opts) => {
+          fulfilled = opts;
+        },
+      });
+      assert.equal(fulfilled.status, 200);
+      assert.equal(fulfilled.body, 'window.axe = {};');
+
+      let continued = false;
+      handler({
+        request: () => ({ url: () => 'blob:http://127.0.0.1:4000/123' }),
+        continue: () => {
+          continued = true;
+        },
+      });
+      assert.equal(continued, true);
+
+      continued = false;
+      handler({
+        request: () => ({ url: () => 'http://127.0.0.1:4000/index.html' }),
+        continue: () => {
+          continued = true;
+        },
+      });
+      assert.equal(continued, true);
+
+      let aborted = false;
+      handler({
+        request: () => ({ url: () => 'https://cdn.example.com/font.woff2' }),
+        abort: () => {
+          aborted = true;
+        },
+      });
+      assert.equal(aborted, true);
+      assert.equal(blockedReqs.length, 1);
+
+      aborted = false;
+      handler({
+        request: () => ({ url: () => 'http://[invalid' }),
+        abort: () => {
+          aborted = true;
+        },
+      });
+      assert.equal(aborted, true);
+
+      // measureOverflowAtWidths mock page
+      const overflowPage = {
+        async goto() {},
+        async setViewportSize() {},
+        async evaluate() {
+          return { scrollWidth: 320, clientWidth: 320 };
+        },
+      };
+      const overflowRes = await measureOverflowAtWidths(
+        overflowPage,
+        'http://127.0.0.1:4000',
+        '/',
+        [320, 768]
+      );
+      assert.equal(overflowRes.length, 2);
+
+      // verifyQualityReportArtifacts against local ephemeral server
+      buildQualityPage({ rootDir: ROOT, siteDir, reportsDir, resume });
+      await withStaticServer(siteDir, async ({ baseUrl }) => {
+        const prevLychee = process.env.LYCHEE_STATUS;
+        try {
+          const reportFile = path.join(siteDir, 'quality', 'report.json');
+          const rpt = JSON.parse(fs.readFileSync(reportFile, 'utf8'));
+          for (const g of rpt.gates) {
+            g.status = g.id === 'link-integrity' ? 'pending' : 'pass';
+          }
+          fs.writeFileSync(reportFile, JSON.stringify(rpt), 'utf8');
+
+          delete process.env.LYCHEE_STATUS;
+          await verifyQualityReportArtifacts(siteDir, baseUrl);
+
+          // Test LYCHEE_STATUS=success branch when all gates pass
+          rpt.overallStatus = 'pass';
+          for (const g of rpt.gates) g.status = 'pass';
+          fs.writeFileSync(reportFile, JSON.stringify(rpt), 'utf8');
+          process.env.LYCHEE_STATUS = 'success';
+          await verifyQualityReportArtifacts(siteDir, baseUrl);
+        } finally {
+          if (prevLychee === undefined) delete process.env.LYCHEE_STATUS;
+          else process.env.LYCHEE_STATUS = prevLychee;
+        }
+      });
+    });
+  });
+
+  it('covers optional branches in evaluateAssetBudgets, evaluateVitalsBudgets, minifyHtml, validateHtmlFiles, sync-resume, site-config, ai-evals, and flaky-triage', async () => {
+    const assets = makeValidAssetSizes();
+    assets.commandMenuCssBytes = 2000;
+    assets.qualityHtmlBytes = 10000;
+    assets.architectureHtmlBytes = 10000;
+    assets.avatarAvif168Bytes = 2000;
+    assets.avatarAvif336Bytes = 3000;
+    assets.avatarWebp168Bytes = 2000;
+    assets.avatarWebp224Bytes = 3000;
+    assets.avatarWebp336Bytes = 3500;
+    evaluateAssetBudgets(assets);
+
+    const vitals = {
+      cls: 0,
+      fcpMs: 500,
+      lcpMs: 800,
+      totalTransferBytes: 30000,
+      eagerPanelLoaded: false,
+      eagerCommandCssLoaded: false,
+      domNodes: 200,
+      maxLongTaskMs: 20,
+    };
+    evaluateVitalsBudgets(vitals, BUDGETS, [
+      { route: '/', width: 320, scrollWidth: 320, clientWidth: 320 },
+    ]);
+
+    assert.throws(
+      () =>
+        evaluateVitalsBudgets(vitals, BUDGETS, [
+          { route: '/', width: 320, scrollWidth: 340, clientWidth: 320 },
+        ]),
+      /Horizontal overflow/
+    );
+
+    // minifyHtml edge branches (CSS comments, unclosed comment, unclosed script tag)
+    const cssWithComments = '<style>/* comment */ body { color: red; } /* unclosed</style>';
+    assert.ok(minifyHtml(cssWithComments).includes('<style>body{color:red}</style>'));
+    assert.ok(minifyHtml('<div><!-- unclosed comment').includes('<div>'));
+    assert.ok(minifyHtml('<script>unclosed script').includes('<script>unclosed script'));
+    assert.ok(minifyHtml('<script attr="unclosed').includes('<script attr="unclosed'));
+
+    // validateHtmlFiles missing dir and empty dir branches
+    await withTempDirAsync('html-val-edges-', async (tmpDir) => {
+      await assert.rejects(
+        () => validateHtmlFiles(path.join(tmpDir, 'nonexistent')),
+        /does not exist/
+      );
+      await assert.rejects(() => validateHtmlFiles(tmpDir), /No HTML files found/);
+    });
+
+    // Sparse resume object branches across sync-resume.mjs and site-config.mjs
+    const sparseResume = {
+      basics: {
+        name: 'SingleName',
+        label: 'Engineer',
+        url: 'invalid-url',
+      },
+      meta: {},
+      work: [
+        {
+          name: 'Org',
+          position: 'Dev',
+          startDate: '2024',
+          endDate: '2025-06',
+          summary: 'Did work',
+          highlights: ['Shipped feature'],
+        },
+      ],
+      projects: [
+        {
+          name: 'ProjNoUrl',
+          startDate: '2025',
+          endDate: '2026',
+          description: 'Desc',
+          showInPrint: false,
+        },
+      ],
+      education: [
+        {},
+        {
+          institution: 'Uni',
+          area: 'CS',
+          studyType: 'BS',
+          startDate: '2010',
+          endDate: '2014',
+        },
+      ],
+      publications: [
+        {},
+        {
+          name: 'PubNoUrl',
+          releaseDate: 'invalid',
+        },
+      ],
+      awards: [
+        {},
+        {
+          title: 'AwardNoDateOrAwarder',
+        },
+        {
+          title: 'AwardInvalidDate',
+          date: 'bad-date',
+        },
+      ],
+      languages: [
+        {
+          language: 'Portuguese',
+        },
+      ],
+    };
+
+    const sparseHtml = buildCvContentHtml(sparseResume);
+    assert.ok(sparseHtml.includes('SingleName'));
+    assert.ok(sparseHtml.includes('ProjNoUrl'));
+    assert.ok(sparseHtml.includes('PubNoUrl'));
+
+    const sparseIndex = buildIndexHtml(sparseResume);
+    assert.ok(sparseIndex.includes('#experience'));
+
+    const bareIndex = buildIndexHtml({ basics: { name: 'Bare', label: 'Role' }, meta: {} });
+    assert.ok(bareIndex.includes('#main-content'));
+
+    const sparseLlms = buildLlmsTxt(sparseResume);
+    assert.ok(sparseLlms.includes('# SingleName'));
+
+    const sparseVcard = buildVCard(sparseResume);
+    assert.ok(sparseVcard.includes('FN:SingleName'));
+
+    const sparseJsonLd = buildJsonLd(sparseResume);
+    assert.equal(sparseJsonLd['@graph'][0].name, 'SingleName');
+
+    const sparseMeta = buildIndexMeta(sparseResume);
+    assert.ok(sparseMeta.includes('SingleName'));
+
+    assert.equal(computeYearsOfExperience({}), null);
+    assert.equal(getRepoUrl({}), '');
+    assert.equal(getSiteEndpoints({}).resumePdfPath, '/resume.pdf');
+    assert.ok(
+      buildResumeEvidence({ ...sparseResume, basics: { name: 'N', summary: 'Sum' } }).length > 0
+    );
+    assert.ok(buildResumeEvidence({}).length === 0);
+    assert.equal(buildCommandMenuConfig({}).host, '');
+
+    // evaluateAiReadiness fallback when neither llmsTxt nor resume has matching facts
+    const emptyEval = evaluateAiReadiness({
+      resume: null,
+      llmsTxt: '',
+      queries: [
+        {
+          id: 'no-hit',
+          category: 'None',
+          query: 'nonexistent query xyz',
+          expectedSection: 'about',
+          expectedToken: 'xyz',
+        },
+      ],
+    });
+    assert.equal(emptyEval.totalQueries, 1);
+    assert.equal(emptyEval.passAt1Rate, 0);
+    assert.equal(emptyEval.results[0].topCitation, null);
+
+    // classifyFailureCluster fallback branch for unknown error signature
+    const unknownDiag = classifyFailureCluster({
+      signature: 'completely unknown custom error message',
+      retryPassed: false,
+    });
+    assert.equal(unknownDiag.classification, 'deterministic_regression');
+
+    const unknownFlakyDiag = classifyFailureCluster({
+      signature: 'completely unknown custom error message',
+      retryPassed: true,
+    });
+    assert.equal(unknownFlakyDiag.classification, 'deterministic_regression');
   });
 });

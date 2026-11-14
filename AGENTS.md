@@ -44,7 +44,7 @@ Zero-third-party-runtime-dependency personal portfolio & resume static site buil
    - External links must use `rel="noopener noreferrer"`.
 4. **Code Style & Coverage Thresholds:**
    - Managed by Biome (`biome.json`): 2-space indentation, single quotes, ES5 trailing commas, 100-char line width.
-   - Unit test coverage (`scripts/run-gate.mjs` via `node --test --experimental-test-coverage`) enforces `>= 80%` line coverage, `>= 85%` function coverage, and `>= 70%` branch coverage.
+   - Unit test coverage (`scripts/run-gate.mjs` via `node --test --experimental-test-coverage`) enforces `>= 85%` line coverage, `>= 85%` function coverage, and `>= 85%` branch coverage.
 
 ## Verification Commands
 

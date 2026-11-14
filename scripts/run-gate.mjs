@@ -7,9 +7,9 @@ import { isEntrypoint, REPORTS_DIR, ROOT } from './lib/paths.mjs';
 const testsDir = path.join(ROOT, 'tests');
 
 export const COVERAGE_THRESHOLDS = {
-  lines: 80,
+  lines: 85,
   functions: 85,
-  branches: 70,
+  branches: 85,
 };
 
 export function parseNodeCoverageReport(output) {

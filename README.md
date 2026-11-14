@@ -107,7 +107,7 @@ This runs sync parity, Biome check (lint + format), unit tests, a security audit
 | `npm run serve`             | Start a local static server for `_site/` at `http://127.0.0.1:4000`                                                   |
 | `npm run lint`              | Run Biome check (lint + format) across JS, CSS, JSON, and HTML                                                        |
 | `npm run lint:fix`          | Auto-fix Biome lint and formatting issues                                                                             |
-| `npm run test:unit`         | Run Node.js unit tests and enforce code coverage thresholds (`>= 80%` lines, `>= 85%` funcs, `>= 70%` branches)       |
+| `npm run test:unit`         | Run Node.js unit tests and enforce code coverage thresholds (`>= 85%` lines, `>= 85%` funcs, `>= 85%` branches)       |
 | `npm run test:html`         | Validate generated HTML5 files in `_site/`                                                                            |
 | `npm run test:e2e`          | Run Cypress end-to-end, mobile, and `axe-core` accessibility tests                                                    |
 | `npm run test:perf`         | Run Playwright mobile Web Vitals and byte-budget checks                                                               |
