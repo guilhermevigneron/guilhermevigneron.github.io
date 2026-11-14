@@ -204,7 +204,7 @@ export function initCommandMenuPanel() {
   }
 
   const dom = ensureDom();
-  const { backdrop, dialog, toast, closeBtn, input, list, emptyState } = dom;
+  const { backdrop, dialog, toast, closeBtn, input, list, emptyState, statusEl } = dom;
   const triggers = qa(D, '#command-trigger,#command-trigger-mobile');
 
   qa(list, '.cmd-group').forEach((g) => {
@@ -259,6 +259,7 @@ export function initCommandMenuPanel() {
   let lastFocused = null;
   let activeIndex = -1;
   let toastTimer = null;
+  let statusTimer = null;
   let cachedLlms = '';
   let llmsPromise = null;
 

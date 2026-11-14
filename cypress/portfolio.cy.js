@@ -788,16 +788,24 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
         .should('exist')
         .then(($script) => {
           const jsonLd = JSON.parse($script.text());
-          expect(jsonLd['@type']).to.eq('Person');
-          expect(jsonLd.name).to.eq(liveResume.basics.name);
-          expect(jsonLd.jobTitle).to.eq(liveResume.meta.jobTitle);
-          expect(jsonLd.email).to.eq(liveResume.basics.email);
+          const graph = Array.isArray(jsonLd['@graph']) ? jsonLd['@graph'] : [jsonLd];
+          const person = graph.find((node) => node['@type'] === 'Person');
+          expect(person, 'Person node in JSON-LD @graph').to.be.an('object');
+          expect(person.name).to.eq(liveResume.basics.name);
+          expect(person.jobTitle).to.eq(liveResume.meta.jobTitle);
+          expect(person.email).to.eq(liveResume.basics.email);
           if (ACTIVE_JOB) {
-            expect(jsonLd.worksFor.name).to.eq(ACTIVE_JOB.name);
+            expect(person.worksFor.name).to.eq(ACTIVE_JOB.name);
           } else {
-            expect(jsonLd.worksFor).to.eq(undefined);
+            expect(person.worksFor).to.eq(undefined);
           }
-          expect(jsonLd.knowsAbout).to.deep.eq(liveResume.skills.map((s) => s.name));
+          const expectedKnowsAbout = Array.from(
+            new Set([
+              ...liveResume.skills.map((s) => s.name),
+              ...(liveResume.projects || []).flatMap((p) => p.keywords || []),
+            ])
+          );
+          expect(person.knowsAbout).to.deep.eq(expectedKnowsAbout);
         });
 
       cy.request('/llms.txt').then((llmsRes) => {
