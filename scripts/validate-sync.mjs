@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { evaluateAiReadiness } from './lib/ai-evals.mjs';
+import { evaluateFlakyTriage } from './lib/flaky-triage.mjs';
 import { resolveBuildYear } from './lib/io.mjs';
 import { isEntrypoint, ROOT } from './lib/paths.mjs';
 import { buildCommandMenuConfig } from './lib/site-config.mjs';
@@ -761,6 +762,21 @@ export function validateSyncState({
     assert.equal(aiEval.passed, true, 'AI readiness evaluation gate failed');
   });
 
+  check('Flaky test triage & failure clustering benchmark passes with 0 false suppressions', () => {
+    const triage = evaluateFlakyTriage();
+    assert.equal(
+      triage.classificationAccuracy,
+      1,
+      `Flaky triage classification accuracy below 100% (${triage.accurateCount}/${triage.clusterCount})`
+    );
+    assert.equal(
+      triage.falseFlakeSuppressions,
+      0,
+      `Flaky triage suppressed ${triage.falseFlakeSuppressions} deterministic regressions`
+    );
+    assert.equal(triage.passed, true, 'Flaky test triage evaluation gate failed');
+  });
+
   check(
     'site.webmanifest, sitemap.xml, robots.txt, security.txt, command-menu-panel.js, and 404.html align with resume.json',
     () => {
@@ -927,6 +943,7 @@ export function validateAllFromRoot(rootDir = ROOT) {
 
   const checks = [];
   const aiEvaluation = evaluateAiReadiness({ resume, llmsTxt });
+  const flakyTriage = evaluateFlakyTriage();
   try {
     const passedChecks = validateSyncState({
       resume,
@@ -955,6 +972,7 @@ export function validateAllFromRoot(rootDir = ROOT) {
           timestamp: new Date().toISOString(),
           checks,
           aiEvaluation,
+          flakyTriage,
         },
         null,
         2

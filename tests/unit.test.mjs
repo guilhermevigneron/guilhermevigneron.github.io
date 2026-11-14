@@ -21,6 +21,11 @@ import {
   startStaticServer as browserStartStaticServer,
   stopStaticServer as browserStopStaticServer,
 } from '../scripts/lib/browser.mjs';
+import {
+  evaluateFlakyTriage,
+  GOLDEN_TRIAGE_RUNS,
+  normalizeFailureSignature,
+} from '../scripts/lib/flaky-triage.mjs';
 import { escapeHtml, rewriteAssetRefs, sanitizeHref } from '../scripts/lib/html.mjs';
 import { normalizeBaseUrl, toPathname } from '../scripts/lib/io.mjs';
 import { ROOT } from '../scripts/lib/paths.mjs';
@@ -1487,9 +1492,34 @@ describe('grounded resume search & AI retrieval evaluation gate', () => {
       assert.equal(qualityReport.aiEvaluation.passed, true);
       assert.equal(qualityReport.aiEvaluation.passAt1Rate, 1);
       assert.equal(qualityReport.aiEvaluation.groundednessRate, 1);
+      assert.ok(qualityReport.flakyTriage);
+      assert.equal(qualityReport.flakyTriage.passed, true);
+      assert.equal(qualityReport.flakyTriage.classificationAccuracy, 1);
+      assert.equal(qualityReport.flakyTriage.falseFlakeSuppressions, 0);
       assert.ok(qualityHtml.includes('ai &amp; retrieval evaluation benchmark'));
       assert.ok(qualityHtml.includes('retrieval pass@1'));
       assert.ok(qualityHtml.includes('citation groundedness'));
+      assert.ok(qualityHtml.includes('flaky test triage &amp; failure clustering benchmark'));
+      assert.ok(qualityHtml.includes('triage accuracy'));
     });
+  });
+
+  it('normalizes volatile stack-trace noise and clusters multi-framework failures with 0 false suppressions', () => {
+    const sig1 = normalizeFailureSignature(GOLDEN_TRIAGE_RUNS[0].rawLog);
+    const sig2 = normalizeFailureSignature(GOLDEN_TRIAGE_RUNS[1].rawLog);
+    assert.equal(sig1, sig2);
+    assert.ok(sig1.includes('<UUID>'));
+    assert.ok(sig1.includes('<HEX>'));
+    assert.ok(sig1.includes(':<LINE>:<COL>'));
+
+    const triage = evaluateFlakyTriage();
+    assert.equal(triage.passed, true);
+    assert.equal(triage.rawRunCount, 10);
+    assert.equal(triage.clusterCount, 6);
+    assert.equal(triage.classificationAccuracy, 1);
+    assert.equal(triage.falseFlakeSuppressions, 0);
+    assert.equal(triage.flakyClusters, 2);
+    assert.equal(triage.regressionClusters, 3);
+    assert.equal(triage.envClusters, 1);
   });
 });

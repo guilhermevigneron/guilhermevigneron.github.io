@@ -84,7 +84,7 @@
   "projects": [
     {
       "name": "guilhermevigneron.dev",
-      "subtitle": "Self-Verifying Portfolio & Resume Pipeline",
+      "subtitle": "Self-Verifying Portfolio, AI Eval Gate & Grounded Resume Search",
       "description": "Zero-third-party static showcase driven by a single resume.json source of truth. Compiles fingerprinted bundles, Schema.org JSON-LD, llms.txt, vCard, Open Graph card, and A4 /resume.pdf, gated by HTML5 validation, Playwright mobile Web Vitals budgets, and 16-audit WCAG 2.1 AA Cypress + axe checks.",
       "highlights": [
         "Enforces strict default-src 'self' CSP with SHA-256 asset fingerprinting, subsetted Geist fonts, and responsive AVIF/WebP imagery.",
@@ -110,6 +110,37 @@
         {
           "label": "Live Quality Report",
           "url": "/quality/"
+        }
+      ],
+      "showInPrint": false
+    },
+    {
+      "name": "CI Flaky Test Triage & Failure Clustering Engine",
+      "subtitle": "Multi-Framework Failure Classifier & PR Quality Gate",
+      "description": "Deterministic failure-log clustering and root-cause triage harness for NUnit, Playwright, and Cypress + axe test suites. Normalizes volatile stack-trace noise into canonical signatures and separates transient infrastructure flakes from PR-blocking regressions with zero false suppressions.",
+      "highlights": [
+        "Deduplicates multi-shard failure traces by stripping volatile timestamps, session UUIDs, hex addresses, and ephemeral ports before root-cause classification.",
+        "Enforces a zero-false-suppression safety invariant on every build and publishes live triage benchmarks to /quality/ and /quality/report.json."
+      ],
+      "keywords": [
+        "Flaky Triage",
+        "Failure Clustering",
+        "Test Reliability",
+        "Playwright",
+        "Cypress",
+        "NUnit"
+      ],
+      "startDate": "2026",
+      "displayDate": "2026 · Open Source",
+      "url": "https://github.com/guilhermevigneron/guilhermevigneron.github.io",
+      "links": [
+        {
+          "label": "Live Triage Benchmark",
+          "url": "/quality/"
+        },
+        {
+          "label": "Telemetry JSON",
+          "url": "/quality/report.json"
         }
       ],
       "showInPrint": false

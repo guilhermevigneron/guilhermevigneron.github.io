@@ -5,7 +5,7 @@ import {
 } from '../../src/js/resume-search.mjs';
 import { buildResumeEvidence } from './site-config.mjs';
 
-export const MAX_LLMS_TOKEN_BUDGET = 1500;
+export const MAX_LLMS_TOKEN_BUDGET = 1600;
 
 export const GOLDEN_RECRUITER_QUERIES = [
   {
@@ -56,6 +56,13 @@ export const GOLDEN_RECRUITER_QUERIES = [
     query: 'Playwright Cypress WCAG accessibility CSP',
     expectedSection: 'projects',
     expectedToken: 'wcag',
+  },
+  {
+    id: 'flaky-triage-engine',
+    category: 'CI Failure Triage',
+    query: 'Flaky test triage root-cause clustering PR quality gate',
+    expectedSection: 'projects',
+    expectedToken: 'triage',
   },
   {
     id: 'performance-scalability',

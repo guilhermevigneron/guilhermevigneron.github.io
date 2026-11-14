@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { evaluateAiReadiness } from './lib/ai-evals.mjs';
+import { evaluateFlakyTriage } from './lib/flaky-triage.mjs';
 import { escapeHtml, renderSubpageLayout, UNHASHED_ASSET_URLS } from './lib/html.mjs';
 import {
   getCombinedSizeBytes,
@@ -355,6 +356,7 @@ export function buildQualityPage({
       ? fs.readFileSync(rootLlmsPath, 'utf8')
       : '';
   const aiEvaluation = syncReport?.aiEvaluation || evaluateAiReadiness({ resume, llmsTxt });
+  const flakyTriage = syncReport?.flakyTriage || evaluateFlakyTriage();
 
   const reportPayload = {
     schemaVersion: 1,
@@ -379,6 +381,7 @@ export function buildQualityPage({
       contactVcfBytes,
     },
     aiEvaluation,
+    flakyTriage,
     gates: cards,
     endpoints: [
       endpoints.resumePdfPath,
@@ -466,6 +469,31 @@ export function buildQualityPage({
                     <div class="panel-card">
                         <p class="metric-label">llms.txt token budget</p>
                         <p class="metric-value">~${aiEvaluation.estimatedTokens}/${aiEvaluation.maxTokenBudget}</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="cv-section">
+                <h2 class="section-title">flaky test triage &amp; failure clustering benchmark</h2>
+                <p class="summary-copy">
+                    Multi-framework CI failure classifier (<strong>Selenium / C#</strong>, <strong>Playwright</strong>, <strong>Cypress + axe</strong>, and <strong>Azure DevOps</strong>) that strips volatile timestamps, UUIDs, hex addresses, and ephemeral ports to deduplicate failure traces and separate transient infrastructure flakes from PR-blocking regressions.
+                </p>
+                <div class="metric-grid">
+                    <div class="panel-card">
+                        <p class="metric-label">triage accuracy</p>
+                        <p class="metric-value">${flakyTriage.accurateCount}/${flakyTriage.clusterCount} (${Math.round(flakyTriage.classificationAccuracy * 100)}%)</p>
+                    </div>
+                    <div class="panel-card">
+                        <p class="metric-label">trace deduplication</p>
+                        <p class="metric-value">${flakyTriage.rawRunCount} &rarr; ${flakyTriage.clusterCount} (-${Math.round(flakyTriage.noiseReductionRate * 100)}%)</p>
+                    </div>
+                    <div class="panel-card">
+                        <p class="metric-label">false suppressions</p>
+                        <p class="metric-value">${flakyTriage.falseFlakeSuppressions} (0 allowed)</p>
+                    </div>
+                    <div class="panel-card">
+                        <p class="metric-label">cluster breakdown</p>
+                        <p class="metric-value">${flakyTriage.regressionClusters} reg &middot; ${flakyTriage.flakyClusters} flake &middot; ${flakyTriage.envClusters} env</p>
                     </div>
                 </div>
             </section>

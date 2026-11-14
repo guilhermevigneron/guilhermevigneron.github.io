@@ -1307,6 +1307,8 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
     cy.contains('h2', 'ai & retrieval evaluation benchmark').should('be.visible');
     cy.contains('retrieval pass@1').should('be.visible');
     cy.contains('citation groundedness').should('be.visible');
+    cy.contains('h2', 'flaky test triage & failure clustering benchmark').should('be.visible');
+    cy.contains('triage accuracy').should('be.visible');
 
     cy.request('/quality/report.json').then((res) => {
       expect(res.status).to.eq(200);
@@ -1319,6 +1321,10 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
       expect(report.aiEvaluation.hitAt3Rate).to.eq(1);
       expect(report.aiEvaluation.groundednessRate).to.eq(1);
       expect(report.aiEvaluation.withinTokenBudget).to.eq(true);
+      expect(report.flakyTriage).to.be.an('object');
+      expect(report.flakyTriage.passed).to.eq(true);
+      expect(report.flakyTriage.classificationAccuracy).to.eq(1);
+      expect(report.flakyTriage.falseFlakeSuppressions).to.eq(0);
       expect(report.artifacts.resumePdfPages).to.eq(MAX_PDF_PAGES);
       expect(report.artifacts.ogCardBytes).to.be.greaterThan(5000);
       expect(report.artifacts.contactVcfBytes).to.be.greaterThan(100);

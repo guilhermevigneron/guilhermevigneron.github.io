@@ -18,11 +18,16 @@ It is designed to be **fast, clean, and private**: there are no trackers, no thi
 ## What Makes This Site Special
 
 - **One File Powers Everything:** All profile details, work experience, projects, and skills live in [`resume.json`](resume.json). Updating that one file automatically updates the website, the PDF resume, the downloadable contact card (`contact.vcf`), the AI-friendly summary (`llms.txt`), and search metadata.
-- **Fast & Private by Design:** Every font, icon, and image is self-hosted, and strict security headers block external requests. The entire initial mobile page load stays under 75 KB.
-- **Helpful Shortcuts for Visitors:**
-  - Press **`Ctrl+J`** (or **`⌘+J`** on Mac) anywhere on the site—or tap the search button on mobile—to open a quick command menu. From there, you can copy an email address, copy a Markdown version of the resume, download a contact card, or jump straight to a section.
-  - Supports **Light & Dark mode** (matching your system preference or toggled manually) and prints cleanly onto a **single A4 page**.
-- **Tested Like a Production App:** Every update is automatically checked for accessibility (WCAG 2.1 AA), mobile responsiveness, page speed, valid HTML, security vulnerabilities, and broken links.
+- **Grounded "Ask / Match My Resume" in the Command Menu (`⌘K` / `⌘J`):**
+  - Press **`Ctrl+K` / `⌘+K`** or **`Ctrl+J` / `⌘+J`** anywhere on the site—or tap the search button on mobile—to open the command menu.
+  - Type natural-language questions or job-description keywords (e.g., `"Azure DevOps CI/CD"`, `"Selenium C#"`, `"flaky test triage"`, `"AI workflows"`) to get instant, cited **Resume Matches** hydrated from `/llms.txt` (`src/js/resume-search.mjs`) with **zero external LLM API calls** and 100% CSP compliance.
+- **Deterministic LLM Quality & Retrieval Eval Gate (`scripts/lib/ai-evals.mjs`):**
+  - Every build and sync check runs a golden benchmark of recruiter & hiring-manager queries against `/llms.txt` and `resume.json`, enforcing **100% `Pass@1`**, **100% `Hit@3`**, **100% citation groundedness** (blocking ungrounded or hallucinated claims), and a strict token budget (`<= 1,600` tokens).
+  - Live benchmark scorecards are published to **[/quality/](https://guilhermevigneron.dev/quality/)** and **[/quality/report.json](https://guilhermevigneron.dev/quality/report.json)**.
+- **CI Flaky Test Triage & Failure Clustering Engine (`scripts/lib/flaky-triage.mjs`):**
+  - Multi-framework failure classifier covering **Selenium / C# (`NUnit`)**, **Playwright**, **Cypress + `axe-core`**, and **Azure DevOps** logs.
+  - Strips volatile runtime noise (timestamps, session UUIDs, hex memory addresses, ephemeral ports, and durations) to deduplicate multi-shard traces into canonical root-cause clusters, separating transient infrastructure flakes from PR-blocking regressions with a **zero-false-suppression** safety invariant.
+- **Fast, Accessible & Private by Design:** Every font, icon, and image is self-hosted, strict security headers (`default-src 'self'`) block external requests, the initial mobile page load stays under 75 KB, and every build is verified for WCAG 2.1 AA accessibility (`cypress-axe`), HTML5 validity, and single-page A4 print layout.
 
 ---
 
@@ -37,8 +42,8 @@ resume.json
 Updates index.html, 404.html, llms.txt, sitemap.xml, robots.txt, etc.
    │
    ▼  npm run build
-Minifies & fingerprints CSS/JS, renders /resume.pdf & social preview card,
-and generates /architecture/ and /quality/
+Runs AI retrieval & flaky-triage eval gates, minifies & fingerprints CSS/JS,
+renders /resume.pdf & social preview card, and generates /architecture/ & /quality/
    │
    ▼
 _site/  (ready to preview locally or deploy to GitHub Pages)
@@ -48,14 +53,14 @@ _site/  (ready to preview locally or deploy to GitHub Pages)
 
 ## Project Layout
 
-| Path                                        | What it's for                                                                            |
-| :------------------------------------------ | :--------------------------------------------------------------------------------------- |
-| [`resume.json`](resume.json)                | **Single source of truth** for all resume content and profile info                       |
-| [`src/`](src/)                              | CSS stylesheets for screen, subpages, and printing                                       |
-| [`assets/`](assets/)                        | Self-hosted fonts, avatar images, icons, and small client-side scripts                   |
-| [`scripts/`](scripts/)                      | Node.js scripts that sync data, build `_site/`, generate the PDF/OG card, and run checks |
-| [`tests/`](tests/) & [`cypress/`](cypress/) | Unit tests, end-to-end browser tests, and accessibility audits                           |
-| [`AGENTS.md`](AGENTS.md)                    | Detailed technical rules and asset budgets for contributors and AI agents                |
+| Path                                        | What it's for                                                                                                                 |
+| :------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------- |
+| [`resume.json`](resume.json)                | **Single source of truth** for all resume content and profile info                                                            |
+| [`src/`](src/)                              | CSS stylesheets, HTML shell template, and client/build shared resume search (`js/resume-search.mjs`)                          |
+| [`assets/`](assets/)                        | Self-hosted fonts, avatar images, icons, and client-side scripts (`command-menu-panel.js`)                                    |
+| [`scripts/`](scripts/)                      | Build, sync, PDF/OG generation, AI retrieval eval gate (`lib/ai-evals.mjs`), and flaky triage engine (`lib/flaky-triage.mjs`) |
+| [`tests/`](tests/) & [`cypress/`](cypress/) | Unit tests, end-to-end browser tests, and accessibility audits                                                                |
+| [`AGENTS.md`](AGENTS.md)                    | Detailed technical rules and asset budgets for contributors and AI agents                                                     |
 
 ---
 
