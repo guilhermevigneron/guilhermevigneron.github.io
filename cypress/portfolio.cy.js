@@ -1342,11 +1342,24 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
     cy.request('/sitemap.xml').then((res) => {
       expect(res.status).to.eq(200);
       expect(res.body).to.include(`${SITE_URL}/`);
+      expect(res.body).to.include(`${SITE_URL}/blog/`);
       expect(res.body).to.include(`${SITE_URL}${resume.meta.resumePdf}`);
       expect(res.body).to.include(`${SITE_URL}/architecture/`);
       expect(res.body).to.include(`${SITE_URL}/quality/`);
       expect(res.body).to.not.include(`${SITE_URL}${resume.meta.contactVcf}`);
       expect(res.body).to.not.include(`${SITE_URL}/quality/report.json`);
+    });
+
+    cy.visit('/blog/');
+    cy.contains('h1', 'Blog').should('be.visible');
+    cy.contains('a', 'Building a Zero-Dependency Static Portfolio').click();
+    cy.url().should('include', '/blog/building-a-zero-dependency-portfolio/');
+    cy.contains('h1', 'Building a Zero-Dependency Static Portfolio').should('be.visible');
+
+    cy.request('/feed.xml').then((res) => {
+      expect(res.status).to.eq(200);
+      expect(res.body).to.include('<rss version="2.0"');
+      expect(res.body).to.include('Building a Zero-Dependency Static Portfolio');
     });
   });
 });
@@ -1388,6 +1401,14 @@ describe('WCAG 2.1 AA Accessibility Matrix (Light/Dark & Mobile/Desktop)', () =>
       viewport: [375, 667],
       theme: 'dark',
       label: 'architecture-mobile-dark',
+    },
+    { route: '/blog/', viewport: [1280, 800], theme: 'light', label: 'blog-desktop-light' },
+    { route: '/blog/', viewport: [375, 667], theme: 'dark', label: 'blog-mobile-dark' },
+    {
+      route: '/blog/building-a-zero-dependency-portfolio/',
+      viewport: [1280, 800],
+      theme: 'light',
+      label: 'blog-post-desktop-light',
     },
   ];
 

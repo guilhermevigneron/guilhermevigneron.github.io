@@ -10,6 +10,7 @@ export async function minifyCssFiles(outSiteDir = SITE_DIR, srcDir = SRC_DIR) {
     ['styles.css', 'assets/css/styles.css'],
     ['command-menu.css', 'assets/css/command-menu.css'],
     ['subpage.css', 'assets/css/subpage.css'],
+    ['blog.css', 'assets/css/blog.css'],
     ['print.css', 'assets/css/print.css'],
   ];
 
@@ -53,6 +54,7 @@ export async function minifyJsFiles(
       ep.quality,
       ep.qualityJson,
       ep.llmsTxt,
+      ep.blog,
     ],
   };
 

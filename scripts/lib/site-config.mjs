@@ -57,6 +57,8 @@ export function getSiteEndpoints(data) {
     '/assets/og-card.png'
   );
   const architecturePath = toPathname(data?.meta?.architectureUrl, '/architecture/');
+  const blogPath = toPathname(data?.meta?.blogUrl, '/blog/');
+  const feedPath = '/feed.xml';
   const qualityPath = toPathname(data?.meta?.qualityReportUrl, '/quality/');
   const qualityJsonPath = toPathname(data?.meta?.qualityReportJsonUrl, '/quality/report.json');
   const securityTxtPath = toPathname(data?.meta?.securityTxtUrl, '/.well-known/security.txt');
@@ -73,6 +75,8 @@ export function getSiteEndpoints(data) {
     contactVcfPath,
     ogImagePath,
     architecturePath,
+    blogPath,
+    feedPath,
     qualityPath,
     qualityJsonPath,
     securityTxtPath,
@@ -84,6 +88,8 @@ export function getSiteEndpoints(data) {
     contactVcfUrl: data?.meta?.contactVcfUrl || `${baseUrl}${contactVcfPath}`,
     ogImageUrl: data?.meta?.ogImageUrl || `${baseUrl}${ogImagePath}`,
     architectureUrl: data?.meta?.architectureUrl || `${baseUrl}${architecturePath}`,
+    blogUrl: data?.meta?.blogUrl || `${baseUrl}${blogPath}`,
+    feedUrl: `${baseUrl}${feedPath}`,
     qualityReportUrl: data?.meta?.qualityReportUrl || `${baseUrl}${qualityPath}`,
     qualityReportJsonUrl: data?.meta?.qualityReportJsonUrl || `${baseUrl}${qualityJsonPath}`,
     securityTxtUrl: data?.meta?.securityTxtUrl || `${baseUrl}${securityTxtPath}`,
@@ -283,6 +289,8 @@ export function buildCommandMenuConfig(data) {
       contactVcf: endpoints.contactVcfPath,
       contactVcfFilename: endpoints.vcardFilename,
       architecture: endpoints.architecturePath,
+      blog: endpoints.blogPath,
+      feed: endpoints.feedPath,
       quality: endpoints.qualityPath,
       qualityJson: endpoints.qualityJsonPath,
       llmsTxt: endpoints.llmsTxtPath,

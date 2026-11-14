@@ -615,6 +615,7 @@ export function buildIndexHtml(
       : '#main-content';
 
   const footerLinks = [
+    { href: endpoints.blogPath, label: 'Blog' },
     { href: endpoints.architecturePath, label: 'Architecture' },
     { href: endpoints.qualityPath, label: 'Quality Report' },
     { href: endpoints.resumeJsonPath, label: 'JSON Resume' },
@@ -666,6 +667,7 @@ export function build404Html(data, { year = resolveBuildYear(data) } = {}) {
     mainHtml,
     footerLinks: [
       { href: '/', label: 'Portfolio' },
+      { href: endpoints.blogPath, label: 'Blog' },
       { href: endpoints.architecturePath, label: 'Architecture' },
       { href: endpoints.qualityPath, label: 'Quality Report' },
       { href: endpoints.resumeJsonPath, label: 'JSON Resume' },
@@ -694,6 +696,7 @@ export function buildSitemapXml(data) {
   const endpoints = getSiteEndpoints(data);
   const entries = [
     { loc: `${endpoints.baseUrl}/`, changefreq: 'monthly', priority: '1.0' },
+    { loc: endpoints.blogUrl, changefreq: 'weekly', priority: '0.8' },
     { loc: endpoints.resumePdfUrl, changefreq: 'monthly', priority: '0.8' },
     { loc: endpoints.architectureUrl, changefreq: 'monthly', priority: '0.6' },
     { loc: endpoints.qualityReportUrl, changefreq: 'weekly', priority: '0.6' },

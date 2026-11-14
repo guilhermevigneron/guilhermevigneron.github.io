@@ -15,6 +15,7 @@ import {
   evaluateVitalsBudgets,
 } from '../scripts/check-performance.mjs';
 import { buildArchitecturePage } from '../scripts/generate-architecture.mjs';
+import { buildBlogPages, loadBlogPosts } from '../scripts/generate-blog.mjs';
 import { buildQualityPage, evaluateQualityGates } from '../scripts/generate-quality-report.mjs';
 import { evaluateAiReadiness, GOLDEN_RECRUITER_QUERIES } from '../scripts/lib/ai-evals.mjs';
 import {
@@ -28,6 +29,7 @@ import {
 } from '../scripts/lib/flaky-triage.mjs';
 import { escapeHtml, rewriteAssetRefs, sanitizeHref } from '../scripts/lib/html.mjs';
 import { normalizeBaseUrl, toPathname } from '../scripts/lib/io.mjs';
+import { estimateReadingTime, parseFrontmatter, renderMarkdown } from '../scripts/lib/markdown.mjs';
 import { ROOT } from '../scripts/lib/paths.mjs';
 import {
   countPdfPages,
@@ -1521,5 +1523,77 @@ describe('grounded resume search & AI retrieval evaluation gate', () => {
     assert.equal(triage.flakyClusters, 2);
     assert.equal(triage.regressionClusters, 3);
     assert.equal(triage.envClusters, 1);
+  });
+});
+
+describe('markdown parser and blog generator', () => {
+  it('parses frontmatter, estimates reading time, and renders safe HTML5', () => {
+    const raw = `---
+title: Hello World
+date: 2026-11-14
+summary: A short summary
+tags: [node, testing]
+draft: false
+---
+
+## Section One
+
+Read [the docs](https://example.com) and \`code()\`.
+
+- First item
+- Second item
+`;
+    const { data, content } = parseFrontmatter(raw);
+    assert.equal(data.title, 'Hello World');
+    assert.equal(data.date, '2026-11-14');
+    assert.deepEqual(data.tags, ['node', 'testing']);
+    assert.equal(data.draft, false);
+    assert.equal(estimateReadingTime(content), 1);
+
+    const html = renderMarkdown(content);
+    assert.ok(html.includes('<h2>Section One</h2>'));
+    assert.ok(html.includes('rel="noopener noreferrer"'));
+    assert.ok(html.includes('<code>code()</code>'));
+    assert.ok(html.includes('<ul>'));
+  });
+
+  it('loads posts, skips drafts, and builds /blog/, post pages, and /feed.xml', () => {
+    withTempDir('blog-gen-', (tmpDir) => {
+      const blogDir = path.join(tmpDir, 'content', 'blog');
+      const siteDir = path.join(tmpDir, '_site');
+      const reportsDir = path.join(tmpDir, '.ci-reports');
+      fs.mkdirSync(blogDir, { recursive: true });
+      fs.mkdirSync(siteDir, { recursive: true });
+      fs.mkdirSync(reportsDir, { recursive: true });
+
+      fs.writeFileSync(
+        path.join(blogDir, '2026-11-14-published.md'),
+        '---\ntitle: Published Post\ndate: 2026-11-14\nsummary: Live summary\ntags: [ci]\n---\n\nHello blog.',
+        'utf8'
+      );
+      fs.writeFileSync(
+        path.join(blogDir, '2026-11-15-draft.md'),
+        '---\ntitle: Draft Post\ndate: 2026-11-15\ndraft: true\n---\n\nHidden.',
+        'utf8'
+      );
+
+      const posts = loadBlogPosts(tmpDir);
+      assert.equal(posts.length, 1);
+      assert.equal(posts[0].slug, 'published');
+
+      buildBlogPages({ rootDir: tmpDir, siteDir, reportsDir, resume });
+      const indexHtml = fs.readFileSync(path.join(siteDir, 'blog', 'index.html'), 'utf8');
+      const postHtml = fs.readFileSync(
+        path.join(siteDir, 'blog', 'published', 'index.html'),
+        'utf8'
+      );
+      const feedXml = fs.readFileSync(path.join(siteDir, 'feed.xml'), 'utf8');
+
+      assert.ok(indexHtml.includes('Published Post'));
+      assert.ok(!indexHtml.includes('Draft Post'));
+      assert.ok(postHtml.includes('<p>Hello blog.</p>'));
+      assert.ok(feedXml.includes('<rss version="2.0"'));
+      assert.ok(feedXml.includes('Published Post'));
+    });
   });
 });

@@ -8,7 +8,7 @@ const ARIA_EXP = 'aria-expanded';
 const NO_SCROLL = { preventScroll: true };
 
 const { email, host, siteUrl, toggleEvent, profiles, sections, ep } = SITE_CFG;
-const [pdfPath, jsonPath, vcfPath, vcfDl, archPath, qualPath, qJsonPath, llmsPath] = ep;
+const [pdfPath, jsonPath, vcfPath, vcfDl, archPath, qualPath, qJsonPath, llmsPath, blogPath] = ep;
 
 export function initCommandMenuPanel() {
   const D = document;
@@ -136,6 +136,7 @@ export function initCommandMenuPanel() {
     const links = [
       ...profiles.map(([network, display, url]) => [network, display, `>${url}`, 'profile']),
       ['Email', email, `mailto:${email}`],
+      ['Blog', blogPath, blogPath, 'writing posts articles'],
       ['Architecture Overview', archPath, archPath, 'diagram pipeline'],
       ['Live Quality Report', qualPath, qualPath, 'verification ci'],
       ['Quality Telemetry (JSON)', qJsonPath, qJsonPath, 'api'],

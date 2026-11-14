@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildArchitecturePage } from './generate-architecture.mjs';
+import { buildBlogPages } from './generate-blog.mjs';
 import { generateOgCard } from './generate-og-card.mjs';
 import { generatePdf } from './generate-pdf.mjs';
 import { buildQualityPage } from './generate-quality-report.mjs';
@@ -137,6 +138,7 @@ export async function runBuild({ skipSync = process.argv.includes('--no-sync') }
   const cssUrl = fingerprintAsset('assets/css/styles.css');
   const commandMenuCssUrl = fingerprintAsset('assets/css/command-menu.css');
   const subpageCssUrl = fingerprintAsset('assets/css/subpage.css');
+  const blogCssUrl = fingerprintAsset('assets/css/blog.css');
   const printCssUrl = fingerprintAsset('assets/css/print.css');
   const themeInitJsUrl = fingerprintAsset('assets/js/theme-init.js');
   const themeJsUrl = fingerprintAsset('assets/js/theme.js');
@@ -200,6 +202,7 @@ export async function runBuild({ skipSync = process.argv.includes('--no-sync') }
     cssUrl,
     commandMenuCssUrl,
     subpageCssUrl,
+    blogCssUrl,
     printCssUrl,
     monoFontUrl,
     pixelFontUrl,
@@ -256,6 +259,9 @@ export async function runBuild({ skipSync = process.argv.includes('--no-sync') }
 
   console.log(`7. Generating ${endpoints.architecturePath}...`);
   buildArchitecturePage({ rootDir: ROOT, siteDir: SITE_DIR, reportsDir: REPORTS_DIR, resume });
+
+  console.log(`8. Generating ${endpoints.blogPath} and ${endpoints.feedPath}...`);
+  buildBlogPages({ rootDir: ROOT, siteDir: SITE_DIR, reportsDir: REPORTS_DIR, resume });
 
   console.log('Build complete: _site/ ready.');
 }
