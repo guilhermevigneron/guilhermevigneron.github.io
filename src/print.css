@@ -97,7 +97,8 @@
     color: var(--faint);
   }
 
-  .print-contact a {
+  .print-contact a,
+  .inline-link {
     color: var(--ink);
     text-decoration: underline;
   }
@@ -113,6 +114,7 @@
     color: var(--ink);
     padding-bottom: 0.125rem;
     border-bottom: 1px solid var(--rule);
+    break-after: avoid;
   }
 
   .work-list {
@@ -129,6 +131,7 @@
 
   .entry-header {
     gap: 0.08rem;
+    break-after: avoid;
   }
 
   .entry-heading {
@@ -143,27 +146,15 @@
   }
 
   .work-highlights {
-    list-style: none;
+    list-style-type: disc;
     margin-top: 0.15rem;
-    padding-left: 0;
+    padding-left: 1rem;
     font-size: 0.6875rem;
     line-height: 1.34;
   }
 
-  .work-highlights li {
-    padding-left: 0.75rem;
-    text-indent: -0.75rem;
-  }
-
   .work-highlights li + li {
     margin-top: 0.1rem;
-  }
-
-  .work-highlights li::before {
-    content: "• ";
-    display: inline-block;
-    width: 0.75rem;
-    text-indent: 0;
   }
 
   .tag-list {

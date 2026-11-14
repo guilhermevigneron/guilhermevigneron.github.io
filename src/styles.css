@@ -36,16 +36,18 @@
   --bg: #fafaf8;
   --ink: #1a1815;
   --body: #4a4744;
-  --faint: #716e6c;
+  --faint: #63605d;
   --rule: #e3e1de;
+  --border-ui: #8a8784;
   --wash: #f2f0ed;
   --backdrop: #fafaf8cc;
 
   --bg: oklch(98.4% 0.0025 95);
   --ink: oklch(21% 0.006 70);
   --body: oklch(40% 0.006 70);
-  --faint: oklch(54% 0.005 70);
+  --faint: oklch(49% 0.005 70);
   --rule: oklch(91% 0.004 80);
+  --border-ui: oklch(62% 0.005 75);
   --wash: oklch(95.6% 0.004 85);
 
   --radius: 0.5rem;
@@ -58,16 +60,18 @@ html.dark {
   --bg: #0d0c0a;
   --ink: #ecebe8;
   --body: #b2b1ae;
-  --faint: #81807d;
+  --faint: #92918e;
   --rule: #282624;
+  --border-ui: #6e6c69;
   --wash: #171614;
   --backdrop: #0d0c0acc;
 
   --bg: oklch(15.5% 0.004 70);
   --ink: oklch(94% 0.004 80);
   --body: oklch(76% 0.004 80);
-  --faint: oklch(60% 0.004 80);
+  --faint: oklch(65.5% 0.004 80);
   --rule: oklch(27% 0.004 70);
+  --border-ui: oklch(53% 0.004 75);
   --wash: oklch(20% 0.004 70);
 
   color-scheme: dark;
@@ -143,8 +147,8 @@ body {
 }
 
 :focus-visible {
-  outline: 1px solid var(--ink);
-  outline-offset: 3px;
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 
 a,
@@ -273,7 +277,8 @@ button {
   }
 }
 
-.cv-shell {
+.cv-shell,
+.cv-main {
   gap: 2rem;
 }
 
@@ -754,6 +759,11 @@ html:not(.js) .command-bar {
   border-bottom: 1px solid var(--rule);
 }
 
+.cmd-input-row:has(.cmd-input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
 .cmd-search-icon {
   width: 1.125rem;
   height: 1.125rem;
@@ -810,11 +820,16 @@ html:not(.js) .command-bar {
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.625rem 0.5rem;
+  border: 1px solid transparent;
   border-radius: 0.25rem;
   text-align: left;
   font-size: 0.875rem;
   color: var(--body);
   transition: background 120ms, color 120ms;
+}
+
+.cmd-item:focus-visible {
+  outline-offset: -2px;
 }
 
 .cmd-item:hover,
@@ -847,6 +862,7 @@ html:not(.js) .command-bar {
   transform: translateX(-50%);
   max-width: calc(100vw - 2rem);
   padding: 0.5rem 0.875rem;
+  border: 1px solid transparent;
   border-radius: 99rem;
   background: var(--ink);
   color: var(--bg);
@@ -857,6 +873,10 @@ html:not(.js) .command-bar {
 }
 
 @media (min-width: 768px) {
+  html {
+    scroll-padding-bottom: 5rem;
+  }
+
   .cmd-toast {
     bottom: 3rem;
   }
@@ -874,8 +894,8 @@ html:not(.js) .command-bar {
   }
 
   .cv-footer-links a {
-    min-height: auto;
-    padding: 0;
+    min-height: 1.5rem;
+    padding: 0 0.25rem;
   }
 
   .cmd-input {
@@ -930,5 +950,32 @@ html:not(.js) .command-bar {
 
   .delay-6 {
     animation-delay: 300ms;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon-btn,
+  .cmd-close,
+  .command-trigger,
+  .cmd-item {
+    transition: none;
+  }
+
+  .icon-btn:active {
+    transform: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .cmd-item[data-selected="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  .cmd-dialog,
+  .cmd-toast {
+    border-color: CanvasText;
   }
 }

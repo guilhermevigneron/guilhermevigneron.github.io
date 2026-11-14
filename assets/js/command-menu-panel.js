@@ -73,6 +73,7 @@ export function initCommandMenuPanel() {
     let closeBtn = byId('command-close');
     let list = byId('command-list');
     let emptyState = byId('command-empty');
+    let statusEl = byId('command-status');
 
     if (!input) {
       sa(dialog, {
@@ -121,7 +122,13 @@ export function initCommandMenuPanel() {
       });
       emptyState.hidden = true;
 
-      dialog.append(title, row, list, emptyState);
+      statusEl = el('div', 'sr-only', '', {
+        id: 'command-status',
+        role: 'status',
+        'aria-live': 'polite',
+      });
+
+      dialog.append(title, row, list, emptyState, statusEl);
     }
 
     let toast = byId('cmd-toast');
@@ -135,7 +142,7 @@ export function initCommandMenuPanel() {
       D.body.appendChild(toast);
     }
 
-    return { backdrop, dialog, toast, closeBtn, input, list, emptyState };
+    return { backdrop, dialog, toast, closeBtn, input, list, emptyState, statusEl };
   }
 
   function getGroups(isHome) {
@@ -358,9 +365,22 @@ export function initCommandMenuPanel() {
     if (scroll) activeItem.scrollIntoView({ block: 'nearest' });
   };
 
-  const filterItems = (query) => {
+  const setBackgroundInert = (inertState) => {
+    [...D.body.children].forEach((child) => {
+      if (child === backdrop || child === dialog || child === toast) return;
+      if (inertState) {
+        child.setAttribute('inert', '');
+        child.setAttribute('aria-hidden', 'true');
+      } else {
+        child.removeAttribute('inert');
+        child.removeAttribute('aria-hidden');
+      }
+    });
+  };
+
+  const filterItems = (query, announce = false) => {
     const q = query.trim().toLowerCase();
-    let any = false;
+    let total = 0;
     groups.forEach((group) => {
       let count = 0;
       qa(group, '.cmd-item').forEach((item) => {
@@ -369,21 +389,36 @@ export function initCommandMenuPanel() {
         item.hidden = !match;
         if (match) {
           count += 1;
-          any = true;
+          total += 1;
         }
       });
       group.hidden = count === 0;
     });
+    const any = total > 0;
     list.hidden = !any;
     emptyState.hidden = any;
     setSelected(0, false);
+    if (statusEl) {
+      if (statusTimer) W.clearTimeout(statusTimer);
+      if (announce) {
+        statusTimer = W.setTimeout(() => {
+          statusEl.textContent = any
+            ? `${total} ${total === 1 ? 'result' : 'results'} available.`
+            : '';
+          statusTimer = null;
+        }, 150);
+      } else {
+        statusEl.textContent = '';
+      }
+    }
   };
 
   const openMenu = (triggerEl = D.activeElement) => {
     lastFocused = triggerEl instanceof HTMLElement ? triggerEl : D.activeElement;
     input.value = '';
-    filterItems('');
+    filterItems('', false);
     list.scrollTop = 0;
+    setBackgroundInert(true);
     backdrop.hidden = false;
     dialog.hidden = false;
     setExpanded(true);
@@ -395,6 +430,11 @@ export function initCommandMenuPanel() {
 
   const closeMenu = (restore) => {
     if (!isOpen()) return;
+    if (statusTimer) {
+      W.clearTimeout(statusTimer);
+      statusTimer = null;
+    }
+    setBackgroundInert(false);
     backdrop.hidden = true;
     dialog.hidden = true;
     setExpanded(false);
@@ -524,16 +564,27 @@ export function initCommandMenuPanel() {
       return;
     }
 
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault();
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End') {
       const onItem =
         D.activeElement instanceof Element && Boolean(D.activeElement.closest('.cmd-item'));
-      setSelected(activeIndex + (event.key === 'ArrowDown' ? 1 : -1), true);
-      if (onItem) {
-        const visible = getVisible();
-        if (activeIndex >= 0 && visible[activeIndex]) {
-          visible[activeIndex].focus({ preventScroll: true });
-        }
+      if ((event.key === 'Home' || event.key === 'End') && !onItem && D.activeElement !== input) {
+        return;
+      }
+      if ((event.key === 'Home' || event.key === 'End') && D.activeElement === input && !onItem) {
+        return;
+      }
+      event.preventDefault();
+      const visible = getVisible();
+      if (!visible.length) return;
+      const targetIndex =
+        event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? visible.length - 1
+            : activeIndex + (event.key === 'ArrowDown' ? 1 : -1);
+      setSelected(targetIndex, true);
+      if (onItem && activeIndex >= 0 && visible[activeIndex]) {
+        visible[activeIndex].focus({ preventScroll: true });
       }
       return;
     }
@@ -548,7 +599,7 @@ export function initCommandMenuPanel() {
   });
 
   input.addEventListener('input', () => {
-    filterItems(input.value);
+    filterItems(input.value, true);
   });
   list.addEventListener('focusin', syncHoveredOrFocused);
   list.addEventListener('pointerover', (e) => {

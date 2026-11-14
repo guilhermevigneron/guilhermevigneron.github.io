@@ -240,7 +240,7 @@ export function buildCvContentHtml(data) {
                         <div class="entry-header">
                             <div class="entry-top">
                                 <h3 class="entry-heading">${escapeHtml(job.name)}</h3>
-                                <div class="date-range" title="Employment period: ${escapeHtml(job.displayDate)}">${escapeHtml(job.displayDate)}</div>
+                                <div class="date-range">${escapeHtml(job.displayDate)}</div>
                             </div>
                             ${roleRow}
                         </div>
@@ -277,9 +277,9 @@ ${highlights}
                         <div class="entry-header">
                             <div class="entry-top">
                                 <h3 class="entry-heading">
-                                    <a href="${escapeHtml(proj.url)}" target="_blank" rel="noopener noreferrer" class="inline-link">${escapeHtml(proj.name)}<span class="ext-arrow" aria-hidden="true">&nbsp;&#8599;</span></a>
+                                    <a href="${escapeHtml(proj.url)}" target="_blank" rel="noopener noreferrer" class="inline-link">${escapeHtml(proj.name)}<span class="ext-arrow" aria-hidden="true">&nbsp;&#8599;</span><span class="sr-only"> (opens in a new tab)</span></a>
                                 </h3>
-                                <div class="date-range" title="Project timeline: ${escapeHtml(dateText)}">${escapeHtml(dateText)}</div>
+                                <div class="date-range">${escapeHtml(dateText)}</div>
                             </div>
                             <p class="entry-role">${escapeHtml(proj.subtitle || '')}${extraLinks}</p>
                         </div>
@@ -296,7 +296,7 @@ ${highlights}
     .map(
       (pub) => `                    <article>
                         <h3 class="entry-heading">
-                            <a href="${escapeHtml(pub.url)}" target="_blank" rel="noopener noreferrer" class="inline-link">${escapeHtml(pub.name)}<span class="ext-arrow" aria-hidden="true">&nbsp;&#8599;</span></a>
+                            <a href="${escapeHtml(pub.url)}" target="_blank" rel="noopener noreferrer" class="inline-link">${escapeHtml(pub.name)}<span class="ext-arrow" aria-hidden="true">&nbsp;&#8599;</span><span class="sr-only"> (opens in a new tab)</span></a>
                         </h3>
                         <p class="entry-sub">Publication <span aria-hidden="true">&middot;</span> ${escapeHtml(pub.publisher)}</p>
                     </article>`
@@ -336,7 +336,7 @@ ${highlights}
       (edu) => `                    <article>
                         <div class="entry-top">
                             <h3 class="entry-heading">${escapeHtml(edu.institution)}</h3>
-                            <div class="date-range" title="Period: ${escapeHtml(edu.startDate)} to ${escapeHtml(edu.endDate)}">${escapeHtml(edu.startDate)} - ${escapeHtml(edu.endDate)}</div>
+                            <div class="date-range">${escapeHtml(edu.startDate)} - ${escapeHtml(edu.endDate)}</div>
                         </div>
                         <p class="edu-degree">${escapeHtml(edu.studyType)}, ${escapeHtml(edu.area)}</p>
                     </article>`
@@ -375,33 +375,30 @@ ${highlights}
                     <nav aria-label="Social links">
                         <ul class="contact-list">
                             <li>
-                                <a href="mailto:${escapeHtml(data.basics.email)}" class="icon-btn" aria-label="Email" title="Email">
+                                <a href="mailto:${escapeHtml(data.basics.email)}" class="icon-btn" aria-label="Email">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                                         <rect width="20" height="16" x="2" y="4" rx="2"></rect>
                                         <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
                                     </svg>
-                                    <span class="sr-only">Email</span>
                                 </a>
                             </li>
                             <li>
-                                <a href="${escapeHtml(github?.url || '')}" target="_blank" rel="noopener noreferrer" class="icon-btn" aria-label="GitHub Profile (opens in a new tab)" title="GitHub">
+                                <a href="${escapeHtml(github?.url || '')}" target="_blank" rel="noopener noreferrer" class="icon-btn" aria-label="GitHub Profile (opens in a new tab)">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
                                         <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"></path>
                                     </svg>
-                                    <span class="sr-only">GitHub</span>
                                 </a>
                             </li>
                             <li>
-                                <a href="${escapeHtml(linkedin?.url || '')}" target="_blank" rel="noopener noreferrer" class="icon-btn" aria-label="LinkedIn Profile (opens in a new tab)" title="LinkedIn">
+                                <a href="${escapeHtml(linkedin?.url || '')}" target="_blank" rel="noopener noreferrer" class="icon-btn" aria-label="LinkedIn Profile (opens in a new tab)">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
                                         <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"></path>
                                     </svg>
-                                    <span class="sr-only">LinkedIn</span>
                                 </a>
                             </li>
                         </ul>
                     </nav>
-                    <a href="${escapeHtml(data.meta.resumePdf)}" class="icon-btn" aria-label="Download My Resume (PDF)" title="Download My Resume (PDF)">
+                    <a href="${escapeHtml(data.meta.resumePdf)}" class="icon-btn" aria-label="Download My Resume (PDF)">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                             <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path>
                             <path d="M14 2v4a2 2 0 0 0 2 2h4"></path>
@@ -410,7 +407,7 @@ ${highlights}
                         </svg>
                         <span class="sr-only">Download My Resume</span>
                     </a>
-                    <button id="theme-toggle" type="button" class="icon-btn" aria-label="Switch to dark theme" aria-pressed="false" title="Switch to dark theme">
+                    <button id="theme-toggle" type="button" class="icon-btn" aria-label="Switch to dark theme" aria-pressed="false">
                         <svg class="theme-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                             <circle cx="12" cy="12" r="4"></circle>
                             <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
@@ -419,7 +416,7 @@ ${highlights}
                             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
                         </svg>
                     </button>
-                    <button id="command-trigger-mobile" type="button" class="icon-btn mobile-only-btn" aria-label="Open command menu" aria-haspopup="dialog" aria-controls="command-dialog" aria-expanded="false" title="Open command menu">
+                    <button id="command-trigger-mobile" type="button" class="icon-btn mobile-only-btn" aria-label="Open command menu" aria-haspopup="dialog" aria-controls="command-dialog" aria-expanded="false">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                             <circle cx="11" cy="11" r="8"></circle>
                             <path d="m21 21-4.3-4.3"></path>
@@ -428,6 +425,7 @@ ${highlights}
                 </div>
             </header>
 
+            <main id="main-content" class="cv-main" tabindex="-1">
             <section id="about" tabindex="-1" aria-labelledby="about-heading" class="cv-section animate-fade-in delay-1">
                 <h2 id="about-heading" class="section-title">Summary</h2>
                 <p class="summary-copy">
@@ -483,7 +481,8 @@ ${eduHtml}
                 <p class="edu-degree">${languagesText}</p>
             </section>`
                 : ''
-            }`;
+            }
+            </main>`;
 }
 
 export function buildCommandMenuMeta(data) {

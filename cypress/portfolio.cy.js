@@ -764,7 +764,7 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
       expect(liveResume.meta.maxPdfPages).to.eq(MAX_PDF_PAGES);
 
       cy.visit('/');
-      cy.get('main').within(() => {
+      cy.get('.cv-shell').within(() => {
         cy.get(`a[href="mailto:${liveResume.basics.email}"]`).should('exist');
         liveResume.basics.profiles.forEach((profile) => {
           cy.get(`a[href="${profile.url}"]`).should('exist');

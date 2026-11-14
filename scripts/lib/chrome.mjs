@@ -108,15 +108,15 @@ export function renderSubpageDocument({
 <body class="subpage-body">
     <a href="#main-content" class="sr-only skip-link">Skip to main content</a>
 
-    <main id="main-content" class="subpage-main" tabindex="-1">
+    <div class="subpage-main">
         <div class="cv-shell">
             <header class="subpage-nav">
                 <div>
                     <a href="/" class="subpage-brand">${escapeHtml(ownerName)}</a>
                     ${subtitleHtml}
                 </div>
-                <div class="subpage-nav-actions">${navLinksHtml ? `\n                    ${navLinksHtml}` : ''}
-                    <button id="theme-toggle" type="button" class="icon-btn" aria-label="Switch to dark theme" aria-pressed="false" title="Switch to dark theme">
+                <div class="subpage-nav-actions">${navLinksHtml ? `\n                    <nav aria-label="Primary">\n                    ${navLinksHtml}\n                    </nav>` : ''}
+                    <button id="theme-toggle" type="button" class="icon-btn" aria-label="Switch to dark theme" aria-pressed="false">
                         <svg class="theme-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                             <circle cx="12" cy="12" r="4"></circle>
                             <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
@@ -125,7 +125,7 @@ export function renderSubpageDocument({
                             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
                         </svg>
                     </button>
-                    <button id="command-trigger-mobile" type="button" class="icon-btn mobile-only-btn" aria-label="Open command menu" aria-haspopup="dialog" aria-controls="command-dialog" aria-expanded="false" title="Open command menu">
+                    <button id="command-trigger-mobile" type="button" class="icon-btn mobile-only-btn" aria-label="Open command menu" aria-haspopup="dialog" aria-controls="command-dialog" aria-expanded="false">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                             <circle cx="11" cy="11" r="8"></circle>
                             <path d="m21 21-4.3-4.3"></path>
@@ -134,16 +134,18 @@ export function renderSubpageDocument({
                 </div>
             </header>
 
+            <main id="main-content" class="cv-main" tabindex="-1">
 ${mainSectionsHtml}
+            </main>
         </div>
-    </main>
+    </div>
 
     <footer class="cv-footer-wrap">
         <div class="cv-footer-inner">
             ${copyrightHtml}
-            <div class="cv-footer-links">
+            <nav class="cv-footer-links" aria-label="Footer">
                 ${footerLinksHtml}
-            </div>
+            </nav>
         </div>
         <div class="command-bar">
             <button type="button" id="command-trigger" class="command-trigger" aria-haspopup="dialog" aria-controls="command-dialog" aria-expanded="false">

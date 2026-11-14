@@ -102,7 +102,7 @@ html.dark {
   min-height: 2.75rem;
   padding: 0.5rem 0.875rem;
   border-radius: var(--radius);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border-ui, var(--rule));
   font-size: 0.75rem;
   color: var(--body);
   transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
@@ -128,12 +128,20 @@ html.dark {
   gap: 0.375rem;
   min-height: 2.75rem;
   padding: 0.5rem 0.875rem;
+  border: 1px solid transparent;
   border-radius: var(--radius);
   background-color: var(--ink);
   color: var(--bg);
   font-size: 0.75rem;
   font-weight: 500;
   transition: opacity 150ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ghost-link,
+  .primary-link {
+    transition: none;
+  }
 }
 
 .primary-link:hover,

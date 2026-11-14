@@ -40,7 +40,6 @@
       const label = isDark ? 'Switch to light theme' : 'Switch to dark theme';
       toggle.setAttribute('aria-pressed', String(isDark));
       toggle.setAttribute('aria-label', label);
-      toggle.setAttribute('title', label);
     }
   }
 

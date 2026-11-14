@@ -26,7 +26,7 @@
 <body class="subpage-body">
     <a href="#main-content" class="sr-only skip-link">Skip to main content</a>
 
-    <main id="main-content" class="subpage-main" tabindex="-1">
+    <div class="subpage-main">
         <div class="cv-shell">
             <header class="subpage-nav">
                 <div>
@@ -34,8 +34,10 @@
                     <!-- SUBTITLE_START --><p class="entry-sub">Principal Technologist | Quality, DevOps &amp; Developer Experience</p><!-- SUBTITLE_END -->
                 </div>
                 <div class="subpage-nav-actions">
+                    <nav aria-label="Primary">
                     <a href="/" class="ghost-link">Portfolio</a>
-                    <button id="theme-toggle" type="button" class="icon-btn" aria-label="Switch to dark theme" aria-pressed="false" title="Switch to dark theme">
+                    </nav>
+                    <button id="theme-toggle" type="button" class="icon-btn" aria-label="Switch to dark theme" aria-pressed="false">
                         <svg class="theme-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                             <circle cx="12" cy="12" r="4"></circle>
                             <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
@@ -44,7 +46,7 @@
                             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
                         </svg>
                     </button>
-                    <button id="command-trigger-mobile" type="button" class="icon-btn mobile-only-btn" aria-label="Open command menu" aria-haspopup="dialog" aria-controls="command-dialog" aria-expanded="false" title="Open command menu">
+                    <button id="command-trigger-mobile" type="button" class="icon-btn mobile-only-btn" aria-label="Open command menu" aria-haspopup="dialog" aria-controls="command-dialog" aria-expanded="false">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                             <circle cx="11" cy="11" r="8"></circle>
                             <path d="m21 21-4.3-4.3"></path>
@@ -53,6 +55,7 @@
                 </div>
             </header>
 
+            <main id="main-content" class="cv-main" tabindex="-1">
             <section class="panel-card panel-card--spacious">
                 <p class="section-title">error 404</p>
                 <h1 class="cv-name error-title">Page Not Found</h1>
@@ -65,13 +68,14 @@
                     <a href="/quality/" class="ghost-link">Quality Report</a>
                 </div>
             </section>
+            </main>
         </div>
-    </main>
+    </div>
 
     <footer class="cv-footer-wrap">
         <div class="cv-footer-inner">
             <!-- COPYRIGHT_START --><span>&copy; 2026 Guilherme Vigneron de Oliveira</span><!-- COPYRIGHT_END -->
-            <div class="cv-footer-links">
+            <nav class="cv-footer-links" aria-label="Footer">
                 <a href="/">Portfolio</a>
                 <span aria-hidden="true">&middot;</span>
                 <a href="/architecture/">Architecture</a>
@@ -81,7 +85,7 @@
                 <a href="/resume.json">JSON Resume</a>
                 <span aria-hidden="true">&middot;</span>
                 <a href="/llms.txt">llms.txt</a>
-            </div>
+            </nav>
         </div>
         <div class="command-bar">
             <button type="button" id="command-trigger" class="command-trigger" aria-haspopup="dialog" aria-controls="command-dialog" aria-expanded="false">
