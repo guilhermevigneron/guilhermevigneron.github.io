@@ -72,7 +72,9 @@ async function fetchOnceWithSafeRedirects(initialUrl, options = {}) {
       const location = response.headers.get('location');
       await response.body?.cancel().catch(() => {});
       if (!location) {
-        throw new Error(`Redirect HTTP ${response.status} without Location header at ${currentUrl}`);
+        throw new Error(
+          `Redirect HTTP ${response.status} without Location header at ${currentUrl}`
+        );
       }
       const fromParsed = new URL(currentUrl);
       const nextParsed = new URL(location, fromParsed);
@@ -278,7 +280,10 @@ async function verifySubpageHtml(route, labels) {
   assert.ok(subpageMatch, `${route} missing compiled subpage stylesheet link`);
   assert.ok(printMatch, `${route} missing compiled print stylesheet link`);
   assert.ok(cmdMatch, `${route} missing command-menu loader script`);
-  assert.ok(refs.scripts.length >= 3, `${route} expected theme-init, theme, and command-menu scripts`);
+  assert.ok(
+    refs.scripts.length >= 3,
+    `${route} expected theme-init, theme, and command-menu scripts`
+  );
 
   for (const url of [...refs.stylesheets, ...refs.scripts]) {
     await fetchCheckedAsset(url, contentTypeForAsset(url), 100);
@@ -323,9 +328,14 @@ async function main() {
       'fonts.gstatic.com',
       'drive.google.com',
     ]) {
-      assert.ok(!homeHtml.includes(banned), `Homepage still references third-party host: ${banned}`);
+      assert.ok(
+        !homeHtml.includes(banned),
+        `Homepage still references third-party host: ${banned}`
+      );
     }
-    console.log('PASS / (200, strict CSP, Selected Projects, OG card, zero third-party references)');
+    console.log(
+      'PASS / (200, strict CSP, Selected Projects, OG card, zero third-party references)'
+    );
   });
 
   await runCheck('homepage-referenced-assets', async () => {
@@ -431,8 +441,13 @@ async function main() {
     );
     assert.ok(/\/StructTreeRoot\b/.test(pdfText), '/resume.pdf missing /StructTreeRoot');
     assert.ok(!/\/Subtype\s*\/Type3\b/.test(pdfText), '/resume.pdf contains Type3 fonts');
-    assert.ok(!/\/Subtype\s*\/Image\b/.test(pdfText), '/resume.pdf contains embedded raster images');
-    console.log(`PASS /resume.pdf (${pdfPages} page, tagged, ${(pdfBuf.length / 1024).toFixed(1)} KB)`);
+    assert.ok(
+      !/\/Subtype\s*\/Image\b/.test(pdfText),
+      '/resume.pdf contains embedded raster images'
+    );
+    console.log(
+      `PASS /resume.pdf (${pdfPages} page, tagged, ${(pdfBuf.length / 1024).toFixed(1)} KB)`
+    );
   });
 
   await runCheck('machine-endpoints', async () => {
@@ -534,10 +549,7 @@ async function main() {
       sitemapText.includes(`${canonicalUrl}/architecture/`),
       'sitemap.xml missing /architecture/'
     );
-    assert.ok(
-      sitemapText.includes(`${canonicalUrl}/quality/`),
-      'sitemap.xml missing /quality/'
-    );
+    assert.ok(sitemapText.includes(`${canonicalUrl}/quality/`), 'sitemap.xml missing /quality/');
   });
 
   await runCheck('not-found-handler', async () => {

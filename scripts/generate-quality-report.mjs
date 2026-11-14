@@ -61,10 +61,7 @@ function statusBadge(status) {
 function buildQualityPage() {
   const resume = readJsonIfExists(path.join(ROOT, 'resume.json'));
   const ownerName = resume?.basics?.name || 'Guilherme Vigneron de Oliveira';
-  const siteUrl = String(resume?.basics?.url || 'https://guilhermevigneron.dev').replace(
-    /\/$/,
-    ''
-  );
+  const siteUrl = String(resume?.basics?.url || 'https://guilhermevigneron.dev').replace(/\/$/, '');
   const domain = siteUrl.replace(/^https?:\/\//, '');
   const currentYear = new Date().getUTCFullYear();
 
@@ -426,7 +423,8 @@ function buildQualityPage() {
       },
     ],
     ownerName,
-    subtitleHtml: '<p class="entry-sub">Self-Verifying Engineering Showcase &amp; Quality Report</p>',
+    subtitleHtml:
+      '<p class="entry-sub">Self-Verifying Engineering Showcase &amp; Quality Report</p>',
     navLinks: [
       { href: '/', label: 'Portfolio' },
       { href: '/architecture/', label: 'Architecture' },

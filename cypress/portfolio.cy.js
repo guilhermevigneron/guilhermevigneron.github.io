@@ -224,11 +224,13 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
       expect($img[0].naturalWidth).to.be.greaterThan(0);
     });
 
-    cy.document().its('documentElement.outerHTML').then((html) => {
-      THIRD_PARTY_DOMAINS.forEach((domain) => {
-        expect(html).to.not.include(domain);
+    cy.document()
+      .its('documentElement.outerHTML')
+      .then((html) => {
+        THIRD_PARTY_DOMAINS.forEach((domain) => {
+          expect(html).to.not.include(domain);
+        });
       });
-    });
 
     cy.get('i[class*="fa"]').should('have.length', 0);
   });
@@ -270,10 +272,9 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
           if (script.getAttribute('type') === 'application/ld+json') {
             return;
           }
-          expect(
-            script.getAttribute('src'),
-            `${route} executable script must use src`
-          ).to.be.a('string').and.not.be.empty;
+          expect(script.getAttribute('src'), `${route} executable script must use src`).to.be.a(
+            'string'
+          ).and.not.be.empty;
         });
       });
 
@@ -515,7 +516,8 @@ describe('Command Menu Interaction', () => {
       cy.contains('#command-dialog .cmd-item', 'Languages').should('exist');
     }
 
-    const emailSearchToken = resume.basics.email.split('@')[1]?.split('.')[0] || resume.basics.email;
+    const emailSearchToken =
+      resume.basics.email.split('@')[1]?.split('.')[0] || resume.basics.email;
     [
       { query: 'Live', expected: 'Live Quality Report' },
       { query: 'Appearance', expected: 'Toggle Light / Dark Theme' },
@@ -560,7 +562,9 @@ describe('Command Menu Interaction', () => {
     cy.get('#command-trigger').click();
     cy.get('#command-input').type('Copy Profile URL');
     cy.contains('#command-dialog .cmd-item:not([hidden])', 'Copy Profile URL').click();
-    cy.get('#cmd-toast').should('be.visible').and('contain.text', 'Profile URL copied to clipboard');
+    cy.get('#cmd-toast')
+      .should('be.visible')
+      .and('contain.text', 'Profile URL copied to clipboard');
     cy.get('@clipWrite').should('have.been.calledWith', SITE_URL);
 
     cy.get('#command-trigger').click();
@@ -617,10 +621,9 @@ describe('Mobile Device Compatibility & Touch UX', () => {
         cy.visit(route, { failOnStatusCode: route !== '/404.html' });
         cy.window().then((win) => {
           const docEl = win.document.documentElement;
-          expect(
-            docEl.scrollWidth,
-            `horizontal overflow on ${route} at ${width}px`
-          ).to.be.at.most(win.innerWidth);
+          expect(docEl.scrollWidth, `horizontal overflow on ${route} at ${width}px`).to.be.at.most(
+            win.innerWidth
+          );
         });
       });
 
@@ -712,7 +715,9 @@ describe('Mobile Device Compatibility & Touch UX', () => {
     });
 
     cy.get('#command-input').type('Resume');
-    cy.contains('#command-dialog .cmd-item:not([hidden])', 'Download Resume (PDF)').should('be.visible');
+    cy.contains('#command-dialog .cmd-item:not([hidden])', 'Download Resume (PDF)').should(
+      'be.visible'
+    );
 
     cy.get('#command-close').then(($close) => {
       const rect = $close[0].getBoundingClientRect();
@@ -939,10 +944,30 @@ describe('WCAG 2.1 AA Accessibility Matrix (Light/Dark & Mobile/Desktop)', () =>
     { route: '/quality/', viewport: [1280, 800], theme: 'dark', label: 'quality-desktop-dark' },
     { route: '/quality/', viewport: [375, 667], theme: 'light', label: 'quality-mobile-light' },
     { route: '/quality/', viewport: [375, 667], theme: 'dark', label: 'quality-mobile-dark' },
-    { route: '/architecture/', viewport: [1280, 800], theme: 'light', label: 'architecture-desktop-light' },
-    { route: '/architecture/', viewport: [1280, 800], theme: 'dark', label: 'architecture-desktop-dark' },
-    { route: '/architecture/', viewport: [375, 667], theme: 'light', label: 'architecture-mobile-light' },
-    { route: '/architecture/', viewport: [375, 667], theme: 'dark', label: 'architecture-mobile-dark' },
+    {
+      route: '/architecture/',
+      viewport: [1280, 800],
+      theme: 'light',
+      label: 'architecture-desktop-light',
+    },
+    {
+      route: '/architecture/',
+      viewport: [1280, 800],
+      theme: 'dark',
+      label: 'architecture-desktop-dark',
+    },
+    {
+      route: '/architecture/',
+      viewport: [375, 667],
+      theme: 'light',
+      label: 'architecture-mobile-light',
+    },
+    {
+      route: '/architecture/',
+      viewport: [375, 667],
+      theme: 'dark',
+      label: 'architecture-mobile-dark',
+    },
   ];
 
   matrix.forEach(({ route, viewport, theme, label }) => {

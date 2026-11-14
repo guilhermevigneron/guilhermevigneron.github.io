@@ -8,7 +8,7 @@
   "scripts": {
     "sync": "node scripts/sync-resume.mjs",
     "lint": "node scripts/run-gate.mjs lint",
-    "lint:fix": "biome lint --write .",
+    "lint:fix": "biome check --write .",
     "build:css": "node scripts/minify-assets.mjs --css",
     "build:pdf": "node scripts/generate-pdf.mjs",
     "build:og": "node scripts/generate-og-card.mjs",
@@ -21,9 +21,11 @@
     "test:html": "node scripts/run-html-validate.mjs",
     "test:e2e": "node scripts/test-e2e.mjs",
     "test:perf": "node scripts/check-performance.mjs",
+    "test:perf:quality": "node scripts/check-performance.mjs --quality-only",
+    "test:quality-status": "node -e \"const r = JSON.parse(require('node:fs').readFileSync('./_site/quality/report.json', 'utf8')); if (r.overallStatus !== 'pass') { console.error(JSON.stringify(r, null, 2)); process.exit(1); }\"",
     "test:security": "node scripts/run-gate.mjs security",
     "test:smoke:prod": "node scripts/prod-smoke.mjs",
-    "verify": "npm run lint && npm run test:unit && npm run test:security && npm run build && npm run test:html && npm run test:e2e && npm run test:perf && npm run build:quality && npm run test:html",
+    "verify": "npm run test:sync && npm run lint && npm run test:unit && npm run test:security && npm run build -- --no-sync && npm run test:html && npm run test:e2e && npm run test:perf && npm run build:quality && npm run test:html && npm run test:perf:quality && npm run test:quality-status",
     "cy:run": "cypress run --browser chrome",
     "cy:run:chromium": "cypress run --browser chromium"
   },

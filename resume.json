@@ -63,13 +63,7 @@
         "Orchestrated testing processes using Azure DevOps release pipelines.",
         "Mentored junior QA engineers, improving team productivity and knowledge sharing."
       ],
-      "keywords": [
-        "Selenium",
-        "C#",
-        "Page Object Model",
-        "Azure DevOps",
-        "Mentorship"
-      ]
+      "keywords": ["Selenium", "C#", "Page Object Model", "Azure DevOps", "Mentorship"]
     },
     {
       "name": "AVEVA",
@@ -84,12 +78,7 @@
         "Collaborated with cross-functional teams to optimize the software development lifecycle.",
         "Developed and delivered comprehensive training programs on testing techniques for QA analysts."
       ],
-      "keywords": [
-        "Risk-Based Testing",
-        "Test Automation",
-        "SDLC",
-        "QA Training"
-      ]
+      "keywords": ["Risk-Based Testing", "Test Automation", "SDLC", "QA Training"]
     }
   ],
   "projects": [

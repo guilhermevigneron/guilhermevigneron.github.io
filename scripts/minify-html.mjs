@@ -53,8 +53,9 @@ export function minifyHtml(html) {
   out = out.replace(/>\s+(__HTML_MINIFY_PRESERVE_(\d+)__)/g, (m, token, idx) =>
     stripAroundTokens.has(Number(idx)) ? `>${token}` : m
   );
-  out = out.replace(/(__HTML_MINIFY_PRESERVE_(\d+)__)\s+(?=<|__HTML_MINIFY_PRESERVE_)/g, (m, token, idx) =>
-    stripAroundTokens.has(Number(idx)) ? token : m
+  out = out.replace(
+    /(__HTML_MINIFY_PRESERVE_(\d+)__)\s+(?=<|__HTML_MINIFY_PRESERVE_)/g,
+    (m, token, idx) => (stripAroundTokens.has(Number(idx)) ? token : m)
   );
 
   preserved.forEach((chunk, index) => {

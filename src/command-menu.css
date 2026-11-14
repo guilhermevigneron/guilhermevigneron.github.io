@@ -13,7 +13,10 @@
   border-radius: 0.25rem;
   color: var(--faint);
   flex-shrink: 0;
-  transition: color 150ms, background 150ms, transform 120ms;
+  transition:
+    color 150ms,
+    background 150ms,
+    transform 120ms;
 }
 
 .cmd-close:hover,
@@ -148,7 +151,9 @@
   text-align: left;
   font-size: 0.875rem;
   color: var(--body);
-  transition: background 120ms, color 120ms;
+  transition:
+    background 120ms,
+    color 120ms;
 }
 
 .cmd-item:focus-visible {

@@ -8,7 +8,9 @@
 
 @font-face {
   font-family: "Geist Mono Fallback";
-  src: local("SFMono-Regular"), local("Menlo"), local("Consolas"), local("Liberation Mono"), local("Roboto Mono"), local("DejaVu Sans Mono"), local("Courier New");
+  src:
+    local("SFMono-Regular"), local("Menlo"), local("Consolas"), local("Liberation Mono"),
+    local("Roboto Mono"), local("DejaVu Sans Mono"), local("Courier New");
   ascent-override: 100.5%;
   descent-override: 29.5%;
   line-gap-override: 0%;
@@ -25,7 +27,9 @@
 
 @font-face {
   font-family: "Geist Pixel Fallback";
-  src: local("SFMono-Regular"), local("Menlo"), local("Consolas"), local("Liberation Mono"), local("Roboto Mono"), local("DejaVu Sans Mono"), local("Courier New");
+  src:
+    local("SFMono-Regular"), local("Menlo"), local("Consolas"), local("Liberation Mono"),
+    local("Roboto Mono"), local("DejaVu Sans Mono"), local("Courier New");
   ascent-override: 100.5%;
   descent-override: 29.5%;
   line-gap-override: 0%;
@@ -42,6 +46,7 @@
   --wash: #f2f0ed;
   --backdrop: #fafaf8cc;
 
+  /* biome-ignore lint/suspicious/noDuplicateCustomProperties: oklch progressive enhancement */
   --bg: oklch(98.4% 0.0025 95);
   --ink: oklch(21% 0.006 70);
   --body: oklch(40% 0.006 70);
@@ -66,6 +71,7 @@ html.dark {
   --wash: #171614;
   --backdrop: #0d0c0acc;
 
+  /* biome-ignore lint/suspicious/noDuplicateCustomProperties: oklch progressive enhancement */
   --bg: oklch(15.5% 0.004 70);
   --ink: oklch(94% 0.004 80);
   --body: oklch(76% 0.004 80);
@@ -97,21 +103,32 @@ html.dark {
   border-color: var(--rule);
 }
 
-h1, h2, h3, h4, p, ul, ol {
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+ol {
   margin: 0;
 }
 
-h1, h2, h3, h4 {
+h1,
+h2,
+h3,
+h4 {
   font-size: inherit;
   font-weight: inherit;
 }
 
-ul, ol {
+ul,
+ol {
   padding: 0;
   list-style: none;
 }
 
-img, svg {
+img,
+svg {
   display: block;
   max-width: 100%;
 }
@@ -131,6 +148,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
+  /* biome-ignore lint/suspicious/noDuplicateProperties: dvh fallback */
   min-height: 100dvh;
   overflow-x: clip;
   background: var(--bg);
@@ -268,7 +286,8 @@ button {
 .page-main {
   position: relative;
   margin: 0 auto;
-  padding: max(1.5rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) 2rem max(1rem, env(safe-area-inset-left));
+  padding: max(1.5rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) 2rem
+    max(1rem, env(safe-area-inset-left));
 }
 
 @media (min-width: 768px) {
@@ -383,7 +402,10 @@ button {
   height: 2.75rem;
   border-radius: 0.375rem;
   color: var(--faint);
-  transition: color 150ms, background 150ms, transform 120ms;
+  transition:
+    color 150ms,
+    background 150ms,
+    transform 120ms;
 }
 
 .icon-btn:hover,
@@ -618,7 +640,8 @@ html.dark .theme-icon-moon {
 
 /* Minimalist Page Footer */
 .cv-footer-wrap {
-  padding: 0 max(1rem, env(safe-area-inset-right)) max(2rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  padding: 0 max(1rem, env(safe-area-inset-right)) max(2rem, env(safe-area-inset-bottom))
+    max(1rem, env(safe-area-inset-left));
 }
 
 @media (min-width: 768px) {
@@ -712,6 +735,7 @@ html:not(.js) .command-bar {
 }
 
 [hidden] {
+  /* biome-ignore lint/complexity/noImportantStyles: [hidden] attribute override */
   display: none !important;
 }
 

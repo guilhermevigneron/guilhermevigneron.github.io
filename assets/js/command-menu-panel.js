@@ -385,7 +385,8 @@ export function initCommandMenuPanel() {
     groups.forEach((group) => {
       let count = 0;
       qa(group, '.cmd-item').forEach((item) => {
-        const text = `${item.getAttribute('data-label') || ''} ${item.textContent || ''}`.toLowerCase();
+        const text =
+          `${item.getAttribute('data-label') || ''} ${item.textContent || ''}`.toLowerCase();
         const match = !q || text.includes(q);
         item.hidden = !match;
         if (match) {
@@ -565,7 +566,12 @@ export function initCommandMenuPanel() {
       return;
     }
 
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End') {
+    if (
+      event.key === 'ArrowDown' ||
+      event.key === 'ArrowUp' ||
+      event.key === 'Home' ||
+      event.key === 'End'
+    ) {
       const onItem =
         D.activeElement instanceof Element && Boolean(D.activeElement.closest('.cmd-item'));
       if ((event.key === 'Home' || event.key === 'End') && !onItem && D.activeElement !== input) {

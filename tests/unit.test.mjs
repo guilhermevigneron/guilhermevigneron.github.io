@@ -75,10 +75,7 @@ describe('sync-resume helpers', () => {
         label: 'Mathematician, Pioneer\nLead',
         location: { city: 'London, UK', region: 'Greater;London', countryCode: 'GB' },
       },
-      work: [
-        { name: 'Past Co', endDate: '2020-01' },
-        { name: 'Engine; Labs, Inc.' },
-      ],
+      work: [{ name: 'Past Co', endDate: '2020-01' }, { name: 'Engine; Labs, Inc.' }],
       meta: { jobTitle: 'Lead, Systems; R&D' },
     });
     assert.ok(customVcf.includes('FN:Ada\\; Lovelace\r\n'));
@@ -158,14 +155,19 @@ describe('sync-resume helpers', () => {
     assert.ok(html.includes('Test &lt;script&gt;User&lt;/script&gt;'));
     assert.ok(!html.includes('tag-sep'));
     assert.ok(html.includes('id="about" tabindex="-1"'));
-    assert.ok(html.includes('id="projects" aria-labelledby="projects-heading" class="cv-section animate-fade-in delay-3 no-print"'));
+    assert.ok(
+      html.includes(
+        'id="projects" aria-labelledby="projects-heading" class="cv-section animate-fade-in delay-3 no-print"'
+      )
+    );
     assert.ok(!html.includes('id="languages"'));
   });
 });
 
 describe('asset & pdf helpers', () => {
   it('rewrites exact asset paths without prefix collisions', () => {
-    const input = '<script src="/assets/js/command-menu.js"></script><script src="/assets/js/command-menu-panel.js"></script>';
+    const input =
+      '<script src="/assets/js/command-menu.js"></script><script src="/assets/js/command-menu-panel.js"></script>';
     const output = rewriteAssetRefs(input, {
       '/assets/js/command-menu.js': '/assets/js/command-menu.1111aaaa.js',
       '/assets/js/command-menu-panel.js': '/assets/js/command-menu-panel.2222bbbb.js',
@@ -289,11 +291,26 @@ describe('static server routing and security guards', () => {
 describe('theme-init graceful degradation', () => {
   it('falls back cleanly when localStorage and matchMedia throw', () => {
     const code = fs.readFileSync(path.join(ROOT, 'assets/js/theme-init.js'), 'utf8');
-    const runInit = ({ storedThrows = false, storedValue = null, mqThrows = false, dark = false }) => {
+    const runInit = ({
+      storedThrows = false,
+      storedValue = null,
+      mqThrows = false,
+      dark = false,
+    }) => {
       const classes = new Set();
       const metas = [
-        { content: '#fafaf8', setAttribute(_k, v) { this.content = v; } },
-        { content: '#0d0c0a', setAttribute(_k, v) { this.content = v; } },
+        {
+          content: '#fafaf8',
+          setAttribute(_k, v) {
+            this.content = v;
+          },
+        },
+        {
+          content: '#0d0c0a',
+          setAttribute(_k, v) {
+            this.content = v;
+          },
+        },
       ];
       const sandbox = {
         document: {

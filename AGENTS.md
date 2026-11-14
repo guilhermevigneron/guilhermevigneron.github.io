@@ -10,6 +10,7 @@ Zero-third-party-runtime-dependency personal portfolio & resume static site buil
 
 - **`resume.json` is the single source of truth** for all profile content, experience, projects, skills, education, publications, awards, and metadata.
 - **Never hand-edit generated/synced blocks** in `index.html`, `404.html`, `llms.txt`, `site.webmanifest`, `sitemap.xml`, `robots.txt`, `.well-known/security.txt`, or `assets/js/command-menu-panel.js`. Instead, edit `resume.json` (or the template logic in `scripts/sync-resume.mjs`) and run:
+
   ```bash
   npm run sync
   ```
@@ -53,8 +54,8 @@ npm run verify
 
 Or run targeted checks as needed:
 
-- `npm run lint` — Biome lint across JS, CSS, JSON, and SVG/HTML (records telemetry)
-- `npm run lint:fix` — Auto-fix Biome lint issues
+- `npm run lint` — Biome check (lint + format) across JS, CSS, JSON, and HTML (records telemetry)
+- `npm run lint:fix` — Auto-fix Biome lint and formatting issues
 - `npm run test:unit` — Unit tests (`tests/unit.test.mjs`, records telemetry)
 - `npm run test:security` — `npm audit --audit-level=moderate` (records telemetry)
 - `npm run test:sync` — Validate `resume.json` parity across synced files
@@ -62,3 +63,7 @@ Or run targeted checks as needed:
 - `npm run test:html` — Validate built HTML5 in `_site/`
 - `npm run test:e2e` — Run Cypress + `axe-core` suite
 - `npm run test:perf` — Run Playwright mobile Web Vitals & byte-budget audit
+- `npm run test:perf:quality` — Run Playwright render & overflow audit on `/quality/`
+- `npm run build:quality` — Refresh `/quality/` and `/quality/report.json` with local test telemetry
+- `npm run test:smoke:prod` — Run production endpoint & security smoke tests
+- `npm run serve` — Serve `_site/` locally at `http://127.0.0.1:4000`

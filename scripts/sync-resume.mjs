@@ -71,9 +71,7 @@ export function buildJsonLd(data) {
         }
       : {}),
     knowsAbout,
-    ...(data.languages?.length
-      ? { knowsLanguage: data.languages.map((l) => l.language) }
-      : {}),
+    ...(data.languages?.length ? { knowsLanguage: data.languages.map((l) => l.language) } : {}),
     alumniOf: uniqueSchools,
     ...(awards.length ? { award: awards } : {}),
     address: {
@@ -233,7 +231,9 @@ export function buildLlmsTxt(data) {
 
 function renderTagList(items, extraClass = '') {
   const cls = extraClass ? `tag-list ${extraClass}` : 'tag-list';
-  const lis = items.map((item) => `                            <li class="tag-item">${escapeHtml(item)}</li>`).join('\n');
+  const lis = items
+    .map((item) => `                            <li class="tag-item">${escapeHtml(item)}</li>`)
+    .join('\n');
   return `                        <ul class="${cls}">\n${lis}\n                        </ul>`;
 }
 
@@ -243,7 +243,8 @@ export function buildIndexMeta(data) {
   const ogDesc = escapeHtml(data.meta.ogDescription || data.meta.shortDescription);
   const ogImageUrl = escapeHtml(data.meta.ogImageUrl || `${data.basics.url}/assets/og-card.png`);
   const ogImageAlt = escapeHtml(data.meta.ogImageAlt || data.meta.pageTitle || data.basics.name);
-  const rawCanonical = data.meta.canonical || `${String(data.basics.url || '').replace(/\/$/, '')}/`;
+  const rawCanonical =
+    data.meta.canonical || `${String(data.basics.url || '').replace(/\/$/, '')}/`;
   const canonical = escapeHtml(rawCanonical);
   const nameParts = String(data.basics.name || '')
     .trim()
@@ -294,7 +295,9 @@ export function buildCvContentHtml(data) {
       const highlights = (job.highlights || [])
         .map((h) => `                            <li>${escapeHtml(h)}</li>`)
         .join('\n');
-      const tags = job.keywords?.length ? `\n${renderTagList(job.keywords, 'tag-list--spaced')}` : '';
+      const tags = job.keywords?.length
+        ? `\n${renderTagList(job.keywords, 'tag-list--spaced')}`
+        : '';
       const roleRow = job.location
         ? `<div class="entry-top">\n                                <h4 class="entry-role">${escapeHtml(job.position)}</h4>\n                                <span class="entry-location">${escapeHtml(job.location)}</span>\n                            </div>`
         : `<h4 class="entry-role">${escapeHtml(job.position)}</h4>`;
@@ -379,7 +382,9 @@ ${highlights}
         ? `<div class="entry-top">\n                            <h3 class="entry-heading">${escapeHtml(award.title)}</h3>\n                            <div class="date-range">${escapeHtml(dateStr)}</div>\n                        </div>`
         : `<h3 class="entry-heading">${escapeHtml(award.title)}</h3>`;
       const subParts = [
-        award.awarder ? `Award <span aria-hidden="true">&middot;</span> ${escapeHtml(award.awarder)}` : 'Award',
+        award.awarder
+          ? `Award <span aria-hidden="true">&middot;</span> ${escapeHtml(award.awarder)}`
+          : 'Award',
         award.summary ? escapeHtml(award.summary) : '',
       ].filter(Boolean);
       return `                    <article>
@@ -775,7 +780,9 @@ export function syncAllFromResume(rootDir = ROOT) {
   }
 
   // 5. Sync site.webmanifest
-  const prevManifestRaw = fs.existsSync(manifestPath) ? fs.readFileSync(manifestPath, 'utf8') : '{}';
+  const prevManifestRaw = fs.existsSync(manifestPath)
+    ? fs.readFileSync(manifestPath, 'utf8')
+    : '{}';
   const prevManifest = JSON.parse(prevManifestRaw);
   const nextManifestRaw = buildSiteWebmanifest(data, prevManifest);
   if (nextManifestRaw !== prevManifestRaw) {

@@ -17,9 +17,7 @@ export function findBrowserExecutable() {
       return candidate;
     }
   }
-  throw new Error(
-    'No Chromium/Chrome executable found. Set CHROME_PATH environment variable.'
-  );
+  throw new Error('No Chromium/Chrome executable found. Set CHROME_PATH environment variable.');
 }
 
 export async function launchHeadlessBrowser(timeoutMs = 30_000) {
@@ -28,11 +26,7 @@ export async function launchHeadlessBrowser(timeoutMs = 30_000) {
     executablePath,
     headless: true,
     timeout: timeoutMs,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-    ],
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
   });
   return { browser, executablePath };
 }

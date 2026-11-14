@@ -324,7 +324,9 @@ async function main() {
           resourceCount: resources.length,
           avatarCurrentSrc: avatarImg ? avatarImg.currentSrc : '',
           eagerPanelLoaded: resources.some((r) => r.name.includes('command-menu-panel')),
-          eagerCommandCssLoaded: resources.some((r) => r.name.includes('command-menu.') && r.name.endsWith('.css')),
+          eagerCommandCssLoaded: resources.some(
+            (r) => r.name.includes('command-menu.') && r.name.endsWith('.css')
+          ),
         };
       });
 

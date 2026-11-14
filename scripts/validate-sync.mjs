@@ -26,7 +26,10 @@ const HTML_ENTITIES = {
 };
 
 function decodeHtmlEntities(text) {
-  return text.replace(/&(amp|lt|gt|quot|#39|middot);/g, (entity) => HTML_ENTITIES[entity] || entity);
+  return text.replace(
+    /&(amp|lt|gt|quot|#39|middot);/g,
+    (entity) => HTML_ENTITIES[entity] || entity
+  );
 }
 
 const bodyMatch = indexHtml.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
@@ -162,7 +165,10 @@ try {
     assert.ok(decodedIndex.includes(currentYear), `Missing current copyright year ${currentYear}`);
     assert.ok(decodedIndex.includes('href="/resume.pdf"'));
     assert.ok(decodedIndex.includes('href="/quality/"'));
-    assert.ok(!decodedIndex.includes('drive.google.com'), 'External Google Drive link still present');
+    assert.ok(
+      !decodedIndex.includes('drive.google.com'),
+      'External Google Drive link still present'
+    );
     assert.ok(!decodedIndex.includes('cdn.tailwindcss.com'), 'Tailwind CDN still present');
     assert.ok(!decodedIndex.includes('cdnjs.cloudflare.com'), 'Font Awesome CDN still present');
     assert.ok(!decodedIndex.includes('fonts.googleapis.com'), 'Google Fonts still present');

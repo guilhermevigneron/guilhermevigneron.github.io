@@ -85,6 +85,7 @@
   .cmd-toast,
   .skip-link,
   .no-print {
+    /* biome-ignore lint/complexity/noImportantStyles: print override */
     display: none !important;
   }
 
@@ -187,7 +188,9 @@
   }
 
   .animate-fade-in {
+    /* biome-ignore lint/complexity/noImportantStyles: print override */
     animation: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: print override */
     transform: none !important;
   }
 }

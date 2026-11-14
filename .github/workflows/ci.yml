@@ -2,12 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   schedule:
     # Weekly production smoke & external link rot check (Mondays 09:00 UTC)
-    - cron: '0 9 * * 1'
+    - cron: "0 9 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -83,7 +83,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version-file: '.node-version'
+          node-version-file: ".node-version"
           cache: npm
 
       - name: Cache Cypress binary
@@ -230,7 +230,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version-file: '.node-version'
+          node-version-file: ".node-version"
 
       - name: Production Endpoint & Security Smoke Tests
         run: npm run test:smoke:prod

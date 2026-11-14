@@ -17,10 +17,7 @@ const outFile = path.join(outDir, 'index.html');
 function buildArchitecturePage() {
   const resume = readJsonIfExists(path.join(ROOT, 'resume.json'));
   const ownerName = resume?.basics?.name || 'Guilherme Vigneron de Oliveira';
-  const siteUrl = String(resume?.basics?.url || 'https://guilhermevigneron.dev').replace(
-    /\/$/,
-    ''
-  );
+  const siteUrl = String(resume?.basics?.url || 'https://guilhermevigneron.dev').replace(/\/$/, '');
   const domain = siteUrl.replace(/^https?:\/\//, '');
   const repoUrl =
     resume?.projects?.find((p) => String(p.url || '').includes('github.com'))?.url ||

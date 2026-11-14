@@ -1,15 +1,12 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.6.7/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
   "files": {
-    "includes": [
-      "**",
-      "!_site",
-      "!.ci-reports",
-      "!node_modules",
-      "!cypress/videos",
-      "!cypress/screenshots",
-      "!package-lock.json"
-    ]
+    "includes": ["**", "!package-lock.json"]
   },
   "formatter": {
     "enabled": true,
@@ -20,36 +17,46 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "preset": "recommended"
+      "preset": "recommended",
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error"
+      }
     }
   },
   "overrides": [
     {
-      "includes": ["src/styles.css"],
+      "includes": ["assets/js/**/*.js"],
       "linter": {
         "rules": {
+          "correctness": {
+            "noNodejsModules": "error"
+          },
           "suspicious": {
-            "noDuplicateCustomProperties": "off"
+            "noConsole": "error"
           }
         }
       }
     },
     {
-      "includes": ["src/styles.css", "src/subpage.css"],
+      "includes": ["scripts/**/*.mjs", "tests/**/*.mjs"],
       "linter": {
         "rules": {
-          "suspicious": {
-            "noDuplicateProperties": "off"
+          "correctness": {
+            "noUndeclaredDependencies": "error"
+          },
+          "style": {
+            "useNodejsImportProtocol": "error"
           }
         }
       }
     },
     {
-      "includes": ["src/styles.css", "src/print.css"],
+      "includes": ["index.html"],
       "linter": {
         "rules": {
-          "complexity": {
-            "noImportantStyles": "off"
+          "a11y": {
+            "useAnchorContent": "off"
           }
         }
       }

@@ -194,4 +194,3 @@ export function atomicWriteFileSync(targetPath, data, encoding) {
     throw err;
   }
 }
-

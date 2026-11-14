@@ -63,5 +63,7 @@ if (isEntrypoint) {
   if (!cssOnly) {
     await minifyJsFiles();
   }
-  console.log(cssOnly ? 'Minified CSS bundles via esbuild.' : 'Minified CSS & JS bundles via esbuild.');
+  console.log(
+    cssOnly ? 'Minified CSS bundles via esbuild.' : 'Minified CSS & JS bundles via esbuild.'
+  );
 }

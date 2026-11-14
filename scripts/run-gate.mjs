@@ -21,7 +21,7 @@ const GATES = {
   lint: {
     reportFile: 'lint-report.json',
     cmd: fs.existsSync(biomeBin) ? biomeBin : 'biome',
-    args: ['lint', '.'],
+    args: ['check', '.'],
   },
   unit: {
     reportFile: 'unit-report.json',

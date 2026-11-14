@@ -102,13 +102,10 @@ async function generatePdf() {
       ]);
       const avatar = document.querySelector('img.avatar');
       const avatarWrap = avatar?.closest('picture') || avatar;
-      const avatarVisible = Boolean(
-        avatarWrap && getComputedStyle(avatarWrap).display !== 'none'
-      );
+      const avatarVisible = Boolean(avatarWrap && getComputedStyle(avatarWrap).display !== 'none');
       const nameEl = document.querySelector('#resume-name') || document.querySelector('h1');
       const hasName = Boolean(
-        nameEl?.textContent?.includes(expectedName) &&
-          getComputedStyle(nameEl).display !== 'none'
+        nameEl?.textContent?.includes(expectedName) && getComputedStyle(nameEl).display !== 'none'
       );
       return {
         hasName,
