@@ -14,6 +14,7 @@ import {
 } from './lib/io.mjs';
 import { isEntrypoint, ROOT, resolveRootPaths } from './lib/paths.mjs';
 import { getSiteEndpoints } from './lib/site-config.mjs';
+import { evaluateWebmcpReadiness, MAX_WEBMCP_JS_BYTES } from './lib/webmcp-evals.mjs';
 import { minifyHtml } from './minify-html.mjs';
 
 function formatKb(bytes) {
@@ -58,6 +59,8 @@ export function evaluateQualityGates({
   htmlReport = null,
   cypressReport = null,
   perfReport = null,
+  webmcpEvaluation = null,
+  webmcpJsBytes = null,
   lycheeExit = undefined,
   expiryDays = null,
   pdfSize = 'N/A',
@@ -115,10 +118,30 @@ export function evaluateQualityGates({
     lycheeExit === 'success' ? 'pass' : lycheeExit === 'failure' ? 'fail' : 'pending';
   const secStatus = expiryDays !== null && expiryDays >= 30 ? 'pass' : 'fail';
 
+  const resolvedWebmcpEval = webmcpEvaluation || syncReport?.webmcpEvaluation || null;
+  const measuredWebmcpBytes = webmcpJsBytes ?? perfReport?.assetSizes?.webmcpJsBytes ?? null;
+  const webmcpBudgetFail =
+    (typeof measuredWebmcpBytes === 'number' &&
+      (measuredWebmcpBytes <= 0 || measuredWebmcpBytes > MAX_WEBMCP_JS_BYTES)) ||
+    perfReport?.mobileVitals?.eagerWebmcpLoaded === true;
+  const webmcpBrowserFail =
+    cypressReport?.webmcp &&
+    (cypressReport.webmcp.failures > 0 || cypressReport.webmcp.checksRun < 6);
+  const webmcpStatus =
+    resolvedWebmcpEval?.passed === false || webmcpBudgetFail || webmcpBrowserFail
+      ? 'fail'
+      : resolvedWebmcpEval?.passed === true &&
+          cypressReport?.webmcp?.failures === 0 &&
+          cypressReport?.webmcp?.checksRun >= 6 &&
+          (!perfReport ||
+            (perfReport.passed && perfReport.mobileVitals?.eagerWebmcpLoaded !== true))
+        ? 'pass'
+        : 'pending';
+
   const syncPassedCount =
     syncReport?.passedCount ??
     (syncReport?.checks ? syncReport.checks.filter((c) => c.passed).length : 0);
-  const syncTotalCount = syncReport?.totalChecks ?? syncReport?.checks?.length ?? 6;
+  const syncTotalCount = syncReport?.totalChecks ?? syncReport?.checks?.length ?? 7;
 
   const cards = [
     {
@@ -239,6 +262,18 @@ export function evaluateQualityGates({
       summary: `Automated parity across ${endpoints.resumeJsonPath}, DOM, Schema.org JSON-LD, ${endpoints.llmsTxtPath}, webmanifest, sitemap, and 404, plus RFC 9116 ${endpoints.securityTxtPath} freshness.`,
       metric: `Sync: ${syncPassedCount}/${syncTotalCount} checks passed · security.txt expires in ${expiryDays ?? '?'} days (min 30d)`,
     },
+    {
+      id: 'webmcp-contract',
+      title: 'WebMCP Agent Tooling & Contract',
+      status: webmcpStatus,
+      summary:
+        'Feature-detected document.modelContext imperative tools (lazy webmcp.js, 0 B eager overhead for standard visitors), strict input schemas, and AbortSignal cleanup.',
+      metric: cypressReport?.webmcp
+        ? `${resolvedWebmcpEval?.contractPassCount ?? 6}/${resolvedWebmcpEval?.expectedToolCount ?? 6} contracts · ${cypressReport.webmcp.checksRun} browser checks (${cypressReport.webmcp.failures} failed)${typeof measuredWebmcpBytes === 'number' ? ` · ${(measuredWebmcpBytes / 1024).toFixed(1)} KB lazy bundle` : ''}`
+        : resolvedWebmcpEval
+          ? `${resolvedWebmcpEval.contractPassCount}/${resolvedWebmcpEval.expectedToolCount} tool contracts valid · Pending Cypress modelContext audit`
+          : 'Pending WebMCP contract & browser audit',
+    },
   ];
 
   const hasFail = cards.some((c) => c.status === 'fail');
@@ -304,6 +339,9 @@ export function buildQualityPage({
       UNHASHED_ASSET_URLS.commandMenuPanelJsUrl
     )
   );
+  const webmcpJsBytes = getFileSizeBytes(
+    toSiteFilePath(resolvedSiteDir, assetManifest?.webmcpJsUrl, UNHASHED_ASSET_URLS.webmcpJsUrl)
+  );
   const fontsBytes = getCombinedSizeBytes([
     toSiteFilePath(resolvedSiteDir, assetManifest?.monoFontUrl, UNHASHED_ASSET_URLS.monoFontUrl),
     toSiteFilePath(resolvedSiteDir, assetManifest?.pixelFontUrl, UNHASHED_ASSET_URLS.pixelFontUrl),
@@ -329,22 +367,6 @@ export function buildQualityPage({
   const pdfSize = formatKb(pdfBytes);
   const indexSize = formatKb(indexBytes);
 
-  const { cards, overallStatus } = evaluateQualityGates({
-    lintReport,
-    unitReport,
-    securityReport,
-    syncReport,
-    pdfReport,
-    ogReport,
-    htmlReport,
-    cypressReport,
-    perfReport,
-    lycheeExit,
-    expiryDays,
-    pdfSize,
-    endpoints,
-  });
-
   const commitSha = process.env.GITHUB_SHA ? process.env.GITHUB_SHA.slice(0, 7) : 'local';
   const branchRef = process.env.GITHUB_REF_NAME || 'workspace';
   const runUrl =
@@ -361,6 +383,28 @@ export function buildQualityPage({
       : '';
   const aiEvaluation = syncReport?.aiEvaluation || evaluateAiReadiness({ resume, llmsTxt });
   const flakyTriage = syncReport?.flakyTriage || evaluateFlakyTriage();
+  const webmcpEvaluation =
+    webmcpJsBytes != null
+      ? evaluateWebmcpReadiness({ resume, llmsTxt, webmcpJsBytes })
+      : syncReport?.webmcpEvaluation || evaluateWebmcpReadiness({ resume, llmsTxt, webmcpJsBytes });
+
+  const { cards, overallStatus } = evaluateQualityGates({
+    lintReport,
+    unitReport,
+    securityReport,
+    syncReport,
+    pdfReport,
+    ogReport,
+    htmlReport,
+    cypressReport,
+    perfReport,
+    webmcpEvaluation,
+    webmcpJsBytes,
+    lycheeExit,
+    expiryDays,
+    pdfSize,
+    endpoints,
+  });
 
   const reportPayload = {
     schemaVersion: 1,
@@ -377,6 +421,7 @@ export function buildQualityPage({
       printCssBytes,
       initialJsBytes,
       commandMenuPanelJsBytes,
+      webmcpJsBytes,
       fontsBytes,
       indexHtmlBytes: indexBytes,
       resumePdfBytes: pdfBytes,
@@ -387,6 +432,7 @@ export function buildQualityPage({
     unitCoverage: unitReport?.coverage || null,
     aiEvaluation,
     flakyTriage,
+    webmcpEvaluation,
     gates: cards,
     endpoints: [
       endpoints.resumePdfPath,
@@ -504,6 +550,31 @@ export function buildQualityPage({
             </section>
 
             <section class="cv-section">
+                <h2 class="section-title">webmcp agent tooling &amp; contract benchmark</h2>
+                <p class="summary-copy">
+                    Feature-detected W3C <strong>document.modelContext</strong> imperative tool suite (lazy <strong>${escapeHtml(assetManifest?.webmcpJsUrl || UNHASHED_ASSET_URLS.webmcpJsUrl)}</strong>) reusing grounded <strong>${escapeHtml(endpoints.llmsTxtPath)}</strong> search, <strong>${escapeHtml(endpoints.resumeJsonPath)}</strong> slicing, telemetry shaping, and reversible UI controls with atomic <strong>AbortController</strong> cleanup.
+                </p>
+                <div class="metric-grid">
+                    <div class="panel-card">
+                        <p class="metric-label">tool contracts</p>
+                        <p class="metric-value">${webmcpEvaluation.contractPassCount}/${webmcpEvaluation.expectedToolCount} (${webmcpEvaluation.expectedToolCount ? Math.round((webmcpEvaluation.contractPassCount / webmcpEvaluation.expectedToolCount) * 100) : 0}%)</p>
+                    </div>
+                    <div class="panel-card">
+                        <p class="metric-label">lazy bundle budget</p>
+                        <p class="metric-value">${escapeHtml(typeof webmcpJsBytes === 'number' ? `${(webmcpJsBytes / 1024).toFixed(1)}/${(MAX_WEBMCP_JS_BYTES / 1024).toFixed(0)} KB` : `Pending (<=${(MAX_WEBMCP_JS_BYTES / 1024).toFixed(0)} KB)`)}</p>
+                    </div>
+                    <div class="panel-card">
+                        <p class="metric-label">eager standard load</p>
+                        <p class="metric-value">${escapeHtml(perfReport?.mobileVitals ? (perfReport.mobileVitals.eagerWebmcpLoaded === false ? '0 B (deferred)' : 'FAIL (eager)') : '0 B (feature-gated)')}</p>
+                    </div>
+                    <div class="panel-card">
+                        <p class="metric-label">tool breakdown</p>
+                        <p class="metric-value">${webmcpEvaluation.readOnlyToolCount} read &middot; ${webmcpEvaluation.interactiveToolCount} ui</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="cv-section">
                 <h2 class="section-title">published machine-readable endpoints</h2>
                 <div class="panel-card">
                     <ul class="endpoint-list">
@@ -532,6 +603,7 @@ export function buildQualityPage({
     title: `Quality & Verification Report - ${ownerName}`,
     description: `Automated CI/CD quality, accessibility, performance, and security verification report for ${endpoints.domain}.`,
     canonicalUrl: endpoints.qualityReportUrl,
+    originTrialToken: resume.meta?.webmcpOriginTrialToken,
     extraHeadLinks: [
       `<link rel="alternate" type="application/json" href="${escapeHtml(endpoints.qualityJsonPath)}" title="Quality Telemetry JSON">`,
     ],

@@ -19,6 +19,7 @@ export const BUDGETS = {
   printCssMaxBytes: 3 * 1024,
   initialJsMaxBytes: 4 * 1024,
   lazyPanelJsMaxBytes: 12 * 1024,
+  webmcpJsMaxBytes: 12 * 1024,
   combinedFontsMaxBytes: 32 * 1024,
   indexHtmlMaxBytes: 25 * 1024,
   notFoundHtmlMaxBytes: 8 * 1024,
@@ -111,6 +112,12 @@ export function evaluateAssetBudgets(assetSizes, budgets = BUDGETS) {
     assetSizes.commandMenuPanelJsBytes <= budgets.lazyPanelJsMaxBytes,
     `Lazy command menu panel JS ${assetSizes.commandMenuPanelJsBytes} B exceeds budget ${budgets.lazyPanelJsMaxBytes} B`
   );
+  if (assetSizes.webmcpJsBytes !== undefined) {
+    assert.ok(
+      assetSizes.webmcpJsBytes <= budgets.webmcpJsMaxBytes,
+      `Lazy WebMCP JS ${assetSizes.webmcpJsBytes} B exceeds budget ${budgets.webmcpJsMaxBytes} B`
+    );
+  }
   assert.ok(
     combinedFontsBytes <= budgets.combinedFontsMaxBytes,
     `Combined fonts ${combinedFontsBytes} B exceed budget ${budgets.combinedFontsMaxBytes} B`
@@ -184,6 +191,13 @@ export function evaluateVitalsBudgets(vitals, budgets = BUDGETS, overflowChecks 
       vitals.eagerCommandCssLoaded,
       false,
       'Lazy command-menu CSS should not load during initial page load'
+    );
+  }
+  if (vitals.eagerWebmcpLoaded !== undefined) {
+    assert.equal(
+      vitals.eagerWebmcpLoaded,
+      false,
+      'Lazy WebMCP JS should not load during initial page load'
     );
   }
   assert.ok(
@@ -294,9 +308,16 @@ export async function verifyQualityReportArtifacts(targetSiteDir, baseUrl) {
   const reportJson = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
   assert.equal(reportJson.schemaVersion, 1, 'Unexpected quality report schemaVersion');
   assert.ok(
-    Array.isArray(reportJson.gates) && reportJson.gates.length === 10,
-    `Expected 10 quality gates, got ${reportJson.gates?.length}`
+    Array.isArray(reportJson.gates) && reportJson.gates.length === 11,
+    `Expected 11 quality gates, got ${reportJson.gates?.length}`
   );
+  if (reportJson.webmcpEvaluation) {
+    assert.equal(
+      reportJson.webmcpEvaluation.passed,
+      true,
+      'Expected passing webmcpEvaluation in quality/report.json'
+    );
+  }
 
   const failingGates = reportJson.gates.filter((g) => g.status === 'fail');
   assert.equal(
@@ -500,6 +521,7 @@ export async function runPerformanceAudit({ qualityOnly = false, rootDir = ROOT 
       targetSiteDir,
       manifest?.commandMenuPanelJsUrl || 'assets/js/command-menu-panel.js'
     ),
+    webmcpJsBytes: fileSize(targetSiteDir, manifest?.webmcpJsUrl || 'assets/js/webmcp.js'),
     monoFontBytes: fileSize(
       targetSiteDir,
       manifest?.monoFontUrl || 'assets/fonts/GeistMono-Variable.woff2'
@@ -700,6 +722,9 @@ export async function runPerformanceAudit({ qualityOnly = false, rootDir = ROOT 
           eagerCommandCssLoaded: resources.some(
             (r) => r.name.includes('command-menu.') && r.name.endsWith('.css')
           ),
+          eagerWebmcpLoaded: resources.some((r) =>
+            /\/assets\/js\/webmcp(?:\.[a-f0-9]+)?\.js(?:$|[?#])/.test(r.name)
+          ),
         };
       });
 
@@ -712,6 +737,11 @@ export async function runPerformanceAudit({ qualityOnly = false, rootDir = ROOT 
         vitals.eagerCommandCssLoaded,
         false,
         'Lazy command-menu CSS should not load during initial page load'
+      );
+      assert.equal(
+        vitals.eagerWebmcpLoaded,
+        false,
+        'Lazy WebMCP JS should not load during initial page load'
       );
 
       await cdp.send('Network.emulateNetworkConditions', {

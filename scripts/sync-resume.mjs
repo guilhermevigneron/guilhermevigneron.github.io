@@ -6,6 +6,7 @@ import {
   renderCommandBarHtml,
   renderCspMeta,
   renderFooterLinks,
+  renderOriginTrialMeta,
   renderSubpageLayout,
   renderThemeColorMetas,
   sanitizeHref,
@@ -263,6 +264,7 @@ export function buildIndexMeta(data) {
     .filter(Boolean);
   const firstName = escapeHtml(nameParts[0] || '');
   const lastName = escapeHtml(nameParts.slice(1).join(' '));
+  const originTrialMeta = renderOriginTrialMeta(data.meta?.webmcpOriginTrialToken);
 
   return [
     `<title>${title}</title>`,
@@ -286,6 +288,7 @@ export function buildIndexMeta(data) {
     `<meta name="twitter:description" content="${ogDesc}">`,
     `<meta name="twitter:image" content="${ogImageUrl}">`,
     `<meta name="twitter:image:alt" content="${ogImageAlt}">`,
+    ...(originTrialMeta ? [originTrialMeta] : []),
   ]
     .map((line, index) => (index === 0 || !line ? line : `    ${line}`))
     .join('\n');
@@ -661,6 +664,7 @@ export function build404Html(data, { year = resolveBuildYear(data) } = {}) {
     title: `Page Not Found (404) - ${data.basics.name}`,
     description: `The requested page could not be found on ${endpoints.domain}.`,
     robots: 'noindex',
+    originTrialToken: data.meta?.webmcpOriginTrialToken,
     ownerName: data.basics.name,
     subtitleHtml: `<p class="entry-sub">${escapeHtml(data.basics.label)}</p>`,
     navLinks: [{ href: '/', label: 'Portfolio' }],

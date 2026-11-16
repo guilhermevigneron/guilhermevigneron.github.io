@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import zlib from 'node:zlib';
 import * as esbuild from 'esbuild';
+import { HtmlValidate } from 'html-validate';
 import {
   attachRouteInterceptor,
   BUDGETS,
@@ -41,7 +42,12 @@ import {
   GOLDEN_TRIAGE_RUNS,
   normalizeFailureSignature,
 } from '../scripts/lib/flaky-triage.mjs';
-import { escapeHtml, rewriteAssetRefs, sanitizeHref } from '../scripts/lib/html.mjs';
+import {
+  escapeHtml,
+  renderOriginTrialMeta,
+  rewriteAssetRefs,
+  sanitizeHref,
+} from '../scripts/lib/html.mjs';
 import {
   getCombinedSizeBytes,
   getFileSizeBytes,
@@ -68,6 +74,12 @@ import {
   getRepoUrl,
   getSiteEndpoints,
 } from '../scripts/lib/site-config.mjs';
+import {
+  EXPECTED_WEBMCP_TOOLS,
+  evaluateWebmcpReadiness,
+  MAX_WEBMCP_JS_BYTES,
+  toCompactSiteConfig,
+} from '../scripts/lib/webmcp-evals.mjs';
 import { minifyCssFiles, minifyJsFiles } from '../scripts/minify-assets.mjs';
 import { minifyHtml } from '../scripts/minify-html.mjs';
 import {
@@ -105,6 +117,14 @@ import {
   scoreEvidenceItem,
   tokenizeSearch,
 } from '../src/js/resume-search.mjs';
+import {
+  createWebMcpTools,
+  RESUME_SECTIONS,
+  registerWebMcpTools,
+  serializeSizeBytes,
+  THEME_MODES,
+  WEBMCP_TOOL_NAMES,
+} from '../src/js/webmcp-tools.mjs';
 
 const resume = JSON.parse(fs.readFileSync(path.join(ROOT, 'resume.json'), 'utf8'));
 
@@ -757,6 +777,7 @@ describe('performance budget & vitals evaluators', () => {
       ['printCssBytes', BUDGETS.printCssMaxBytes + 1],
       ['commandMenuJsBytes', BUDGETS.initialJsMaxBytes],
       ['commandMenuPanelJsBytes', BUDGETS.lazyPanelJsMaxBytes + 1],
+      ['webmcpJsBytes', BUDGETS.webmcpJsMaxBytes + 1],
       ['monoFontBytes', BUDGETS.combinedFontsMaxBytes],
       ['indexHtmlBytes', BUDGETS.indexHtmlMaxBytes + 1],
       ['notFoundHtmlBytes', BUDGETS.notFoundHtmlMaxBytes + 1],
@@ -770,17 +791,22 @@ describe('performance budget & vitals evaluators', () => {
     }
   });
 
-  it('rejects Web Vitals threshold breaches, eager lazy panel load, null metrics, and horizontal overflow', () => {
+  it('rejects Web Vitals threshold breaches, eager lazy panel/WebMCP load, null metrics, and horizontal overflow', () => {
     const valid = {
       cls: 0.001,
       lcpMs: 900,
       fcpMs: 700,
       totalTransferBytes: 40000,
       eagerPanelLoaded: false,
+      eagerWebmcpLoaded: false,
     };
     assert.throws(
       () => evaluateVitalsBudgets({ ...valid, eagerPanelLoaded: true }, BUDGETS),
       /not load during initial/
+    );
+    assert.throws(
+      () => evaluateVitalsBudgets({ ...valid, eagerWebmcpLoaded: true }, BUDGETS),
+      /Lazy WebMCP JS/
     );
     assert.throws(() => evaluateVitalsBudgets({ ...valid, cls: 0.02 }, BUDGETS), /CLS/);
     assert.throws(() => evaluateVitalsBudgets({ ...valid, lcpMs: 2600 }, BUDGETS), /LCP/);
@@ -814,6 +840,13 @@ describe('quality gate evaluator', () => {
     pdfReport: { passed: true, pages: 1, maxPages: 1, blockedExternalRequests: 0 },
     ogReport: { passed: true, bytes: 32000, blockedExternalRequests: 0 },
     htmlReport: { valid: true, fileCount: 4, errorCount: 0, warningCount: 0 },
+    webmcpEvaluation: {
+      passed: true,
+      toolCount: 6,
+      contractPassCount: 6,
+      expectedToolCount: 6,
+    },
+    webmcpJsBytes: 2500,
     cypressReport: {
       totalTests: 20,
       totalPassed: 20,
@@ -821,26 +854,41 @@ describe('quality gate evaluator', () => {
       a11y: { violations: 0, checksRun: 16 },
       mobile: { failures: 0, checksRun: 6 },
       network: { pagesChecked: 4, externalRequests: 0 },
+      webmcp: { checksRun: 6, failures: 0 },
     },
     perfReport: {
       passed: true,
       overflowChecksCount: 16,
-      mobileVitals: { totalTransferBytes: 48000, fcpMs: 600, lcpMs: 900, cls: 0 },
+      assetSizes: { webmcpJsBytes: 2500 },
+      mobileVitals: {
+        totalTransferBytes: 48000,
+        fcpMs: 600,
+        lcpMs: 900,
+        cls: 0,
+        eagerWebmcpLoaded: false,
+      },
     },
     lycheeExit: 'success',
     expiryDays: 300,
     pdfSize: '25.0 KB',
   };
 
-  it('computes pass when all 10 gates pass and pending when only lychee is unset', () => {
+  it('computes pass when all 11 gates pass and pending when only lychee or webmcp browser audit is unset', () => {
     const passResult = evaluateQualityGates(allPassInput);
     assert.equal(passResult.overallStatus, 'pass');
-    assert.equal(passResult.cards.length, 10);
+    assert.equal(passResult.cards.length, 11);
     assert.ok(passResult.cards.every((c) => c.status === 'pass'));
 
     const pendingResult = evaluateQualityGates({ ...allPassInput, lycheeExit: undefined });
     assert.equal(pendingResult.overallStatus, 'pending');
     assert.equal(pendingResult.cards.find((c) => c.id === 'link-integrity').status, 'pending');
+
+    const pendingWebmcp = evaluateQualityGates({
+      ...allPassInput,
+      cypressReport: { ...allPassInput.cypressReport, webmcp: undefined },
+    });
+    assert.equal(pendingWebmcp.overallStatus, 'pending');
+    assert.equal(pendingWebmcp.cards.find((c) => c.id === 'webmcp-contract').status, 'pending');
   });
 
   it('marks overallStatus fail when any gate fails', () => {
@@ -873,6 +921,41 @@ describe('quality gate evaluator', () => {
         cypressReport: {
           ...allPassInput.cypressReport,
           network: { pagesChecked: 4, externalRequests: 1 },
+        },
+      },
+      {
+        ...allPassInput,
+        webmcpEvaluation: { passed: false, contractPassCount: 5, expectedToolCount: 6 },
+      },
+      { ...allPassInput, webmcpJsBytes: MAX_WEBMCP_JS_BYTES + 1 },
+      { ...allPassInput, webmcpJsBytes: 0 },
+      {
+        ...allPassInput,
+        webmcpJsBytes: null,
+        perfReport: {
+          ...allPassInput.perfReport,
+          assetSizes: { webmcpJsBytes: MAX_WEBMCP_JS_BYTES + 1 },
+        },
+      },
+      {
+        ...allPassInput,
+        perfReport: {
+          ...allPassInput.perfReport,
+          mobileVitals: { ...allPassInput.perfReport.mobileVitals, eagerWebmcpLoaded: true },
+        },
+      },
+      {
+        ...allPassInput,
+        cypressReport: {
+          ...allPassInput.cypressReport,
+          webmcp: { checksRun: 6, failures: 1 },
+        },
+      },
+      {
+        ...allPassInput,
+        cypressReport: {
+          ...allPassInput.cypressReport,
+          webmcp: { checksRun: 3, failures: 0 },
         },
       },
       { ...allPassInput, perfReport: { ...allPassInput.perfReport, passed: false } },
@@ -1131,6 +1214,7 @@ describe('HTML and asset minifiers', () => {
         'theme.js',
         'command-menu.js',
         'command-menu-panel.js',
+        'webmcp.js',
       ]) {
         fs.copyFileSync(
           path.join(ROOT, 'assets', 'js', jsFile),
@@ -1143,12 +1227,22 @@ describe('HTML and asset minifiers', () => {
         path.join(tmpSite, 'assets', 'js', 'command-menu-panel.js'),
         'utf8'
       );
+      const minWebmcp = fs.readFileSync(path.join(tmpSite, 'assets', 'js', 'webmcp.js'), 'utf8');
       assert.ok(
         minCmd.length < fs.statSync(path.join(ROOT, 'assets', 'js', 'command-menu.js')).size
       );
       assert.ok(
         minPanel.length < fs.statSync(path.join(ROOT, 'assets', 'js', 'command-menu-panel.js')).size
       );
+      assert.ok(
+        minWebmcp.length <
+          fs.statSync(path.join(ROOT, 'assets', 'js', 'webmcp.js')).size +
+            fs.statSync(path.join(ROOT, 'src', 'js', 'webmcp-tools.mjs')).size
+      );
+      assert.ok(minWebmcp.length <= BUDGETS.webmcpJsMaxBytes);
+      assert.ok(minWebmcp.includes('initWebMcp'));
+      assert.ok(minWebmcp.includes('search_resume'));
+      assert.ok(minWebmcp.includes('/feed.xml'));
     });
   });
 
@@ -1509,7 +1603,7 @@ describe('grounded resume search & AI retrieval evaluation gate', () => {
     assert.ok(hallucinatedEval.groundednessRate < 1);
   });
 
-  it('publishes aiEvaluation telemetry in /quality/report.json and renders the AI benchmark section on /quality/', () => {
+  it('publishes aiEvaluation and webmcpEvaluation telemetry in /quality/report.json and renders benchmark sections on /quality/', () => {
     withTempDir('quality-ai-eval-', (tmpDir) => {
       const siteDir = path.join(tmpDir, '_site');
       const reportsDir = path.join(tmpDir, '.ci-reports');
@@ -1523,7 +1617,7 @@ describe('grounded resume search & AI retrieval evaluation gate', () => {
         fs.readFileSync(path.join(siteDir, 'quality', 'report.json'), 'utf8')
       );
 
-      assert.equal(qualityReport.gates.length, 10);
+      assert.equal(qualityReport.gates.length, 11);
       assert.ok(qualityReport.aiEvaluation);
       assert.equal(qualityReport.aiEvaluation.passed, true);
       assert.equal(qualityReport.aiEvaluation.passAt1Rate, 1);
@@ -1532,11 +1626,18 @@ describe('grounded resume search & AI retrieval evaluation gate', () => {
       assert.equal(qualityReport.flakyTriage.passed, true);
       assert.equal(qualityReport.flakyTriage.classificationAccuracy, 1);
       assert.equal(qualityReport.flakyTriage.falseFlakeSuppressions, 0);
+      assert.ok(qualityReport.webmcpEvaluation);
+      assert.equal(qualityReport.webmcpEvaluation.passed, true);
+      assert.equal(qualityReport.webmcpEvaluation.toolCount, 6);
+      assert.equal(qualityReport.webmcpEvaluation.contractPassCount, 6);
       assert.ok(qualityHtml.includes('ai &amp; retrieval evaluation benchmark'));
       assert.ok(qualityHtml.includes('retrieval pass@1'));
       assert.ok(qualityHtml.includes('citation groundedness'));
       assert.ok(qualityHtml.includes('flaky test triage &amp; failure clustering benchmark'));
       assert.ok(qualityHtml.includes('triage accuracy'));
+      assert.ok(qualityHtml.includes('webmcp agent tooling &amp; contract benchmark'));
+      assert.ok(qualityHtml.includes('tool contracts'));
+      assert.ok(qualityHtml.includes('lazy bundle budget'));
     });
   });
 
@@ -2273,5 +2374,569 @@ describe('io.mjs, browser.mjs, check-performance.mjs, and sparse resume edge cas
       retryPassed: true,
     });
     assert.equal(unknownFlakyDiag.classification, 'deterministic_regression');
+  });
+});
+
+describe('WebMCP tools, registration, evaluator, and origin-trial metadata', () => {
+  it('renders optional origin-trial meta tags cleanly, validates HTML5 output, and enforces sync parity', async () => {
+    assert.equal(renderOriginTrialMeta(null), '');
+    assert.equal(renderOriginTrialMeta(''), '');
+    assert.equal(renderOriginTrialMeta('   '), '');
+    assert.equal(
+      renderOriginTrialMeta('  tok"<tag>  '),
+      '<meta http-equiv="origin-trial" content="tok&quot;&lt;tag&gt;">'
+    );
+
+    assert.equal(buildIndexMeta(resume).includes('origin-trial'), false);
+
+    const tokenResume = structuredClone(resume);
+    tokenResume.meta.webmcpOriginTrialToken = 'trial-token-xyz-123';
+    const tokenIndex = buildIndexHtml(tokenResume, { rootDir: ROOT });
+    const token404 = build404Html(tokenResume);
+    assert.ok(
+      tokenIndex.includes('<meta http-equiv="origin-trial" content="trial-token-xyz-123">')
+    );
+    assert.ok(token404.includes('<meta http-equiv="origin-trial" content="trial-token-xyz-123">'));
+
+    const htmlvalidate = new HtmlValidate({ extends: ['html-validate:recommended'] });
+    const idxReport = await htmlvalidate.validateString(tokenIndex);
+    const err404Report = await htmlvalidate.validateString(token404);
+    assert.equal(idxReport.valid, true);
+    assert.equal(idxReport.errorCount, 0);
+    assert.equal(idxReport.warningCount, 0);
+    assert.equal(err404Report.valid, true);
+    assert.equal(err404Report.errorCount, 0);
+    assert.equal(err404Report.warningCount, 0);
+
+    const badTokenType = structuredClone(resume);
+    badTokenType.meta.webmcpOriginTrialToken = 12345;
+    assert.throws(
+      () => validateResumeSchema(badTokenType),
+      /meta\.webmcpOriginTrialToken must be a string/
+    );
+
+    const base = makeValidRepoInputs();
+    const unexpectedOriginTrialHtml = base.indexHtml.replace(
+      '</head>',
+      '    <meta http-equiv="origin-trial" content="unexpected">\n</head>'
+    );
+    assert.throws(
+      () => validateSyncState({ ...base, indexHtml: unexpectedOriginTrialHtml }),
+      /index\.html origin-trial meta tag mismatch/
+    );
+
+    assert.throws(
+      () =>
+        validateSyncState({
+          ...base,
+          resume: tokenResume,
+          indexHtml: tokenIndex,
+        }),
+      /404\.html origin-trial meta tag mismatch/
+    );
+
+    const tokenChecks = validateSyncState({
+      ...base,
+      resume: tokenResume,
+      indexHtml: tokenIndex,
+      notFoundHtml: token404,
+    });
+    assert.ok(tokenChecks.every((c) => c.passed));
+  });
+
+  it('implements read-only WebMCP tools with caching, truncation, fallback, validation, and AbortSignal handling', async () => {
+    assert.equal(WEBMCP_TOOL_NAMES.length, 6);
+    assert.ok(RESUME_SECTIONS.includes('endpoints'));
+    assert.deepEqual(THEME_MODES, ['light', 'dark', 'toggle']);
+
+    const bytesDefault = serializeSizeBytes({ ok: true, label: 'abc' });
+    assert.ok(bytesDefault > 0);
+    const origTextEncoder = globalThis.TextEncoder;
+    try {
+      globalThis.TextEncoder = undefined;
+      assert.equal(serializeSizeBytes({ ok: true }), JSON.stringify({ ok: true }).length);
+    } finally {
+      globalThis.TextEncoder = origTextEncoder;
+    }
+
+    const llmsTxt = fs.readFileSync(path.join(ROOT, 'llms.txt'), 'utf8');
+    const siteConfig = toCompactSiteConfig(resume);
+    const longTitle = `${'Extremely verbose distributed CI automation highlight '.repeat(6)}end`;
+    const hugeLlms = [
+      '## Experience',
+      '- Principal Engineer at HugeCorp (2025), Austin',
+      ...Array.from(
+        { length: 10 },
+        (_, i) => `  - Item ${i}: ${longTitle} kubernetes playwright azure`
+      ),
+    ].join('\n');
+
+    let llmsFetchCalls = 0;
+    let resumeFetchCalls = 0;
+    let throwAbortOnFetch = false;
+    let returnStatuslessError = false;
+    let telemetryPayload = {
+      overallStatus: 'pass',
+      generatedAt: '2026-11-15T00:00:00.000Z',
+      gates: [{ id: 'webmcp-contract', status: 'pass' }],
+      aiEvaluation: { passed: true, passAt1Rate: 1, groundednessRate: 1 },
+      flakyTriage: { passed: true, classificationAccuracy: 1, falseFlakeSuppressions: 0 },
+      webmcpEvaluation: { passed: true, toolCount: 6, contractPassCount: 6 },
+    };
+    let activeLlms = llmsTxt;
+    let onHome = true;
+
+    const tools = createWebMcpTools({
+      siteConfig,
+      env: {
+        getSectionElement: (id) => (onHome && id === 'about' ? { id } : null),
+        async fetch(url) {
+          if (throwAbortOnFetch) {
+            const err = new Error('aborted');
+            err.name = 'AbortError';
+            throw err;
+          }
+          if (returnStatuslessError) {
+            return { ok: false };
+          }
+          if (url === siteConfig.ep[7]) {
+            llmsFetchCalls += 1;
+            return {
+              ok: true,
+              async text() {
+                return activeLlms;
+              },
+            };
+          }
+          if (url === siteConfig.ep[1]) {
+            resumeFetchCalls += 1;
+            return {
+              ok: true,
+              async json() {
+                return resume;
+              },
+            };
+          }
+          if (url === siteConfig.ep[6]) {
+            return {
+              ok: true,
+              async json() {
+                return telemetryPayload;
+              },
+            };
+          }
+          return { ok: false, status: 404 };
+        },
+      },
+    });
+    const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
+
+    // search_resume invalid inputs
+    const shortQ = await byName.search_resume.execute({ query: 'a' }, {});
+    assert.equal(shortQ.ok, false);
+    assert.equal(shortQ.error.code, 'INVALID_INPUT');
+    const longQ = await byName.search_resume.execute({ query: 'x'.repeat(201) }, {});
+    assert.equal(longQ.error.code, 'INVALID_INPUT');
+    const badLimit = await byName.search_resume.execute({ query: 'Azure', limit: 11 }, {});
+    assert.equal(badLimit.error.code, 'INVALID_INPUT');
+
+    // search_resume caches /llms.txt and handles home vs subpage hrefs
+    const s1 = await byName.search_resume.execute({ query: 'Azure DevOps CI/CD', limit: 3 }, {});
+    assert.equal(s1.ok, true);
+    assert.equal(s1.source, 'llms.txt');
+    assert.equal(s1.matches[0].href, '#experience');
+    onHome = false;
+    const s2 = await byName.search_resume.execute({ query: 'StickyMinds flaky' }, {});
+    assert.equal(s2.ok, true);
+    assert.equal(s2.matches[0].href, '/#publications');
+    assert.equal(llmsFetchCalls, 1);
+
+    // Huge payload shrinks matches within MAX_SEARCH_OUTPUT_BYTES & truncates long titles
+    activeLlms = hugeLlms;
+    const freshHugeTool = createWebMcpTools({
+      siteConfig,
+      env: {
+        getSectionElement: () => null,
+        async fetch() {
+          return {
+            ok: true,
+            async text() {
+              return activeLlms;
+            },
+          };
+        },
+      },
+    }).find((t) => t.name === 'search_resume');
+    const shrunk = await freshHugeTool.execute({ query: 'kubernetes playwright', limit: 10 }, {});
+    assert.equal(shrunk.ok, true);
+    assert.ok(shrunk.count < 10);
+    assert.ok(shrunk.matches[0].title.endsWith('…'));
+
+    // search_resume fallback to site-config on fetch error, both with and without about section
+    const fallbackTools = createWebMcpTools({
+      siteConfig: { ...siteConfig, sections: [['experience', 'Experience', 'work']] },
+      env: { fetch: null },
+    });
+    const fbSearch = await fallbackTools[0].execute({ query: 'GitHub' }, {});
+    assert.equal(fbSearch.ok, true);
+    assert.equal(fbSearch.source, 'site-config');
+
+    // search_resume fallback handles sparse config with about section and AbortError rethrow
+    const abortAc = new AbortController();
+    abortAc.abort();
+    await assert.rejects(
+      () => byName.search_resume.execute({ query: 'Azure' }, { signal: abortAc.signal }),
+      { name: 'AbortError' }
+    );
+    const abortingSearchTool = createWebMcpTools({
+      siteConfig,
+      env: {
+        async fetch() {
+          const e = new Error('network abort');
+          e.name = 'AbortError';
+          throw e;
+        },
+      },
+    })[0];
+    await assert.rejects(() => abortingSearchTool.execute({ query: 'Azure' }, {}), {
+      name: 'AbortError',
+    });
+
+    // get_resume_section across all supported sections + endpoints + sparse data
+    const badSec = await byName.get_resume_section.execute({ section: 'unknown' }, {});
+    assert.equal(badSec.ok, false);
+    assert.equal(badSec.error.code, 'INVALID_INPUT');
+
+    const epRes = await byName.get_resume_section.execute({ section: 'endpoints' }, {});
+    assert.equal(epRes.ok, true);
+    assert.equal(epRes.data.rssFeed, 'https://guilhermevigneron.dev/feed.xml');
+    assert.equal(resumeFetchCalls, 0);
+
+    for (const sec of ['basics', 'work', 'projects', 'skills', 'publications', 'awards']) {
+      const res = await byName.get_resume_section.execute({ section: sec }, {});
+      assert.equal(res.ok, true);
+      assert.ok(res.data);
+    }
+    assert.equal(resumeFetchCalls, 1);
+
+    const sparseEndpoints = createWebMcpTools({ siteConfig: {}, env: {} })[1];
+    const sparseEp = await sparseEndpoints.execute({ section: 'endpoints' }, {});
+    assert.equal(sparseEp.data.siteUrl, '/');
+    assert.equal(sparseEp.data.resumePdf, '/resume.pdf');
+
+    const sparseSectionTool = createWebMcpTools({
+      siteConfig,
+      env: {
+        async fetch() {
+          return {
+            ok: true,
+            async json() {
+              return { projects: [{ name: 'P' }] };
+            },
+          };
+        },
+      },
+    })[1];
+    const sparseBasics = await sparseSectionTool.execute({ section: 'basics' }, {});
+    assert.equal(sparseBasics.data.name, '');
+    const sparseProjects = await sparseSectionTool.execute({ section: 'projects' }, {});
+    assert.equal(sparseProjects.data[0].subtitle, '');
+    const sparseAwards = await sparseSectionTool.execute({ section: 'awards' }, {});
+    assert.deepEqual(sparseAwards.data, []);
+
+    const failingFetchTool = createWebMcpTools({
+      siteConfig,
+      env: {
+        async fetch() {
+          return returnStatuslessError ? { ok: false } : { ok: false, status: 503 };
+        },
+      },
+    });
+    returnStatuslessError = true;
+    const failedResume = await failingFetchTool[1].execute({ section: 'work' }, {});
+    assert.equal(failedResume.ok, false);
+    assert.equal(failedResume.error.code, 'FETCH_FAILED');
+    returnStatuslessError = false;
+
+    // get_quality_telemetry success, sparse shape, failure, and AbortError rethrow
+    const qtOk = await byName.get_quality_telemetry.execute({}, {});
+    assert.equal(qtOk.ok, true);
+    assert.equal(qtOk.overallStatus, 'pass');
+    assert.equal(qtOk.gateCount, 1);
+    assert.equal(qtOk.webmcpEvaluation.passed, true);
+
+    telemetryPayload = null;
+    const qtSparse = await byName.get_quality_telemetry.execute({}, {});
+    assert.equal(qtSparse.ok, true);
+    assert.equal(qtSparse.overallStatus, 'unknown');
+    assert.equal(qtSparse.aiEvaluation, null);
+
+    throwAbortOnFetch = true;
+    await assert.rejects(() => byName.get_quality_telemetry.execute({}, {}), {
+      name: 'AbortError',
+    });
+    await assert.rejects(
+      () =>
+        createWebMcpTools({
+          siteConfig,
+          env: {
+            async fetch() {
+              const e = new Error('abort');
+              e.name = 'AbortError';
+              throw e;
+            },
+          },
+        })[1].execute({ section: 'work' }, {}),
+      { name: 'AbortError' }
+    );
+    throwAbortOnFetch = false;
+
+    const qtFail = await failingFetchTool[2].execute({}, {});
+    assert.equal(qtFail.ok, false);
+    assert.equal(qtFail.error.code, 'FETCH_FAILED');
+  });
+
+  it('implements interactive WebMCP tools, Atomic AbortController registration, rollback, and pagehide cleanup', async () => {
+    const scrolled = [];
+    const themed = [];
+    let currentTheme;
+    let menuOpen = true;
+    let openMenuImpl = async (q) => (q ? 2 : 10);
+
+    const tools = createWebMcpTools({
+      siteConfig: { toggleEvent: 'theme-toggle-request', sections: [] },
+      env: {
+        getSectionElement: (id) => (id === 'about' ? { id } : null),
+        scrollToSection: (target, hash) => scrolled.push({ target, hash }),
+        dispatchTheme: (evt, mode) => themed.push({ evt, mode }),
+        getActiveTheme: () => currentTheme,
+        openCommandMenu: (q) => openMenuImpl(q),
+        isCommandMenuOpen: () => menuOpen,
+        nextFrame: async () => {},
+      },
+    });
+    const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
+
+    // navigate_to_section
+    assert.equal(
+      (await byName.navigate_to_section.execute({ section: 'missing' }, {})).error.code,
+      'INVALID_INPUT'
+    );
+    const navHome = await byName.navigate_to_section.execute({ section: 'about' }, {});
+    assert.equal(navHome.ok, true);
+    assert.equal(navHome.navigated, true);
+    assert.equal(scrolled[0].hash, '#about');
+
+    const navSub = await byName.navigate_to_section.execute({ section: 'projects' }, {});
+    assert.equal(navSub.ok, true);
+    assert.equal(navSub.requiresNavigation, true);
+    assert.equal(navSub.url, '/#projects');
+
+    // set_theme
+    assert.equal(
+      (await byName.set_theme.execute({ theme: 'sepia' }, {})).error.code,
+      'INVALID_INPUT'
+    );
+    const themeFallback = await byName.set_theme.execute({ theme: 'dark' }, {});
+    assert.equal(themeFallback.ok, true);
+    assert.equal(themeFallback.theme, 'light');
+    currentTheme = 'dark';
+    const themeToggle = await byName.set_theme.execute({ theme: 'toggle' }, {});
+    assert.equal(themeToggle.theme, 'dark');
+    assert.equal(themed.length, 2);
+
+    // open_command_menu
+    assert.equal(
+      (await byName.open_command_menu.execute({ query: 123 }, {})).error.code,
+      'INVALID_INPUT'
+    );
+    assert.equal(
+      (await byName.open_command_menu.execute({ query: 'x'.repeat(101) }, {})).error.code,
+      'INVALID_INPUT'
+    );
+    const menuOk = await byName.open_command_menu.execute({ query: 'Azure' }, {});
+    assert.equal(menuOk.ok, true);
+    assert.equal(menuOk.open, true);
+    assert.equal(menuOk.visibleItems, 2);
+
+    openMenuImpl = async () => undefined;
+    menuOpen = false;
+    const menuEmpty = await byName.open_command_menu.execute({}, {});
+    assert.equal(menuEmpty.ok, true);
+    assert.equal(menuEmpty.open, false);
+    assert.equal(menuEmpty.visibleItems, null);
+
+    openMenuImpl = async () => {
+      throw new Error('panel import failed');
+    };
+    const menuErr = await byName.open_command_menu.execute({ query: '' }, {});
+    assert.equal(menuErr.ok, false);
+    assert.equal(menuErr.error.code, 'OPEN_FAILED');
+
+    openMenuImpl = async () => {
+      const e = new Error('abort open');
+      e.name = 'AbortError';
+      throw e;
+    };
+    await assert.rejects(() => byName.open_command_menu.execute({}, {}), { name: 'AbortError' });
+
+    const unavailableTools = createWebMcpTools({ siteConfig: {}, env: {} });
+    const unavailRes = await unavailableTools[5].execute({}, {});
+    assert.equal(unavailRes.error.code, 'UNAVAILABLE');
+
+    // registerWebMcpTools
+    await assert.rejects(() => registerWebMcpTools(null, tools), /unavailable/);
+
+    const listeners = {};
+    const mockTarget = {
+      addEventListener(name, fn) {
+        listeners[name] = fn;
+      },
+    };
+    const registered = [];
+    const handle = await registerWebMcpTools(
+      {
+        registerTool(tool, opts) {
+          registered.push({ name: tool.name, signal: opts.signal });
+        },
+      },
+      tools,
+      { lifecycleTarget: mockTarget }
+    );
+    assert.equal(handle.count, 6);
+    assert.equal(registered.length, 6);
+    assert.equal(registered[0].signal.aborted, false);
+    listeners.pagehide();
+    assert.equal(registered[0].signal.aborted, true);
+    handle.cleanup();
+    assert.equal(handle.controller.signal.aborted, true);
+
+    let failCount = 0;
+    let capturedRollbackSignal = null;
+    await assert.rejects(
+      () =>
+        registerWebMcpTools(
+          {
+            registerTool(_tool, opts) {
+              capturedRollbackSignal = opts.signal;
+              failCount += 1;
+              if (failCount === 3) {
+                throw new Error('duplicate tool');
+              }
+            },
+          },
+          tools
+        ),
+      /duplicate tool/
+    );
+    assert.equal(capturedRollbackSignal.aborted, true);
+  });
+
+  it('evaluates WebMCP contracts, byte budgets, annotations, and JSON Schemas deterministically', () => {
+    const llmsTxt = fs.readFileSync(path.join(ROOT, 'llms.txt'), 'utf8');
+    const passEval = evaluateWebmcpReadiness({
+      resume,
+      llmsTxt,
+      webmcpJsBytes: 4200,
+    });
+    assert.equal(passEval.passed, true);
+    assert.equal(passEval.toolCount, EXPECTED_WEBMCP_TOOLS.length);
+    assert.equal(passEval.contractPassCount, EXPECTED_WEBMCP_TOOLS.length);
+    assert.equal(passEval.readOnlyToolCount, 3);
+    assert.equal(passEval.interactiveToolCount, 3);
+    assert.ok(passEval.maxDescriptionLength > 0 && passEval.maxDescriptionLength <= 500);
+    assert.equal(passEval.withinByteBudget, true);
+
+    const overBudget = evaluateWebmcpReadiness({
+      resume,
+      llmsTxt,
+      webmcpJsBytes: MAX_WEBMCP_JS_BYTES + 1,
+    });
+    assert.equal(overBudget.withinByteBudget, false);
+    assert.equal(overBudget.passed, false);
+
+    const zeroBudget = evaluateWebmcpReadiness({
+      resume,
+      llmsTxt,
+      webmcpJsBytes: 0,
+    });
+    assert.equal(zeroBudget.withinByteBudget, false);
+    assert.equal(zeroBudget.passed, false);
+
+    const noResume = evaluateWebmcpReadiness({ resume: null, llmsTxt: '' });
+    assert.equal(noResume.passed, false);
+    assert.equal(noResume.hasLlmsEvidence, false);
+
+    const badToolsEval = evaluateWebmcpReadiness({
+      resume,
+      llmsTxt,
+      toolsOverride: [
+        {
+          name: 'bad tool!',
+          title: '',
+          description: '',
+          annotations: { readOnlyHint: true, consequentialHint: true, untrustedContentHint: true },
+          execute: null,
+          inputSchema: null,
+        },
+        {
+          name: 'search_resume',
+          title: 'Search',
+          description: 'x'.repeat(501),
+          annotations: {
+            readOnlyHint: false,
+            consequentialHint: false,
+            untrustedContentHint: false,
+          },
+          execute: async () => {},
+          inputSchema: {
+            type: 'object',
+            additionalProperties: true,
+            properties: null,
+          },
+        },
+        {
+          name: 'set_theme',
+          title: 'Theme',
+          description: 'Switch theme.',
+          annotations: {
+            readOnlyHint: false,
+            consequentialHint: false,
+            untrustedContentHint: false,
+          },
+          execute: async () => {},
+          inputSchema: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              broken: null,
+              theme: { type: 'string', description: '', enum: [] },
+            },
+            required: ['missingProp'],
+          },
+        },
+      ],
+    });
+    assert.equal(badToolsEval.passed, false);
+    assert.equal(badToolsEval.contractPassCount, 0);
+    assert.ok(badToolsEval.tools[0].issues.includes('invalid or unexpected tool name'));
+    assert.ok(badToolsEval.tools[0].issues.includes('missing title'));
+    assert.ok(badToolsEval.tools[0].issues.includes('execute must be a function'));
+    assert.ok(
+      badToolsEval.tools[1].issues.includes('inputSchema.additionalProperties must be false')
+    );
+    assert.ok(badToolsEval.tools[1].issues.includes('inputSchema.properties must be an object'));
+    assert.ok(badToolsEval.tools[2].issues.includes('property "broken" invalid or missing type'));
+    assert.ok(
+      badToolsEval.tools[2].issues.includes('property "theme" description must be 1..150 chars')
+    );
+    assert.ok(
+      badToolsEval.tools[2].issues.includes('property "theme" enum must be a non-empty array')
+    );
+    assert.ok(
+      badToolsEval.tools[2].issues.includes(
+        'required property "missingProp" missing from properties'
+      )
+    );
   });
 });

@@ -2,6 +2,11 @@
   const D = document;
   const PANEL_URL = '/assets/js/command-menu-panel.js';
   const PANEL_CSS_URL = '/assets/css/command-menu.css';
+  const WEBMCP_URL = '/assets/js/webmcp.js';
+  const webMcpMod =
+    typeof D.modelContext?.registerTool === 'function'
+      ? import(WEBMCP_URL).catch(() => null)
+      : null;
 
   function showLoadError() {
     if (!D.body) return;
@@ -57,12 +62,27 @@
 
     function ensureLoaded() {
       if (!panelPromise) {
-        panelPromise = Promise.all([import(PANEL_URL), loadPanelStyles()]).then(([mod]) => {
-          panelApi = mod.initCommandMenuPanel();
-          return panelApi;
-        });
+        panelPromise = Promise.all([import(PANEL_URL), loadPanelStyles()])
+          .then(([mod]) => {
+            panelApi = mod.initCommandMenuPanel();
+            return panelApi;
+          })
+          .catch((err) => {
+            panelPromise = null;
+            throw err;
+          });
       }
       return panelPromise;
+    }
+
+    if (webMcpMod) {
+      webMcpMod.then((mod) => {
+        mod?.initWebMcp?.({
+          openCommandMenu(query) {
+            return ensureLoaded().then((api) => api.open(D.activeElement, query));
+          },
+        });
+      });
     }
 
     function toggleFromLoader(triggerEl) {

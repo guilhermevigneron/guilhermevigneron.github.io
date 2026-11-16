@@ -388,6 +388,12 @@ export async function runSmokeTests({
     const cmdPanelJs = cmdPanelBuf.toString('utf8');
     assert.ok(cmdPanelJs.includes('initCommandMenuPanel'), 'command-menu-panel missing export');
 
+    const webmcpMatch = cmdLoaderJs.match(/\/assets\/js\/webmcp(?:\.[a-f0-9]+)?\.js/);
+    assert.ok(webmcpMatch, 'command-menu loader missing webmcp module reference');
+    const { buf: webmcpBuf } = await fetchCheckedAsset(webmcpMatch[0], 'javascript', 200);
+    const webmcpJs = webmcpBuf.toString('utf8');
+    assert.ok(webmcpJs.includes('initWebMcp'), 'webmcp module missing initWebMcp export');
+
     const cssFontUrls = [
       ...activeCssText.matchAll(/url\((['"]?)(\/assets\/fonts\/[^)'"\s]+)\1\)/g),
     ].map((m) => m[2]);
@@ -526,8 +532,13 @@ export async function runSmokeTests({
     const qualityJson = JSON.parse(qualityJsonBuf.toString('utf8'));
     assert.equal(qualityJson.schemaVersion, 1);
     assert.ok(
-      Array.isArray(qualityJson.gates) && qualityJson.gates.length === 10,
-      `quality/report.json expected 10 gates, got ${qualityJson.gates?.length}`
+      Array.isArray(qualityJson.gates) && qualityJson.gates.length === 11,
+      `quality/report.json expected 11 gates, got ${qualityJson.gates?.length}`
+    );
+    assert.equal(
+      qualityJson.webmcpEvaluation?.passed,
+      true,
+      'quality/report.json expected passing webmcpEvaluation'
     );
     const failingGates = qualityJson.gates.filter((g) => g.status === 'fail');
     assert.equal(

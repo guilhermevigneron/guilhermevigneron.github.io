@@ -27,7 +27,10 @@ It is designed to be **fast, clean, and private**: there are no trackers, no thi
 - **CI Flaky Test Triage & Failure Clustering Engine (`scripts/lib/flaky-triage.mjs`):**
   - Multi-framework failure classifier covering **Selenium / C# (`NUnit`)**, **Playwright**, **Cypress + `axe-core`**, and **Azure DevOps** logs.
   - Strips volatile runtime noise (timestamps, session UUIDs, hex memory addresses, ephemeral ports, and durations) to deduplicate multi-shard traces into canonical root-cause clusters, separating transient infrastructure flakes from PR-blocking regressions with a **zero-false-suppression** safety invariant.
-- **Fast, Accessible & Private by Design:** Every font, icon, and image is self-hosted, strict security headers (`default-src 'self'`) block external requests, the initial mobile page load stays under 75 KB, and every build is verified for WCAG 2.1 AA accessibility (`cypress-axe`), HTML5 validity, and single-page A4 print layout.
+- **Feature-Detected WebMCP Agent Tooling (`assets/js/webmcp.js` & `src/js/webmcp-tools.mjs`):**
+  - When a browser exposes `document.modelContext.registerTool`, the site lazily loads a compressed `webmcp.js` bundle (`<= 12 KB`) and registers 6 grounded tools (`search_resume`, `get_resume_section`, `get_quality_telemetry`, `navigate_to_section`, `set_theme`, `open_command_menu`) with strict JSON Schemas and `AbortSignal` cleanup.
+  - Standard browsers incur **0 B** extra eager payload; test locally via `chrome://flags/#enable-webmcp-testing`, or opt in for all visitors via an Origin Trial token under `meta.webmcpOriginTrialToken` in `resume.json`.
+- **Fast, Accessible & Private by Design:** Every font, icon, and image is self-hosted, strict security headers (`default-src 'self'`) block external requests, the initial mobile page load stays under 75 KB, and every build is verified across 11 gates including WCAG 2.1 AA accessibility (`cypress-axe`), HTML5 validity, and single-page A4 print layout.
 
 ---
 
@@ -42,8 +45,9 @@ resume.json
 Updates index.html, 404.html, llms.txt, sitemap.xml, robots.txt, etc.
    │
    ▼  npm run build
-Runs AI retrieval & flaky-triage eval gates, minifies & fingerprints CSS/JS,
-renders /resume.pdf & social preview card, and generates /architecture/ & /quality/
+Runs AI retrieval, flaky-triage & WebMCP contract eval gates, minifies &
+fingerprints CSS/JS, renders /resume.pdf & social preview card, and generates
+/architecture/, /blog/, & /quality/
    │
    ▼
 _site/  (ready to preview locally or deploy to GitHub Pages)
@@ -53,14 +57,14 @@ _site/  (ready to preview locally or deploy to GitHub Pages)
 
 ## Project Layout
 
-| Path                                        | What it's for                                                                                                                 |
-| :------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------- |
-| [`resume.json`](resume.json)                | **Single source of truth** for all resume content and profile info                                                            |
-| [`src/`](src/)                              | CSS stylesheets, HTML shell template, and client/build shared resume search (`js/resume-search.mjs`)                          |
-| [`assets/`](assets/)                        | Self-hosted fonts, avatar images, icons, and client-side scripts (`command-menu-panel.js`)                                    |
-| [`scripts/`](scripts/)                      | Build, sync, PDF/OG generation, AI retrieval eval gate (`lib/ai-evals.mjs`), and flaky triage engine (`lib/flaky-triage.mjs`) |
-| [`tests/`](tests/) & [`cypress/`](cypress/) | Unit tests, end-to-end browser tests, and accessibility audits                                                                |
-| [`AGENTS.md`](AGENTS.md)                    | Detailed technical rules and asset budgets for contributors and AI agents                                                     |
+| Path                                        | What it's for                                                                                                                   |
+| :------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------ |
+| [`resume.json`](resume.json)                | **Single source of truth** for all resume content and profile info                                                              |
+| [`src/`](src/)                              | CSS stylesheets, HTML shell template, and shared resume search / WebMCP modules (`js/resume-search.mjs`, `js/webmcp-tools.mjs`) |
+| [`assets/`](assets/)                        | Self-hosted fonts, avatar images, icons, and client-side scripts (`command-menu-panel.js`, lazy `webmcp.js`)                    |
+| [`scripts/`](scripts/)                      | Build, sync, PDF/OG generation, and eval gates (`lib/ai-evals.mjs`, `lib/flaky-triage.mjs`, `lib/webmcp-evals.mjs`)             |
+| [`tests/`](tests/) & [`cypress/`](cypress/) | Unit tests, end-to-end browser tests, WebMCP mock tests, and accessibility audits                                               |
+| [`AGENTS.md`](AGENTS.md)                    | Detailed technical rules and asset budgets for contributors and AI agents                                                       |
 
 ---
 
@@ -103,13 +107,13 @@ This runs sync parity, Biome check (lint + format), unit tests, a security audit
 | :-------------------------- | :-------------------------------------------------------------------------------------------------------------------- |
 | `npm run sync`              | Sync `resume.json` into HTML, `llms.txt`, `sitemap.xml`, `robots.txt`, `security.txt`, and the command menu           |
 | `npm run test:sync`         | Check that all synced files match `resume.json`                                                                       |
-| `npm run build`             | Sync, validate, bundle/fingerprint assets, and build `_site/` (including PDF, OG card, `/quality/`, `/architecture/`) |
+| `npm run build`             | Sync, validate, bundle/fingerprint assets, and build `_site/` (PDF, OG card, `/architecture/`, `/blog/`, `/quality/`) |
 | `npm run serve`             | Start a local static server for `_site/` at `http://127.0.0.1:4000`                                                   |
 | `npm run lint`              | Run Biome check (lint + format) across JS, CSS, JSON, and HTML                                                        |
 | `npm run lint:fix`          | Auto-fix Biome lint and formatting issues                                                                             |
 | `npm run test:unit`         | Run Node.js unit tests and enforce code coverage thresholds (`>= 85%` lines, `>= 85%` funcs, `>= 85%` branches)       |
 | `npm run test:html`         | Validate generated HTML5 files in `_site/`                                                                            |
-| `npm run test:e2e`          | Run Cypress end-to-end, mobile, and `axe-core` accessibility tests                                                    |
+| `npm run test:e2e`          | Run Cypress end-to-end, mobile, WebMCP, and `axe-core` accessibility tests                                            |
 | `npm run test:perf`         | Run Playwright mobile Web Vitals and byte-budget checks                                                               |
 | `npm run test:perf:quality` | Run Playwright render and horizontal overflow audit on `/quality/`                                                    |
 | `npm run test:security`     | Run `npm audit` for moderate+ vulnerabilities                                                                         |

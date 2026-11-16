@@ -32,8 +32,8 @@ export function buildArchitecturePage({
     {
       title: '2. Zero Third-Party Dependencies',
       summary:
-        'All fonts, icons, styles, and scripts are self-hosted and bundled locally. There are no external trackers, ad networks, cookies, or third-party CDNs.',
-      detail: 'Strict default-src "self" CSP · lazy command menu',
+        'All fonts, icons, styles, and scripts are self-hosted and bundled locally. Optional WebMCP agent tools lazy-load only when document.modelContext is enabled, with zero external trackers or CDNs.',
+      detail: 'Strict default-src "self" CSP · lazy command menu & WebMCP',
     },
     {
       title: '3. Automated PDF & Social Previews',
@@ -43,7 +43,7 @@ export function buildArchitecturePage({
     {
       title: '4. Built-In Quality Gates',
       summary:
-        'Before anything goes live, automated checks verify Biome lint, unit tests, dependency audit, HTML5 validity, AI retrieval groundedness, flaky test triage clustering, mobile speed budgets, WCAG 2.1 AA accessibility, and zero broken links.',
+        'Before anything goes live, automated checks verify Biome lint, unit tests, dependency audit, HTML5 validity, AI retrieval groundedness, WebMCP contracts, flaky test triage clustering, mobile speed budgets, WCAG 2.1 AA accessibility, and zero broken links.',
       detail: `Live results published to ${endpoints.qualityPath}`,
     },
   ];
@@ -80,6 +80,7 @@ export function buildArchitecturePage({
                             <div class="arch-chip">A4 PDF <span>(${escapeHtml(endpoints.resumePdfPath)})</span></div>
                             <div class="arch-chip">Contact <span>(${escapeHtml(endpoints.contactVcfPath)})</span></div>
                             <div class="arch-chip">AI &amp; Search <span>(${escapeHtml(endpoints.llmsTxtPath)}, JSON-LD)</span></div>
+                            <div class="arch-chip">WebMCP <span>(document.modelContext)</span></div>
                         </div>
                     </div>
 
@@ -133,6 +134,7 @@ export function buildArchitecturePage({
     title: `Architecture Overview - ${ownerName}`,
     description: `High-level visual architecture of ${endpoints.domain}: how a single resume.json source builds and verifies the site, PDF, and quality report.`,
     canonicalUrl: endpoints.architectureUrl,
+    originTrialToken: resume.meta?.webmcpOriginTrialToken,
     ownerName,
     subtitleHtml: `<p class="entry-sub">How ${escapeHtml(endpoints.domain)} Works</p>`,
     navLinks: [

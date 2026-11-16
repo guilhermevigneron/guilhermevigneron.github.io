@@ -21,6 +21,12 @@ const state = {
     externalRequests: 0,
     blockedUrls: [],
   },
+  webmcp: {
+    checksRun: 0,
+    failures: 0,
+    registeredTools: [],
+    checks: [],
+  },
 };
 
 function persistMetrics(extra = {}) {
@@ -56,6 +62,7 @@ module.exports = defineConfig({
         state.a11y = { checksRun: 0, violations: 0, audits: [] };
         state.mobile = { checksRun: 0, failures: 0, checks: [] };
         state.network = { pagesChecked: 0, externalRequests: 0, blockedUrls: [] };
+        state.webmcp = { checksRun: 0, failures: 0, registeredTools: [], checks: [] };
         persistMetrics({ totalTests: 0, totalPassed: 0, totalFailed: 0 });
       });
 
@@ -78,6 +85,18 @@ module.exports = defineConfig({
           state.network.pagesChecked += 1;
           state.network.externalRequests += externalUrls.length;
           state.network.blockedUrls.push(...externalUrls);
+          persistMetrics();
+          return null;
+        },
+        recordWebmcpAudit({ label, passed, tools = null }) {
+          state.webmcp.checksRun += 1;
+          if (!passed) state.webmcp.failures += 1;
+          if (Array.isArray(tools) && tools.length > 0) {
+            state.webmcp.registeredTools = [
+              ...new Set([...state.webmcp.registeredTools, ...tools]),
+            ];
+          }
+          state.webmcp.checks.push({ label, passed });
           persistMetrics();
           return null;
         },

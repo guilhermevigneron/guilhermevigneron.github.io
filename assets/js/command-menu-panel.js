@@ -5,6 +5,12 @@ const COPIED = ' copied to clipboard';
 const ARIA_SEL = 'aria-selected';
 const DATA_SEL = 'data-selected';
 const ARIA_EXP = 'aria-expanded';
+const ARIA_HID = 'aria-hidden';
+const ARIA_ACT = 'aria-activedescendant';
+const STATUS = 'status';
+const CMD_CLS = 'cmd-item';
+const ITEM_SEL = `.${CMD_CLS}`;
+const CMD_PREFIX = 'command-';
 const NO_SCROLL = { preventScroll: true };
 
 const { email, host, siteUrl, toggleEvent, profiles, sections, ep } = SITE_CFG;
@@ -18,7 +24,7 @@ export function initCommandMenuPanel() {
   const qa = (root, sel) => [...root.querySelectorAll(sel)];
   const sa = (node, attrs) => {
     for (const k in attrs) {
-      if (attrs[k] != null) node.setAttribute(k, String(attrs[k]));
+      if (attrs[k] != null) node.setAttribute(k, attrs[k]);
     }
     return node;
   };
@@ -40,7 +46,7 @@ export function initCommandMenuPanel() {
       'stroke-width': 2,
       'stroke-linecap': 'round',
       'stroke-linejoin': 'round',
-      'aria-hidden': 'true',
+      [ARIA_HID]: 'true',
       focusable: 'false',
     });
     svg.appendChild(sa(D.createElementNS(ns, 'path'), { d }));
@@ -57,69 +63,82 @@ export function initCommandMenuPanel() {
       }
       return n;
     };
-    const backdrop = ensureRoot('command-backdrop', 'cmd-backdrop');
-    const dialog = ensureRoot('command-dialog', 'cmd-dialog');
+    const backdrop = ensureRoot(`${CMD_PREFIX}backdrop`, 'cmd-backdrop');
+    const dialog = ensureRoot(`${CMD_PREFIX}dialog`, 'cmd-dialog');
+    const cmdId = (s) => `${CMD_PREFIX}${s}`;
+    let [closeBtn, input, list, emptyState, statusEl] = [
+      'close',
+      'input',
+      'list',
+      'empty',
+      STATUS,
+    ].map((s) => byId(cmdId(s)));
 
-    if (!byId('command-input')) {
+    if (!input) {
       sa(dialog, {
         role: 'dialog',
         'aria-modal': 'true',
-        'aria-labelledby': 'command-dialog-title',
+        'aria-labelledby': cmdId('dialog-title'),
       });
       dialog.textContent = '';
 
       const row = el('div', 'cmd-input-row');
-      const closeBtn = el('button', 'cmd-close', null, {
+      closeBtn = el('button', 'cmd-close', null, {
         type: 'button',
-        id: 'command-close',
+        id: cmdId('close'),
         'aria-label': 'Close command menu',
       });
       closeBtn.appendChild(iconSvg(null, 16, 'M18 6 6 18M6 6l12 12'));
+      input = el('input', 'cmd-input', null, {
+        id: cmdId('input'),
+        type: 'text',
+        placeholder: 'Search commands, skills, or experience...',
+        'aria-label': 'Search commands and links',
+        autocomplete: 'off',
+        role: 'combobox',
+        'aria-autocomplete': 'list',
+        [ARIA_EXP]: 'false',
+        'aria-controls': cmdId('list'),
+      });
       row.append(
         iconSvg('cmd-search-icon', 18, 'M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm10 18-4.3-4.3'),
-        el('input', 'cmd-input', null, {
-          id: 'command-input',
-          type: 'text',
-          placeholder: 'Search commands, skills, or experience...',
-          'aria-label': 'Search commands and links',
-          autocomplete: 'off',
-          role: 'combobox',
-          'aria-autocomplete': 'list',
-          [ARIA_EXP]: 'false',
-          'aria-controls': 'command-list',
-        }),
+        input,
         closeBtn
       );
 
-      const emptyState = el('p', 'cmd-empty', 'No results found.', {
-        id: 'command-empty',
-        role: 'status',
+      list = el('div', 'cmd-list', null, {
+        id: cmdId('list'),
+        role: 'listbox',
+        'aria-label': 'Commands and links',
+      });
+      emptyState = el('p', 'cmd-empty', 'No results found.', {
+        id: cmdId('empty'),
+        role: STATUS,
       });
       emptyState.hidden = true;
+      statusEl = el('div', 'sr-only', '', {
+        id: cmdId(STATUS),
+        role: STATUS,
+        'aria-live': 'polite',
+      });
       dialog.append(
-        el('h2', 'sr-only', 'Command menu', { id: 'command-dialog-title' }),
+        el('h2', 'sr-only', 'Command menu', { id: cmdId('dialog-title') }),
         row,
-        el('div', 'cmd-list', null, {
-          id: 'command-list',
-          role: 'listbox',
-          'aria-label': 'Commands and links',
-        }),
+        list,
         emptyState,
-        el('div', 'sr-only', '', {
-          id: 'command-status',
-          role: 'status',
-          'aria-live': 'polite',
-        })
+        statusEl
       );
     }
 
     return [
       backdrop,
       dialog,
-      ensureRoot('cmd-toast', 'cmd-toast', { role: 'status', 'aria-live': 'polite' }),
-      ...['command-close', 'command-input', 'command-list', 'command-empty', 'command-status'].map(
-        byId
-      ),
+      ensureRoot('cmd-toast', 'cmd-toast', { role: STATUS, 'aria-live': 'polite' }),
+      closeBtn,
+      input,
+      list,
+      emptyState,
+      statusEl,
     ];
   }
 
@@ -177,7 +196,7 @@ export function initCommandMenuPanel() {
     const isAct = target[0] === ':';
     const external = target[0] === '>';
     const href = isAct ? null : external ? target.slice(1) : target;
-    const btn = el('button', isEvidence ? 'cmd-item cmd-item--match' : 'cmd-item', null, {
+    const btn = el('button', isEvidence ? `${CMD_CLS} ${CMD_CLS}--match` : CMD_CLS, null, {
       id: `cmd-item-${itemCounter++}`,
       type: 'button',
       role: 'option',
@@ -193,7 +212,7 @@ export function initCommandMenuPanel() {
       dl || null,
       `${title} ${hint} ${extras || ''}`.toLowerCase(),
     ]);
-    btn.append(el('span', '', title), el('span', 'cmd-item-hint', hint));
+    btn.append(el('span', '', title), el('span', `${CMD_CLS}-hint`, hint));
     return btn;
   };
 
@@ -299,7 +318,7 @@ export function initCommandMenuPanel() {
   };
 
   const isOpen = () => !dialog.hidden;
-  const getAllItems = () => qa(list, '.cmd-item');
+  const getAllItems = () => qa(list, ITEM_SEL);
   const getVisible = () => getAllItems().filter((item) => !item.hidden);
   const getFocusables = () => [
     input,
@@ -319,13 +338,13 @@ export function initCommandMenuPanel() {
     });
     if (!visible.length) {
       activeIndex = -1;
-      input.removeAttribute('aria-activedescendant');
+      input.removeAttribute(ARIA_ACT);
       return;
     }
     activeIndex = ((index % visible.length) + visible.length) % visible.length;
     const activeItem = visible[activeIndex];
     markItem(activeItem, 'true');
-    input.setAttribute('aria-activedescendant', activeItem.id);
+    input.setAttribute(ARIA_ACT, activeItem.id);
     if (scroll) activeItem.scrollIntoView({ block: 'nearest' });
   };
 
@@ -333,14 +352,14 @@ export function initCommandMenuPanel() {
     [...D.body.children].forEach((c) => {
       if (c !== backdrop && c !== dialog && c !== toast) {
         c.toggleAttribute('inert', open);
-        if (open) c.setAttribute('aria-hidden', 'true');
-        else c.removeAttribute('aria-hidden');
+        if (open) c.setAttribute(ARIA_HID, 'true');
+        else c.removeAttribute(ARIA_HID);
       }
     });
     backdrop.hidden = !open;
     dialog.hidden = !open;
     [input, ...triggers].forEach((b) => {
-      b.setAttribute(ARIA_EXP, String(open));
+      b.setAttribute(ARIA_EXP, open);
     });
     const ov = open ? 'hidden' : '';
     D.documentElement.style.overflow = ov;
@@ -352,7 +371,7 @@ export function initCommandMenuPanel() {
     let total = 0;
     staticGroups.forEach((group) => {
       let count = 0;
-      qa(group, '.cmd-item').forEach((item) => {
+      qa(group, ITEM_SEL).forEach((item) => {
         const match = !q || itemActions.get(item)[4].includes(q);
         item.hidden = !match;
         if (match) {
@@ -396,14 +415,20 @@ export function initCommandMenuPanel() {
     }
   };
 
-  const openMenu = (triggerEl = D.activeElement) => {
-    lastFocused = triggerEl?.focus ? triggerEl : D.activeElement;
-    input.value = '';
-    filterItems('', false);
-    list.scrollTop = 0;
-    setModalState(true);
+  const openMenu = (triggerEl = D.activeElement, initialQuery = '') => {
+    const query = typeof initialQuery === 'string' ? initialQuery : '';
+    const hasQuery = Boolean(query.trim());
+    if (!isOpen()) {
+      lastFocused = triggerEl?.focus ? triggerEl : D.activeElement;
+      list.scrollTop = 0;
+      setModalState(true);
+    }
+    input.value = query;
+    filterItems(query, hasQuery);
     input.focus(NO_SCROLL);
-    fetchLlms().catch(() => {});
+    const task = fetchLlms().catch(() => {});
+    const count = () => getVisible().length;
+    return hasQuery ? task.then(count) : Promise.resolve(count());
   };
 
   const closeMenu = (restore) => {
@@ -413,7 +438,7 @@ export function initCommandMenuPanel() {
       statusTimer = null;
     }
     setModalState(false);
-    input.removeAttribute('aria-activedescendant');
+    input.removeAttribute(ARIA_ACT);
     if (restore && lastFocused?.isConnected) {
       lastFocused.focus(NO_SCROLL);
     }
@@ -462,6 +487,7 @@ export function initCommandMenuPanel() {
     if (action === 'toggle-theme') D.dispatchEvent(new CustomEvent(toggleEvent));
     closeMenu(true);
 
+    const mdLabel = 'Markdown resume';
     if (action === 'toggle-theme') {
       const isDark = D.documentElement.classList.contains('dark');
       showToast(
@@ -475,13 +501,11 @@ export function initCommandMenuPanel() {
       copyText(siteUrl, 'Profile URL');
     } else if (action === 'copy-llms') {
       if (cachedLlms) {
-        copyText(cachedLlms, 'Markdown resume');
+        copyText(cachedLlms, mdLabel);
       } else {
         fetchLlms()
-          .then((txt) =>
-            copyText(txt, 'Markdown resume', 'Markdown resume ready — select Copy again')
-          )
-          .catch(() => showToast('Unable to fetch Markdown resume'));
+          .then((txt) => copyText(txt, mdLabel, `${mdLabel} ready — select Copy again`))
+          .catch(() => showToast(`Unable to fetch ${mdLabel}`));
       }
     } else if (dl && href?.startsWith('/')) {
       const link = el('a', '', null, { href, download: dl });
@@ -498,7 +522,7 @@ export function initCommandMenuPanel() {
     }
   };
 
-  const findItem = (e) => e.target?.closest?.('.cmd-item');
+  const findItem = (e) => e.target?.closest?.(ITEM_SEL);
   const syncHoveredOrFocused = (e) => {
     const item = findItem(e);
     if (!item || item.hidden) return;
@@ -533,7 +557,7 @@ export function initCommandMenuPanel() {
     }
 
     if (k === 'ArrowDown' || k === 'ArrowUp' || k === 'Home' || k === 'End') {
-      const onItem = Boolean(D.activeElement?.closest?.('.cmd-item'));
+      const onItem = Boolean(findItem({ target: D.activeElement }));
       if ((k === 'Home' || k === 'End') && !onItem) return;
       event.preventDefault();
       const visible = getVisible();

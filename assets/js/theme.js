@@ -38,8 +38,13 @@ function applyTheme(theme) {
   }
 }
 
-function toggleTheme() {
-  const nextTheme = root.classList.contains('dark') ? 'light' : 'dark';
+function setTheme(explicitTheme) {
+  const nextTheme =
+    explicitTheme === 'light' || explicitTheme === 'dark'
+      ? explicitTheme
+      : root.classList.contains('dark')
+        ? 'light'
+        : 'dark';
   try {
     localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
   } catch {
@@ -59,10 +64,12 @@ function initThemeToggle() {
 
   const toggle = document.getElementById('theme-toggle');
   if (toggle) {
-    toggle.addEventListener('click', toggleTheme);
+    toggle.addEventListener('click', () => setTheme());
   }
 
-  document.addEventListener(THEME_TOGGLE_EVENT, toggleTheme);
+  document.addEventListener(THEME_TOGGLE_EVENT, (event) => {
+    setTheme(event?.detail?.theme);
+  });
 
   if (mediaQuery) {
     const onChange = (event) => {

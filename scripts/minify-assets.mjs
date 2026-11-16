@@ -55,6 +55,7 @@ export async function minifyJsFiles(
       ep.qualityJson,
       ep.llmsTxt,
       ep.blog,
+      ep.feed,
     ],
   };
 
@@ -77,6 +78,7 @@ export async function minifyJsFiles(
     { file: 'theme.js', format: 'iife' },
     { file: 'command-menu.js', format: 'iife' },
     { file: 'command-menu-panel.js', format: 'esm' },
+    { file: 'webmcp.js', format: 'esm' },
   ];
 
   await Promise.all(

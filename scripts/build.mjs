@@ -143,9 +143,11 @@ export async function runBuild({ skipSync = process.argv.includes('--no-sync') }
   const themeInitJsUrl = fingerprintAsset('assets/js/theme-init.js');
   const themeJsUrl = fingerprintAsset('assets/js/theme.js');
   const commandMenuPanelJsUrl = fingerprintAsset('assets/js/command-menu-panel.js');
+  const webmcpJsUrl = fingerprintAsset('assets/js/webmcp.js');
   rewriteTextFile('assets/js/command-menu.js', {
     '/assets/js/command-menu-panel.js': commandMenuPanelJsUrl,
     '/assets/css/command-menu.css': commandMenuCssUrl,
+    '/assets/js/webmcp.js': webmcpJsUrl,
   });
   const commandMenuJsUrl = fingerprintAsset('assets/js/command-menu.js');
   const faviconSvgUrl = fingerprintAsset('assets/favicon.svg');
@@ -179,6 +181,7 @@ export async function runBuild({ skipSync = process.argv.includes('--no-sync') }
     '/assets/js/theme.js': themeJsUrl,
     '/assets/js/command-menu.js': commandMenuJsUrl,
     '/assets/js/command-menu-panel.js': commandMenuPanelJsUrl,
+    '/assets/js/webmcp.js': webmcpJsUrl,
     '/assets/favicon.svg': faviconSvgUrl,
     '/assets/apple-touch-icon.png': appleTouchIconUrl,
   };
@@ -210,6 +213,7 @@ export async function runBuild({ skipSync = process.argv.includes('--no-sync') }
     themeJsUrl,
     commandMenuJsUrl,
     commandMenuPanelJsUrl,
+    webmcpJsUrl,
     faviconSvgUrl,
     appleTouchIconUrl,
     icon192Url,

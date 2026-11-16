@@ -6,6 +6,7 @@ import { evaluateFlakyTriage } from './lib/flaky-triage.mjs';
 import { resolveBuildYear } from './lib/io.mjs';
 import { isEntrypoint, ROOT } from './lib/paths.mjs';
 import { buildCommandMenuConfig } from './lib/site-config.mjs';
+import { evaluateWebmcpReadiness } from './lib/webmcp-evals.mjs';
 
 const HTML_ENTITIES = {
   '&amp;': '&',
@@ -314,6 +315,13 @@ export function validateResumeSchema(resume) {
   ]) {
     assert.ok(resume.meta?.[metaField], `meta.${metaField} missing`);
   }
+  if (resume.meta?.webmcpOriginTrialToken !== undefined) {
+    assert.equal(
+      typeof resume.meta.webmcpOriginTrialToken,
+      'string',
+      'meta.webmcpOriginTrialToken must be a string'
+    );
+  }
 }
 
 export function validateSyncState({
@@ -406,6 +414,14 @@ export function validateSyncState({
       extractMetaContent(headSource, 'name', 'twitter:image'),
       resume.meta.ogImageUrl,
       'twitter:image mismatch'
+    );
+    const expectedOriginTrial = String(resume.meta?.webmcpOriginTrialToken || '').trim();
+    const actualIndexOriginTrial =
+      extractMetaContent(headSource, 'http-equiv', 'origin-trial') || '';
+    assert.equal(
+      actualIndexOriginTrial,
+      expectedOriginTrial,
+      'index.html origin-trial meta tag mismatch'
     );
 
     const match = indexHtml.match(
@@ -777,6 +793,26 @@ export function validateSyncState({
     assert.equal(triage.passed, true, 'Flaky test triage evaluation gate failed');
   });
 
+  check('WebMCP tool contracts and schemas match resume.json & llms.txt', () => {
+    const webmcpEval = evaluateWebmcpReadiness({ resume, llmsTxt });
+    assert.equal(
+      webmcpEval.toolCount,
+      webmcpEval.expectedToolCount,
+      `WebMCP expected ${webmcpEval.expectedToolCount} tools, got ${webmcpEval.toolCount}`
+    );
+    assert.equal(
+      webmcpEval.contractPassCount,
+      webmcpEval.expectedToolCount,
+      `WebMCP tool contract failures: ${JSON.stringify(webmcpEval.tools.filter((t) => !t.passed))}`
+    );
+    assert.equal(
+      webmcpEval.hasLlmsEvidence,
+      true,
+      'WebMCP search_resume missing llms.txt evidence'
+    );
+    assert.equal(webmcpEval.passed, true, 'WebMCP readiness gate failed');
+  });
+
   check(
     'site.webmanifest, sitemap.xml, robots.txt, security.txt, command-menu-panel.js, and 404.html align with resume.json',
     () => {
@@ -871,6 +907,16 @@ export function validateSyncState({
       assert.ok(decoded404.includes('href="/"'), '404.html missing / link');
       assert.ok(decoded404.includes('href="/resume.pdf"'), '404.html missing /resume.pdf link');
       assert.ok(decoded404.includes('href="/quality/"'), '404.html missing /quality/ link');
+      const notFoundHeadMatch = String(notFoundHtml).match(/<head\b[^>]*>([\s\S]*?)<\/head>/i);
+      const notFoundHead = notFoundHeadMatch ? notFoundHeadMatch[1] : '';
+      const expectedOriginTrial = String(resume.meta?.webmcpOriginTrialToken || '').trim();
+      const actual404OriginTrial =
+        extractMetaContent(notFoundHead, 'http-equiv', 'origin-trial') || '';
+      assert.equal(
+        actual404OriginTrial,
+        expectedOriginTrial,
+        '404.html origin-trial meta tag mismatch'
+      );
     }
   );
 
@@ -944,6 +990,7 @@ export function validateAllFromRoot(rootDir = ROOT) {
   const checks = [];
   const aiEvaluation = evaluateAiReadiness({ resume, llmsTxt });
   const flakyTriage = evaluateFlakyTriage();
+  const webmcpEvaluation = evaluateWebmcpReadiness({ resume, llmsTxt });
   try {
     const passedChecks = validateSyncState({
       resume,
@@ -973,6 +1020,7 @@ export function validateAllFromRoot(rootDir = ROOT) {
           checks,
           aiEvaluation,
           flakyTriage,
+          webmcpEvaluation,
         },
         null,
         2

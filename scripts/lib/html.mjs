@@ -73,6 +73,7 @@ export const UNHASHED_ASSET_URLS = {
   themeJsUrl: '/assets/js/theme.js',
   commandMenuJsUrl: '/assets/js/command-menu.js',
   commandMenuPanelJsUrl: '/assets/js/command-menu-panel.js',
+  webmcpJsUrl: '/assets/js/webmcp.js',
   faviconSvgUrl: '/assets/favicon.svg',
   appleTouchIconUrl: '/assets/apple-touch-icon.png',
 };
@@ -89,6 +90,7 @@ export function resolveAssetUrls(assetManifest) {
     commandMenuJsUrl: assetManifest?.commandMenuJsUrl || UNHASHED_ASSET_URLS.commandMenuJsUrl,
     commandMenuPanelJsUrl:
       assetManifest?.commandMenuPanelJsUrl || UNHASHED_ASSET_URLS.commandMenuPanelJsUrl,
+    webmcpJsUrl: assetManifest?.webmcpJsUrl || UNHASHED_ASSET_URLS.webmcpJsUrl,
     faviconSvgUrl: assetManifest?.faviconSvgUrl || UNHASHED_ASSET_URLS.faviconSvgUrl,
     appleTouchIconUrl: assetManifest?.appleTouchIconUrl || UNHASHED_ASSET_URLS.appleTouchIconUrl,
     ogCardUrl: assetManifest?.ogCardUrl || '/assets/og-card.png',
@@ -104,6 +106,11 @@ export function renderThemeColorMetas(indent = '    ') {
 
 export function renderCspMeta() {
   return `<meta http-equiv="Content-Security-Policy" content="${CSP_POLICY}">`;
+}
+
+export function renderOriginTrialMeta(token) {
+  const trimmed = typeof token === 'string' ? token.trim() : '';
+  return trimmed ? `<meta http-equiv="origin-trial" content="${escapeHtml(trimmed)}">` : '';
 }
 
 export function renderFooterLinks(links) {
@@ -127,6 +134,7 @@ export function renderSubpageLayout({
   description,
   canonicalUrl = null,
   robots = null,
+  originTrialToken = null,
   extraHeadLinks = [],
   ownerName,
   subtitleHtml = '',
@@ -138,6 +146,8 @@ export function renderSubpageLayout({
 }) {
   const assets = resolveAssetUrls(assetManifest);
   const robotsMeta = robots ? `\n    <meta name="robots" content="${escapeHtml(robots)}">` : '';
+  const originTrialTag = renderOriginTrialMeta(originTrialToken);
+  const originTrialLine = originTrialTag ? `\n    ${originTrialTag}` : '';
   const canonicalLink = canonicalUrl
     ? `\n    <link rel="canonical" href="${escapeHtml(canonicalUrl)}">`
     : '';
@@ -178,7 +188,7 @@ export function renderSubpageLayout({
     <title>${escapeHtml(title)}</title>
     <meta name="description" content="${escapeHtml(description)}">${robotsMeta}
     ${renderThemeColorMetas()}
-    ${renderCspMeta()}
+    ${renderCspMeta()}${originTrialLine}
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <link rel="icon" type="image/svg+xml" href="${escapeHtml(assets.faviconSvgUrl)}">
     <link rel="icon" href="/favicon.ico" sizes="32x32">

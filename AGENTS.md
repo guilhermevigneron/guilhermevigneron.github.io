@@ -21,11 +21,11 @@ Zero-third-party-runtime-dependency personal portfolio & resume static site buil
 ## Key Directories & Files
 
 - `resume.json` — Canonical JSON Resume data.
-- `src/` — Source stylesheets (`styles.css`, `command-menu.css`, `subpage.css`, `print.css`), declarative HTML shell (`templates/index.html`), shared theme config (`theme-tokens.json`), and shared JS module (`js/theme-shared.js`).
-- `assets/js/` — Client scripts (`theme-init.js`, `theme.js`, eager loader `command-menu.js`, lazy ES module `command-menu-panel.js`).
-- `scripts/` — Build, sync, PDF/OG generation, HTML validation, perf, gate telemetry (`run-gate.mjs`), and report generators, backed by shared helpers in `scripts/lib/` (`paths.mjs`, `io.mjs`, `site-config.mjs`, `html.mjs`, `browser.mjs`, `pdf.mjs`, `png.mjs`).
+- `src/` — Source stylesheets (`styles.css`, `command-menu.css`, `subpage.css`, `print.css`), declarative HTML shell (`templates/index.html`), shared theme config (`theme-tokens.json`), and shared JS modules (`js/theme-shared.js`, `js/resume-search.mjs`, `js/webmcp-tools.mjs`).
+- `assets/js/` — Client scripts (`theme-init.js`, `theme.js`, eager loader `command-menu.js`, lazy ES modules `command-menu-panel.js` and `webmcp.js`).
+- `scripts/` — Build, sync, PDF/OG generation, HTML validation, perf, gate telemetry (`run-gate.mjs`), and report generators, backed by shared helpers in `scripts/lib/` (`paths.mjs`, `io.mjs`, `site-config.mjs`, `html.mjs`, `browser.mjs`, `pdf.mjs`, `png.mjs`, `webmcp-evals.mjs`).
 - `tests/unit.test.mjs` — Node built-in unit tests (`node --test`).
-- `cypress/portfolio.cy.js` — E2E, mobile, CSP, lazy module loading, and WCAG 2.1 AA (`cypress-axe`) tests.
+- `cypress/portfolio.cy.js` — E2E, mobile, CSP, lazy module loading, WebMCP `document.modelContext`, and WCAG 2.1 AA (`cypress-axe`) tests.
 
 ## Non-Negotiable Constraints
 
@@ -34,7 +34,7 @@ Zero-third-party-runtime-dependency personal portfolio & resume static site buil
    - Do **not** add inline `<script>` or `<style>` blocks, `eval()`, or external CDN/font/API requests.
 2. **Performance & Asset Budgets** (enforced by `scripts/check-performance.mjs` and `scripts/generate-pdf.mjs`):
    - Screen CSS `<= 12 KB`, subpage CSS `<= 6 KB`, print CSS `<= 3 KB`
-   - Initial JS (`theme-init.js` + `theme.js` + `command-menu.js`) `<= 4 KB`, lazy `command-menu-panel.js` `<= 12 KB`
+   - Initial JS (`theme-init.js` + `theme.js` + `command-menu.js`) `<= 4 KB`, lazy `command-menu-panel.js` `<= 12 KB`, lazy `webmcp.js` `<= 12 KB`
    - Minified `index.html` `<= 25 KB`, initial mobile transfer `<= 75 KB`
    - `CLS <= 0.01`, `LCP <= 2500 ms`, `FCP <= 1800 ms`
    - `/resume.pdf` must remain **1 page** (`maxPdfPages: 1`).

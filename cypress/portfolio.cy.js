@@ -238,6 +238,12 @@ describe('Zero Third-Party Dependencies & Local-First Assets', () => {
         initialUrls.some((url) => url.includes('command-menu-panel')),
         'command-menu-panel should be deferred until command palette is opened'
       ).to.eq(false);
+      if (typeof win.document.modelContext?.registerTool !== 'function') {
+        expect(
+          initialUrls.some((url) => /\/assets\/js\/webmcp(?:\.[a-f0-9]+)?\.js/.test(url)),
+          'webmcp.js must not load eagerly when document.modelContext is unavailable'
+        ).to.eq(false);
+      }
     });
 
     cy.document().then(async (doc) => {
@@ -1299,6 +1305,7 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
       'Print PDF & Social Card Pipeline',
       'Link Integrity (Lychee)',
       'Single Source of Truth & Security Policy',
+      'WebMCP Agent Tooling & Contract',
     ].forEach((title) => {
       cy.contains(title).should('be.visible');
     });
@@ -1309,12 +1316,15 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
     cy.contains('citation groundedness').should('be.visible');
     cy.contains('h2', 'flaky test triage & failure clustering benchmark').should('be.visible');
     cy.contains('triage accuracy').should('be.visible');
+    cy.contains('h2', 'webmcp agent tooling & contract benchmark').should('be.visible');
+    cy.contains('tool contracts').should('be.visible');
+    cy.contains('lazy bundle budget').should('be.visible');
 
     cy.request('/quality/report.json').then((res) => {
       expect(res.status).to.eq(200);
       const report = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;
       expect(report.schemaVersion).to.eq(1);
-      expect(report.gates).to.have.length(10);
+      expect(report.gates).to.have.length(11);
       expect(report.aiEvaluation).to.be.an('object');
       expect(report.aiEvaluation.passed).to.eq(true);
       expect(report.aiEvaluation.passAt1Rate).to.eq(1);
@@ -1325,6 +1335,11 @@ describe('Machine-Readable Endpoints, Security Policy & 404 Page', () => {
       expect(report.flakyTriage.passed).to.eq(true);
       expect(report.flakyTriage.classificationAccuracy).to.eq(1);
       expect(report.flakyTriage.falseFlakeSuppressions).to.eq(0);
+      expect(report.webmcpEvaluation).to.be.an('object');
+      expect(report.webmcpEvaluation.passed).to.eq(true);
+      expect(report.webmcpEvaluation.toolCount).to.eq(6);
+      expect(report.webmcpEvaluation.contractPassCount).to.eq(6);
+      expect(report.artifacts.webmcpJsBytes).to.be.greaterThan(200).and.at.most(12288);
       expect(report.artifacts.resumePdfPages).to.eq(MAX_PDF_PAGES);
       expect(report.artifacts.ogCardBytes).to.be.greaterThan(5000);
       expect(report.artifacts.contactVcfBytes).to.be.greaterThan(100);
@@ -1425,5 +1440,242 @@ describe('WCAG 2.1 AA Accessibility Matrix (Light/Dark & Mobile/Desktop)', () =>
       cy.injectAxe();
       runAxeAndRecord(label);
     });
+  });
+});
+
+describe('WebMCP Imperative Tooling (document.modelContext)', () => {
+  const expectedToolNames = [
+    'search_resume',
+    'get_resume_section',
+    'get_quality_telemetry',
+    'navigate_to_section',
+    'set_theme',
+    'open_command_menu',
+  ];
+
+  function attachMockModelContext(win, violations = null) {
+    const registry = new Map();
+    if (Array.isArray(violations)) {
+      win.addEventListener('securitypolicyviolation', (ev) => {
+        violations.push(`${ev.violatedDirective}:${ev.blockedURI}`);
+      });
+    }
+    const modelContext = {
+      registerTool(tool, options = {}) {
+        const entry = {
+          tool,
+          signal: options.signal || null,
+          aborted: Boolean(options.signal?.aborted),
+        };
+        registry.set(tool.name, entry);
+        if (options.signal && typeof options.signal.addEventListener === 'function') {
+          options.signal.addEventListener(
+            'abort',
+            () => {
+              entry.aborted = true;
+              registry.delete(tool.name);
+            },
+            { once: true }
+          );
+        }
+      },
+    };
+    Object.defineProperty(win.document, 'modelContext', {
+      configurable: true,
+      writable: true,
+      value: modelContext,
+    });
+    return registry;
+  }
+
+  it('auto-registers all 6 tools across routes when document.modelContext is present', () => {
+    ['/', '/architecture/', '/blog/'].forEach((route) => {
+      let registry;
+      const violations = [];
+      cy.visit(route, {
+        onBeforeLoad(win) {
+          registry = attachMockModelContext(win, violations);
+        },
+      });
+      cy.wrap(null).should(() => {
+        expect(registry.size, `${route} WebMCP tool count`).to.eq(expectedToolNames.length);
+      });
+      cy.then(() => {
+        expect([...registry.keys()]).to.have.members(expectedToolNames);
+        expect(violations, `CSP violations on ${route}`).to.deep.equal([]);
+      });
+    });
+    cy.task('recordWebmcpAudit', {
+      label: 'autoregister-routes',
+      passed: true,
+      tools: expectedToolNames,
+    });
+  });
+
+  it('executes read-only search_resume, get_resume_section, and get_quality_telemetry tools accurately', () => {
+    let registry;
+    cy.visit('/', {
+      onBeforeLoad(win) {
+        registry = attachMockModelContext(win);
+      },
+    });
+    cy.wrap(null).should(() => {
+      expect(registry.size).to.eq(expectedToolNames.length);
+    });
+
+    cy.then(async () => {
+      const ac = new AbortController();
+      const searchRes = await registry
+        .get('search_resume')
+        .tool.execute({ query: 'Azure DevOps CI/CD', limit: 3 }, { signal: ac.signal });
+      expect(searchRes.ok).to.eq(true);
+      expect(searchRes.source).to.eq('llms.txt');
+      expect(searchRes.count).to.be.greaterThan(0);
+      expect(searchRes.matches[0].citation).to.include('AVEVA');
+      expect(searchRes.matches[0].href).to.eq('#experience');
+    });
+    cy.task('recordWebmcpAudit', { label: 'search_resume', passed: true });
+
+    cy.then(async () => {
+      const workRes = await registry
+        .get('get_resume_section')
+        .tool.execute({ section: 'work' }, {});
+      expect(workRes.ok).to.eq(true);
+      expect(workRes.data).to.have.length(resume.work.length);
+
+      const endpointsRes = await registry
+        .get('get_resume_section')
+        .tool.execute({ section: 'endpoints' }, {});
+      expect(endpointsRes.ok).to.eq(true);
+      expect(endpointsRes.data.resumePdf).to.eq(`${SITE_URL}${resume.meta.resumePdf}`);
+      expect(endpointsRes.data.rssFeed).to.eq(`${SITE_URL}/feed.xml`);
+    });
+    cy.task('recordWebmcpAudit', { label: 'get_resume_section', passed: true });
+
+    cy.then(async () => {
+      const qualityRes = await registry.get('get_quality_telemetry').tool.execute({}, {});
+      expect(qualityRes.ok).to.eq(true);
+      expect(qualityRes.gateCount).to.eq(11);
+      expect(qualityRes.aiEvaluation.passed).to.eq(true);
+      expect(qualityRes.webmcpEvaluation.passed).to.eq(true);
+    });
+    cy.task('recordWebmcpAudit', { label: 'get_quality_telemetry', passed: true });
+  });
+
+  it('executes interactive set_theme, navigate_to_section, open_command_menu, validation errors, and pagehide cleanup cleanly', () => {
+    let registry;
+    const violations = [];
+    cy.viewport(1280, 800);
+    cy.visit('/', {
+      onBeforeLoad(win) {
+        win.localStorage.setItem('theme', 'light');
+        registry = attachMockModelContext(win, violations);
+      },
+    });
+    cy.wrap(null).should(() => {
+      expect(registry.size).to.eq(expectedToolNames.length);
+    });
+
+    // set_theme dark -> light roundtrip
+    cy.then(async () => {
+      const darkRes = await registry.get('set_theme').tool.execute({ theme: 'dark' }, {});
+      expect(darkRes.ok).to.eq(true);
+      expect(darkRes.theme).to.eq('dark');
+    });
+    cy.get('html').should('have.class', 'dark');
+    cy.get('#theme-toggle').should('have.attr', 'aria-pressed', 'true');
+    cy.get('meta[name="theme-color"]').each(($meta) => {
+      expect($meta.attr('content')).to.eq('#0d0c0a');
+    });
+    cy.window().its('localStorage').invoke('getItem', 'theme').should('eq', 'dark');
+    cy.then(async () => {
+      const lightRes = await registry.get('set_theme').tool.execute({ theme: 'light' }, {});
+      expect(lightRes.ok).to.eq(true);
+      expect(lightRes.theme).to.eq('light');
+    });
+    cy.get('html').should('not.have.class', 'dark');
+    cy.task('recordWebmcpAudit', { label: 'set_theme', passed: true });
+
+    // navigate_to_section on home route
+    cy.then(async () => {
+      const navRes = await registry
+        .get('navigate_to_section')
+        .tool.execute({ section: 'projects' }, {});
+      expect(navRes.ok).to.eq(true);
+      expect(navRes.navigated).to.eq(true);
+      expect(navRes.href).to.eq('#projects');
+    });
+    cy.location('hash').should('eq', '#projects');
+    cy.focused().should('have.id', 'projects');
+    cy.task('recordWebmcpAudit', { label: 'navigate_to_section-home', passed: true });
+
+    // open_command_menu pre-filters query & passes WCAG 2.1 AA
+    cy.then(async () => {
+      const menuRes = await registry
+        .get('open_command_menu')
+        .tool.execute({ query: 'StickyMinds' }, {});
+      expect(menuRes.ok).to.eq(true);
+      expect(menuRes.open).to.eq(true);
+      expect(menuRes.visibleItems).to.be.greaterThan(0);
+    });
+    cy.get('#command-dialog').should('be.visible');
+    cy.contains('#command-dialog .cmd-item--match:not([hidden])', 'StickyMinds').should(
+      'be.visible'
+    );
+    cy.injectAxe();
+    runAxeAndRecord(null, '#command-dialog');
+    cy.get('#command-close').click();
+    cy.get('#command-dialog').should('not.be.visible');
+    cy.task('recordWebmcpAudit', { label: 'open_command_menu', passed: true });
+
+    // Defensive error payloads on invalid inputs
+    cy.then(async () => {
+      const badQuery = await registry.get('search_resume').tool.execute({ query: 'a' }, {});
+      expect(badQuery.ok).to.eq(false);
+      expect(badQuery.error.code).to.eq('INVALID_INPUT');
+
+      const badTheme = await registry.get('set_theme').tool.execute({ theme: 'neon' }, {});
+      expect(badTheme.ok).to.eq(false);
+      expect(badTheme.error.code).to.eq('INVALID_INPUT');
+
+      const badSec = await registry
+        .get('navigate_to_section')
+        .tool.execute({ section: 'nonexistent' }, {});
+      expect(badSec.ok).to.eq(false);
+      expect(badSec.error.code).to.eq('INVALID_INPUT');
+    });
+    cy.task('recordWebmcpAudit', { label: 'defensive-validation', passed: true });
+
+    // pagehide unregisters tools cleanly via AbortSignal
+    cy.window().then((win) => {
+      const capturedSignal = registry.get('search_resume').signal;
+      expect(capturedSignal.aborted).to.eq(false);
+      win.dispatchEvent(new win.Event('pagehide'));
+      expect(capturedSignal.aborted).to.eq(true);
+      expect(registry.size).to.eq(0);
+      expect(violations).to.deep.equal([]);
+    });
+    cy.task('recordWebmcpAudit', { label: 'pagehide-abort', passed: true });
+
+    // Subpage navigate_to_section returns safe URL guidance instead of mid-call unload
+    let subRegistry;
+    cy.visit('/architecture/', {
+      onBeforeLoad(win) {
+        subRegistry = attachMockModelContext(win);
+      },
+    });
+    cy.wrap(null).should(() => {
+      expect(subRegistry.size).to.eq(expectedToolNames.length);
+    });
+    cy.then(async () => {
+      const subNav = await subRegistry
+        .get('navigate_to_section')
+        .tool.execute({ section: 'projects' }, {});
+      expect(subNav.ok).to.eq(true);
+      expect(subNav.navigated).to.eq(false);
+      expect(subNav.requiresNavigation).to.eq(true);
+      expect(subNav.url).to.eq('/#projects');
+    });
+    cy.task('recordWebmcpAudit', { label: 'navigate_to_section-subpage', passed: true });
   });
 });
