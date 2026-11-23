@@ -32,13 +32,13 @@
   "author": "Guilherme Vigneron de Oliveira",
   "license": "ISC",
   "devDependencies": {
-    "@biomejs/biome": "^2.6.7",
+    "@biomejs/biome": "^2.6.8",
     "axe-core": "^4.14.0",
     "cypress": "^15.21.2",
     "cypress-axe": "^1.7.0",
     "esbuild": "^0.28.2",
     "html-validate": "^11.21.1",
-    "playwright-core": "^1.65.0"
+    "playwright-core": "^1.65.1"
   },
   "overrides": {
     "tmp": "^0.2.7"
