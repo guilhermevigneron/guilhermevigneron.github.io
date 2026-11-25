@@ -1823,6 +1823,38 @@ Paragraph with **bold**, *italic*, [unsafe](javascript:alert(1)), and [internal]
     const trailingOl = renderMarkdown('1. trailing item');
     assert.ok(trailingOl.includes('<ol>\n<li>trailing item</li>\n</ol>'));
 
+    // Empty-body frontmatter (no trailing newline after closing ---)
+    const emptyBodyFm = parseFrontmatter('---\ntitle: Empty Body\ndraft: false\n---');
+    assert.equal(emptyBodyFm.data.title, 'Empty Body');
+    assert.equal(emptyBodyFm.data.draft, false);
+    assert.equal(emptyBodyFm.content, '');
+
+    // Balanced parentheses in URLs, formatted link labels, unclosed link, and *** hr after paragraph
+    const edgeMd = renderMarkdown(
+      'See [**Wiki** and `code`](https://en.wikipedia.org/wiki/Foo_(bar)) and [unclosed(url\n***\nAfter rule'
+    );
+    assert.ok(
+      edgeMd.includes(
+        '<a href="https://en.wikipedia.org/wiki/Foo_(bar)" target="_blank" rel="noopener noreferrer"><strong>Wiki</strong> and <code>code</code></a>'
+      )
+    );
+    assert.ok(edgeMd.includes('[unclosed(url'));
+    assert.ok(edgeMd.includes('<hr>\n<p>After rule</p>'));
+
+    // Sitemap with blog posts
+    const sitemapWithPosts = buildSitemapXml(
+      { basics: { url: 'https://example.dev' }, meta: {} },
+      {
+        posts: [
+          { slug: 'first-post', date: '2026-11-14' },
+          { slug: 'undated-post', date: '' },
+        ],
+      }
+    );
+    assert.ok(sitemapWithPosts.includes('<loc>https://example.dev/blog/first-post/</loc>'));
+    assert.ok(sitemapWithPosts.includes('<lastmod>2026-11-14</lastmod>'));
+    assert.ok(sitemapWithPosts.includes('<loc>https://example.dev/blog/undated-post/</loc>'));
+
     withTempDir('blog-edge-', (tmpDir) => {
       // Missing content/blog directory
       assert.deepEqual(loadBlogPosts(tmpDir), []);
@@ -2204,14 +2236,24 @@ describe('io.mjs, browser.mjs, check-performance.mjs, and sparse resume edge cas
   it('covers optional branches in evaluateAssetBudgets, evaluateVitalsBudgets, minifyHtml, validateHtmlFiles, sync-resume, site-config, ai-evals, and flaky-triage', async () => {
     const assets = makeValidAssetSizes();
     assets.commandMenuCssBytes = 2000;
+    assets.blogCssBytes = 2000;
     assets.qualityHtmlBytes = 10000;
     assets.architectureHtmlBytes = 10000;
+    assets.blogHtmlBytes = 10000;
     assets.avatarAvif168Bytes = 2000;
     assets.avatarAvif336Bytes = 3000;
     assets.avatarWebp168Bytes = 2000;
     assets.avatarWebp224Bytes = 3000;
     assets.avatarWebp336Bytes = 3500;
     evaluateAssetBudgets(assets);
+    assert.throws(
+      () => evaluateAssetBudgets({ ...assets, blogCssBytes: BUDGETS.blogCssMaxBytes + 1 }),
+      /Blog CSS/
+    );
+    assert.throws(
+      () => evaluateAssetBudgets({ ...assets, blogHtmlBytes: BUDGETS.blogHtmlMaxBytes + 1 }),
+      /blog\/index\.html/
+    );
 
     const vitals = {
       cls: 0,

@@ -16,6 +16,7 @@ export const BUDGETS = {
   screenCssMaxBytes: 12 * 1024,
   commandMenuCssMaxBytes: 4 * 1024,
   subpageCssMaxBytes: 6 * 1024,
+  blogCssMaxBytes: 6 * 1024,
   printCssMaxBytes: 3 * 1024,
   initialJsMaxBytes: 4 * 1024,
   lazyPanelJsMaxBytes: 12 * 1024,
@@ -25,6 +26,7 @@ export const BUDGETS = {
   notFoundHtmlMaxBytes: 8 * 1024,
   qualityHtmlMaxBytes: 35 * 1024,
   architectureHtmlMaxBytes: 25 * 1024,
+  blogHtmlMaxBytes: 25 * 1024,
   avatarJpgMaxBytes: 8 * 1024,
   avatarAvifMaxBytes: 4 * 1024,
   avatarWebpMaxBytes: 5 * 1024,
@@ -100,6 +102,12 @@ export function evaluateAssetBudgets(assetSizes, budgets = BUDGETS) {
     assetSizes.subpageCssBytes <= budgets.subpageCssMaxBytes,
     `Subpage CSS ${assetSizes.subpageCssBytes} B exceeds budget ${budgets.subpageCssMaxBytes} B`
   );
+  if (assetSizes.blogCssBytes != null) {
+    assert.ok(
+      assetSizes.blogCssBytes <= budgets.blogCssMaxBytes,
+      `Blog CSS ${assetSizes.blogCssBytes} B exceeds budget ${budgets.blogCssMaxBytes} B`
+    );
+  }
   assert.ok(
     assetSizes.printCssBytes <= budgets.printCssMaxBytes,
     `Print CSS ${assetSizes.printCssBytes} B exceeds budget ${budgets.printCssMaxBytes} B`
@@ -140,6 +148,12 @@ export function evaluateAssetBudgets(assetSizes, budgets = BUDGETS) {
     assert.ok(
       assetSizes.architectureHtmlBytes <= budgets.architectureHtmlMaxBytes,
       `architecture/index.html ${assetSizes.architectureHtmlBytes} B exceeds budget ${budgets.architectureHtmlMaxBytes} B`
+    );
+  }
+  if (assetSizes.blogHtmlBytes != null) {
+    assert.ok(
+      assetSizes.blogHtmlBytes <= budgets.blogHtmlMaxBytes,
+      `blog/index.html ${assetSizes.blogHtmlBytes} B exceeds budget ${budgets.blogHtmlMaxBytes} B`
     );
   }
   assert.ok(
@@ -513,6 +527,14 @@ export async function runPerformanceAudit({ qualityOnly = false, rootDir = ROOT 
       manifest?.commandMenuCssUrl || 'assets/css/command-menu.css'
     ),
     subpageCssBytes: fileSize(targetSiteDir, manifest?.subpageCssUrl || 'assets/css/subpage.css'),
+    blogCssBytes: fs.existsSync(
+      path.join(
+        targetSiteDir,
+        String(manifest?.blogCssUrl || 'assets/css/blog.css').replace(/^\//, '')
+      )
+    )
+      ? fileSize(targetSiteDir, manifest?.blogCssUrl || 'assets/css/blog.css')
+      : null,
     printCssBytes: fileSize(targetSiteDir, printCssPath),
     themeInitJsBytes: fileSize(targetSiteDir, themeInitJsPath),
     themeJsBytes: fileSize(targetSiteDir, themeJsPath),
@@ -537,6 +559,9 @@ export async function runPerformanceAudit({ qualityOnly = false, rootDir = ROOT 
       : null,
     architectureHtmlBytes: fs.existsSync(path.join(targetSiteDir, 'architecture/index.html'))
       ? fileSize(targetSiteDir, 'architecture/index.html')
+      : null,
+    blogHtmlBytes: fs.existsSync(path.join(targetSiteDir, 'blog/index.html'))
+      ? fileSize(targetSiteDir, 'blog/index.html')
       : null,
     avatarJpgBytes: fileSize(targetSiteDir, resolveAvatarPath(manifest, 'assets/avatar.jpg')),
     avatarAvif168Bytes: fileSize(

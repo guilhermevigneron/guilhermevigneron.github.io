@@ -150,7 +150,7 @@ jobs:
         id: lychee
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
-          args: --root-dir ${{ github.workspace }}/_site --index-files index.html --remap "^https://guilhermevigneron\.dev file://${{ github.workspace }}/_site" --accept 200..=299,429,999 --max-retries 3 --retry-wait-time 5 --timeout 20 --no-progress ./_site/index.html ./_site/404.html ./_site/quality/index.html ./_site/architecture/index.html
+          args: --root-dir ${{ github.workspace }}/_site --index-files index.html --remap "^https://guilhermevigneron\.dev file://${{ github.workspace }}/_site" --accept 200..=299,429,999 --max-retries 3 --retry-wait-time 5 --timeout 20 --no-progress ./_site/index.html ./_site/404.html ./_site/quality/index.html ./_site/architecture/index.html ./_site/blog
 
       - name: Run Browser E2E & Accessibility Tests (Cypress)
         env:
@@ -262,4 +262,4 @@ jobs:
       - name: Production Link Checker (guilhermevigneron.dev)
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
-          args: --accept 200..=299,429,999 --max-retries 3 --retry-wait-time 5 --timeout 20 --no-progress https://guilhermevigneron.dev https://guilhermevigneron.dev/404.html https://guilhermevigneron.dev/quality/ https://guilhermevigneron.dev/architecture/
+          args: --accept 200..=299,429,999 --max-retries 3 --retry-wait-time 5 --timeout 20 --no-progress https://guilhermevigneron.dev https://guilhermevigneron.dev/404.html https://guilhermevigneron.dev/quality/ https://guilhermevigneron.dev/architecture/ https://guilhermevigneron.dev/blog/

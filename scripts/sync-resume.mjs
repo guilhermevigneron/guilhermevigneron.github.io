@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { loadBlogPosts } from './generate-blog.mjs';
 import {
   escapeHtml,
   ICONS,
@@ -696,23 +697,32 @@ export function buildSiteWebmanifest(data, currentManifest = {}) {
   )}\n`;
 }
 
-export function buildSitemapXml(data) {
+export function buildSitemapXml(data, { posts = [] } = {}) {
   const endpoints = getSiteEndpoints(data);
   const entries = [
     { loc: `${endpoints.baseUrl}/`, changefreq: 'monthly', priority: '1.0' },
     { loc: endpoints.blogUrl, changefreq: 'weekly', priority: '0.8' },
+    ...posts.map((post) => ({
+      loc: `${endpoints.baseUrl}${endpoints.blogPath}${post.slug}/`,
+      lastmod: post.date || undefined,
+      changefreq: 'monthly',
+      priority: '0.7',
+    })),
     { loc: endpoints.resumePdfUrl, changefreq: 'monthly', priority: '0.8' },
     { loc: endpoints.architectureUrl, changefreq: 'monthly', priority: '0.6' },
     { loc: endpoints.qualityReportUrl, changefreq: 'weekly', priority: '0.6' },
   ];
   const urls = entries
-    .map(
-      (entry) => `  <url>
-    <loc>${escapeHtml(entry.loc)}</loc>
+    .map((entry) => {
+      const lastmodLine = entry.lastmod
+        ? `\n    <lastmod>${escapeHtml(entry.lastmod)}</lastmod>`
+        : '';
+      return `  <url>
+    <loc>${escapeHtml(entry.loc)}</loc>${lastmodLine}
     <changefreq>${entry.changefreq}</changefreq>
     <priority>${entry.priority}</priority>
-  </url>`
-    )
+  </url>`;
+    })
     .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
@@ -750,6 +760,7 @@ export function syncAllFromResume(rootDir = ROOT) {
 
   const data = readJson(resumePath);
   const year = resolveBuildYear(data, rootDir);
+  const blogPosts = loadBlogPosts(rootDir);
 
   if (writeTextIfChanged(indexPath, buildIndexHtml(data, { rootDir, year }))) {
     console.log('Updated index.html from resume.json + src/templates/index.html');
@@ -780,7 +791,7 @@ export function syncAllFromResume(rootDir = ROOT) {
     console.log('site.webmanifest is already in sync with resume.json');
   }
 
-  if (writeTextIfChanged(sitemapPath, buildSitemapXml(data))) {
+  if (writeTextIfChanged(sitemapPath, buildSitemapXml(data, { posts: blogPosts }))) {
     console.log('Updated sitemap.xml from resume.json');
   } else {
     console.log('sitemap.xml is already in sync with resume.json');
