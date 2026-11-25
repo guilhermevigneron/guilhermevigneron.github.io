@@ -15,6 +15,10 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # cypress-axe@1.7.0 peerDependency only supports cypress <= 15
+      - dependency-name: "cypress"
+        versions: [">= 16.0.0"]
     open-pull-requests-limit: 5
 
   - package-ecosystem: "github-actions"
