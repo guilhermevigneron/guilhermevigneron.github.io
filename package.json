@@ -33,7 +33,7 @@
   "license": "ISC",
   "devDependencies": {
     "@biomejs/biome": "^2.6.8",
-    "axe-core": "^4.14.0",
+    "axe-core": "^4.14.1",
     "cypress": "^15.21.2",
     "cypress-axe": "^1.7.0",
     "esbuild": "^0.28.2",
