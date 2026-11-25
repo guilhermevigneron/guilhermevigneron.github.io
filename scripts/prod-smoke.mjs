@@ -292,6 +292,36 @@ async function verifySubpageHtml(client, route, labels) {
   }
 }
 
+function listPublishedBlogPosts(rootDir) {
+  const blogDir = path.join(rootDir, 'content', 'blog');
+  if (!fs.existsSync(blogDir)) return [];
+  const posts = [];
+  for (const file of fs
+    .readdirSync(blogDir)
+    .filter((f) => f.endsWith('.md'))
+    .sort()) {
+    const raw = fs.readFileSync(path.join(blogDir, file), 'utf8').replace(/\r\n/g, '\n');
+    const fmMatch = raw.match(/^---\n([\s\S]*?)\n---(?:\n|$)/);
+    const fm = fmMatch ? fmMatch[1] : '';
+    if (/^draft:\s*true\s*$/m.test(fm)) continue;
+    const readField = (key) => {
+      const m = fm.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
+      if (!m) return '';
+      return m[1].trim().replace(/^["']|["']$/g, '');
+    };
+    const rawSlug =
+      readField('slug') || file.replace(/\.md$/i, '').replace(/^\d{4}-\d{2}-\d{2}-/, '');
+    const slug =
+      rawSlug
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9-]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'post';
+    posts.push({ slug, title: readField('title') || slug });
+  }
+  return posts;
+}
+
 export async function runSmokeTests({
   baseUrl,
   allowLocalPending = process.env.SMOKE_ALLOW_LOCAL_PENDING === '1',
@@ -569,9 +599,17 @@ export async function runSmokeTests({
       );
     }
 
+    const blogPosts = listPublishedBlogPosts(rootDir);
     const { buf: sitemapBuf } = await fetchCheckedAsset('/sitemap.xml', 'xml', 100);
     const sitemapText = sitemapBuf.toString('utf8');
     assert.ok(sitemapText.includes(`${canonicalUrl}/`), 'sitemap.xml missing homepage');
+    assert.ok(sitemapText.includes(`${canonicalUrl}/blog/`), 'sitemap.xml missing /blog/');
+    for (const post of blogPosts) {
+      assert.ok(
+        sitemapText.includes(`${canonicalUrl}/blog/${post.slug}/`),
+        `sitemap.xml missing /blog/${post.slug}/`
+      );
+    }
     assert.ok(
       sitemapText.includes(`${canonicalUrl}/resume.pdf`),
       'sitemap.xml missing /resume.pdf'
@@ -581,6 +619,26 @@ export async function runSmokeTests({
       'sitemap.xml missing /architecture/'
     );
     assert.ok(sitemapText.includes(`${canonicalUrl}/quality/`), 'sitemap.xml missing /quality/');
+  });
+
+  await runCheck('blog-and-rss', async () => {
+    const blogPosts = listPublishedBlogPosts(rootDir);
+    await verifySubpageHtml(client, '/blog/', 'Blog');
+    for (const post of blogPosts) {
+      await verifySubpageHtml(client, `/blog/${post.slug}/`, post.title);
+    }
+
+    const { buf: feedBuf } = await fetchCheckedAsset('/feed.xml', 'xml', 100);
+    const feedText = feedBuf.toString('utf8');
+    assert.ok(feedText.includes('<rss version="2.0"'), '/feed.xml missing RSS 2.0 root');
+    assert.ok(feedText.includes('<channel>'), '/feed.xml missing <channel>');
+    for (const post of blogPosts) {
+      assert.ok(
+        feedText.includes(`${canonicalUrl}/blog/${post.slug}/`),
+        `/feed.xml missing item link for /blog/${post.slug}/`
+      );
+    }
+    console.log(`PASS /blog/ (${blogPosts.length} post(s)) & /feed.xml`);
   });
 
   await runCheck('not-found-handler', async () => {

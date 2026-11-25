@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { loadBlogPosts } from './generate-blog.mjs';
 import { evaluateAiReadiness } from './lib/ai-evals.mjs';
 import { evaluateFlakyTriage } from './lib/flaky-triage.mjs';
 import { resolveBuildYear } from './lib/io.mjs';
@@ -335,6 +336,7 @@ export function validateSyncState({
   securityTxt = null,
   commandPanelJs = null,
   contactVcf = null,
+  blogPosts = [],
   currentYear = resolveBuildYear(resume),
 }) {
   const yearStr = String(currentYear);
@@ -826,6 +828,8 @@ export function validateSyncState({
 
       const expectedUrls = [
         `${baseUrl}/`,
+        `${baseUrl}/blog/`,
+        ...blogPosts.map((post) => `${baseUrl}/blog/${post.slug}/`),
         resume.meta.resumePdfUrl,
         `${baseUrl}/architecture/`,
         resume.meta.qualityReportUrl,
@@ -986,6 +990,7 @@ export function validateAllFromRoot(rootDir = ROOT) {
   const vcfPath = path.join(rootDir, '_site', 'contact.vcf');
   const contactVcf = fs.existsSync(vcfPath) ? fs.readFileSync(vcfPath, 'utf8') : null;
   const currentYear = resolveBuildYear(resume, rootDir);
+  const blogPosts = loadBlogPosts(rootDir);
 
   const checks = [];
   const aiEvaluation = evaluateAiReadiness({ resume, llmsTxt });
@@ -1003,6 +1008,7 @@ export function validateAllFromRoot(rootDir = ROOT) {
       securityTxt,
       commandPanelJs,
       contactVcf,
+      blogPosts,
       currentYear,
     });
     checks.push(...passedChecks);

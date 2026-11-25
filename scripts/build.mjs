@@ -47,6 +47,8 @@ function copyStaticAssets() {
   });
 }
 
+// Keeps the unhashed original alongside the content-hashed copy as a stable fallback
+// URL for external/meta references (e.g., og-card.png) and direct asset checks.
 function fingerprintAsset(relPath) {
   const fullPath = path.join(SITE_DIR, relPath);
   if (!fs.existsSync(fullPath)) return `/${relPath}`;

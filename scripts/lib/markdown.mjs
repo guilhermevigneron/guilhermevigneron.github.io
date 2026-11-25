@@ -5,13 +5,14 @@ export function parseFrontmatter(raw) {
   if (!input.startsWith('---\n')) {
     return { data: {}, content: input.trim() };
   }
-  const endIdx = input.indexOf('\n---\n', 4);
-  if (endIdx === -1) {
+  const closeMatch = input.slice(4).match(/\n---(?:\n|$)/);
+  if (!closeMatch || closeMatch.index === undefined) {
     return { data: {}, content: input.trim() };
   }
 
+  const endIdx = 4 + closeMatch.index;
   const fmBlock = input.slice(4, endIdx);
-  const content = input.slice(endIdx + 5).trim();
+  const content = input.slice(endIdx + closeMatch[0].length).trim();
   const data = {};
   let activeArrayKey = null;
 
@@ -73,6 +74,44 @@ export function estimateReadingTime(markdown) {
   return Math.max(1, Math.ceil(words / 200));
 }
 
+function formatEmphasis(text) {
+  let out = escapeHtml(text);
+  out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  return out;
+}
+
+function replaceMarkdownLinks(input, renderLink) {
+  let result = '';
+  let i = 0;
+
+  while (i < input.length) {
+    if (input[i] === '[') {
+      const closeBracket = input.indexOf(']', i + 1);
+      if (closeBracket !== -1 && input[closeBracket + 1] === '(') {
+        let depth = 1;
+        let j = closeBracket + 2;
+        while (j < input.length && depth > 0) {
+          if (input[j] === '(') depth += 1;
+          else if (input[j] === ')') depth -= 1;
+          if (depth > 0) j += 1;
+        }
+        if (depth === 0) {
+          const label = input.slice(i + 1, closeBracket);
+          const rawHref = input.slice(closeBracket + 2, j);
+          result += renderLink(label, rawHref);
+          i = j + 1;
+          continue;
+        }
+      }
+    }
+    result += input[i];
+    i += 1;
+  }
+
+  return result;
+}
+
 function renderInline(text) {
   const codeSpans = [];
   let out = String(text || '').replace(/`([^`]+)`/g, (_, code) => {
@@ -82,9 +121,9 @@ function renderInline(text) {
   });
 
   const linkSpans = [];
-  out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, rawHref) => {
+  out = replaceMarkdownLinks(out, (label, rawHref) => {
     const href = sanitizeHref(rawHref, { allowRelative: true, allowMailto: true });
-    const safeLabel = escapeHtml(label);
+    const safeLabel = formatEmphasis(label);
     if (!href) return safeLabel;
     const isExternal = /^https?:\/\//i.test(href);
     const attrs = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
@@ -93,9 +132,7 @@ function renderInline(text) {
     return `\u0000LINK${idx}\u0000`;
   });
 
-  out = escapeHtml(out);
-  out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  out = formatEmphasis(out);
   // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional placeholder token
   out = out.replace(/\u0000LINK(\d+)\u0000/g, (_, idx) => linkSpans[Number(idx)] || '');
   // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional placeholder token
@@ -186,7 +223,8 @@ export function renderMarkdown(markdown) {
       !/^#{1,4}\s+/.test(lines[i].trim()) &&
       !/^[-*]\s+/.test(lines[i].trim()) &&
       !/^\d+\.\s+/.test(lines[i].trim()) &&
-      !/^---+$/.test(lines[i].trim())
+      !/^---+$/.test(lines[i].trim()) &&
+      !/^\*\*\*+$/.test(lines[i].trim())
     ) {
       paraLines.push(lines[i].trim());
       i += 1;
